@@ -1,0 +1,66 @@
+{
+    "expo": {
+        "name": "Running App",
+        "slug": "running-app",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/icon.png",
+        "userInterfaceStyle": "light",
+        "splash": {
+            "image": "./assets/splash.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#4CAF50"
+        },
+        "assetBundlePatterns": [
+            "**/*"
+        ],
+        "ios": {
+            "supportsTablet": true
+        },
+        "android": {
+            "adaptiveIcon": {
+                "foregroundImage": "./assets/adaptive-icon.png",
+                "backgroundColor": "#4CAF50"
+            }
+        },
+        "web": {
+            "favicon": "./assets/favicon.png"
+        },
+        "newArchEnabled": true,
+        "plugins": [
+            [
+                "expo-location",
+                {
+                    "locationAlwaysAndWhenInUsePermission": "Permettez à l'application de suivre votre position pour enregistrer vos courses."
+                }
+            ],
+            [
+                "expo-image-picker",
+                {
+                    "photosPermission": "L'application a besoin d'accéder à vos photos pour mettre à jour votre photo de profil."
+                }
+            ]
+        ]
+    },
+    "dependencies": {
+        "@react-native-async-storage/async-storage": "^2.1.2",
+        "@react-navigation/bottom-tabs": "^7.3.3",
+        "@react-navigation/native": "^7.0.19",
+        "@react-navigation/stack": "^7.2.3",
+        "axios": "^1.8.4",
+        "expo": "^52.0.41",
+        "expo-image-picker": "^16.0.6",
+        "expo-location": "^18.0.8",
+        "expo-status-bar": "^2.0.1",
+        "react-native-gesture-handler": "^2.25.0",
+        "react-native-maps": "^1.20.1",
+        "react-native-reanimated": "^3.17.1",
+        "react-native-safe-area-context": "^5.3.0",
+        "react-native-screens": "^4.10.0",
+        "setimmediate": "^1.0.5"
+    },
+    "devDependencies": {
+        "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
+        "react-native-dotenv": "^3.4.11"
+    }
+}
