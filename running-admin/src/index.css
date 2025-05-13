@@ -39,3 +39,71 @@ html, body, #root {
 body {
   @apply bg-gray-50 text-gray-900;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+.animate-pulse {
+  animation: pulse 2s infinite;
+}
+
+/* Couleurs personnalisées pour l'interface */
+:root {
+  --color-primary-50: #eafef2;
+  --color-primary-100: #d0fce0;
+  --color-primary-500: #1abb66;
+  --color-primary-600: #0e9651;
+  --color-primary-700: #0c7742;
+}
+
+/* Override des styles Tailwind */
+.bg-primary-50 { background-color: var(--color-primary-50); }
+.bg-primary-100 { background-color: var(--color-primary-100); }
+.bg-primary-500 { background-color: var(--color-primary-500); }
+.bg-primary-600 { background-color: var(--color-primary-600); }
+.bg-primary-700 { background-color: var(--color-primary-700); }
+
+.text-primary-500 { color: var(--color-primary-500); }
+.text-primary-600 { color: var(--color-primary-600); }
+.text-primary-700 { color: var(--color-primary-700); }
+
+.focus\:ring-primary-500:focus { --tw-ring-color: var(--color-primary-500); }
+.focus\:border-primary-500:focus { border-color: var(--color-primary-500); }
+
+.hover\:bg-primary-700:hover { background-color: var(--color-primary-700); }
+
+/* Styles d'input améliorés */
+input:focus {
+  box-shadow: 0 0 0 2px rgba(26, 187, 102, 0.2);
+  outline: none;
+}
+
+/* Transitions fluides */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.duration-300 {
+  transition-duration: 300ms;
+}
+
+.duration-500 {
+  transition-duration: 500ms;
+}
+
+.ease-in-out {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}

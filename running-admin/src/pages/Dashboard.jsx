@@ -1,3 +1,4 @@
+// Fichier: src/pages/Dashboard.jsx
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { 
@@ -21,36 +22,81 @@ const Dashboard = () => {
     averagePace: 0,
     lastWeekRuns: 0,
     lastWeekDistance: 0
-  })
-  const [userActivity, setUserActivity] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [dateRange, setDateRange] = useState('month') // 'week', 'month', 'year'
+  });
+  const [userActivity, setUserActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [dateRange, setDateRange] = useState('month'); // 'week', 'month', 'year'
   
   useEffect(() => {
     const fetchDashboardData = async () => {
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
       
       try {
         // Obtenir les statistiques globales
-        const globalStats = await api.stats.getGlobal()
+        const statsResponse = await api.stats.getGlobal();
         
-        // Obtenir l'activité des utilisateurs
-        const userActivityData = await api.stats.getUserActivity()
+        // Vérifier la structure de la réponse et extraire les données
+        const statsData = statsResponse.data || {};
         
-        setStats(globalStats.data)
-        setUserActivity(userActivityData.data)
+        // Mise à jour des statistiques selon la structure de la réponse de l'API
+        setStats({
+          totalUsers: statsData.total_users || 0,
+          activeUsers: statsData.active_users || 0,
+          totalRuns: statsData.total_runs || 0,
+          totalDistance: statsData.total_distance || 0,
+          averagePace: statsData.average_pace || 0,
+          lastWeekRuns: statsData.runs_this_month || 0,
+          lastWeekDistance: statsData.distance_this_month || 0
+        });
+        
+        // Simuler des données d'activité pour le développement
+        // Dans un environnement de production, remplacez par un appel API réel
+        const fakeUserActivity = [
+          {
+            id: 1,
+            user: {
+              id: 101,
+              name: 'Alexandre Dupont'
+            },
+            date: new Date(),
+            distance: 8.5,
+            duration: 42 * 60 + 15, // 42 min 15 sec
+          },
+          {
+            id: 2,
+            user: {
+              id: 102,
+              name: 'Sophie Martin'
+            },
+            date: new Date(),
+            distance: 5.2,
+            duration: 25 * 60 + 45, // 25 min 45 sec
+          },
+          {
+            id: 3,
+            user: {
+              id: 103,
+              name: 'Thomas Bernard'
+            },
+            date: new Date(Date.now() - 24 * 60 * 60 * 1000), // hier
+            distance: 12.0,
+            duration: 65 * 60 + 30, // 1h 5min 30sec
+          }
+        ];
+        
+        setUserActivity(fakeUserActivity);
       } catch (err) {
-        console.error('Erreur lors du chargement des données du tableau de bord', err)
-        setError('Impossible de charger les données du tableau de bord')
+        console.error('Erreur lors du chargement des données du tableau de bord', err);
+        setError('Impossible de charger les données du tableau de bord');
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
     
-    fetchDashboardData()
-  }, [])
+    fetchDashboardData();
+  }, []);
   
   if (loading) {
     return (
@@ -99,7 +145,7 @@ const Dashboard = () => {
         <StatCard 
           title="Courses" 
           value={stats.totalRuns} 
-          subValue={`${stats.lastWeekRuns} cette semaine`}
+          subValue={`${stats.lastWeekRuns} ce mois-ci`}
           icon={ClockIcon} 
           iconColor="bg-green-100 text-green-600" 
           to="/history"
@@ -107,13 +153,13 @@ const Dashboard = () => {
         <StatCard 
           title="Distance" 
           value={`${stats.totalDistance.toLocaleString()} km`} 
-          subValue={`${stats.lastWeekDistance.toLocaleString()} km cette semaine`}
+          subValue={`${stats.lastWeekDistance.toLocaleString()} km ce mois-ci`}
           icon={LocationMarkerIcon} 
           iconColor="bg-purple-100 text-purple-600" 
         />
         <StatCard 
           title="Allure moyenne" 
-          value={`${stats.averagePace} min/km`} 
+          value={`${stats.averagePace || "--:--"} min/km`} 
           subValue="Globale" 
           icon={TrendingUpIcon} 
           iconColor="bg-yellow-100 text-yellow-600" 

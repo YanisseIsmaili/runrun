@@ -49,7 +49,7 @@ const UserDetail = () => {
   const [error, setError] = useState(null)
   const [selectedTab, setSelectedTab] = useState('info') // 'info', 'runs', 'stats'
   
-  useEffect(() => {
+    (() => {
     const fetchUserData = async () => {
       setLoading(true)
       setError(null)

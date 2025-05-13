@@ -1,3 +1,4 @@
+# Modification nécessaire du fichier app/config.py
 import os
 from datetime import timedelta
 
@@ -6,8 +7,13 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev_key_very_secret')
     DEBUG = os.getenv('DEBUG', 'False') == 'True'
     
-    # Configuration SQLAlchemy
-    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{os.getenv('DB_USERNAME', 'root')}:{os.getenv('DB_PASSWORD', 'root')}@{os.getenv('DB_HOST', '127.0.0.1')}:{os.getenv('DB_PORT', '3306')}/{os.getenv('DB_NAME', 'running_app_db')}"
+    # Configuration SQLAlchemy - utiliser la chaîne de connexion MySQL
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'mysql+pymysql://root:root@192.168.0.47:3306/running_app_db')
+    
+    # Log des requêtes SQL en mode debug
+    SQLALCHEMY_ECHO = DEBUG
+    
+    # Désactiver le suivi des modifications
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Configuration JWT
