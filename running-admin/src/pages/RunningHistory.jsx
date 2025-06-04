@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { SearchIcon, FilterIcon, ChartBarIcon, DownloadIcon } from '@heroicons/react/outline'
+import { MagnifyingGlassIcon, FunnelIcon, ChartBarIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import api from '../services/api'
 
 // Données temporaires pour le développement
@@ -223,7 +223,7 @@ const RunningHistory = () => {
       <div className="flex flex-col md:flex-row justify-between mb-6 gap-4">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <SearchIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
           </div>
           <input
             type="text"
@@ -239,7 +239,7 @@ const RunningHistory = () => {
             className="btn btn-secondary"
             onClick={() => setShowFilters(!showFilters)}
           >
-            <FilterIcon className="h-5 w-5 mr-2" />
+            <FunnelIcon className="h-5 w-5 mr-2" />
             Filtres
           </button>
           <button className="btn btn-secondary">
@@ -247,7 +247,7 @@ const RunningHistory = () => {
             Statistiques
           </button>
           <button className="btn btn-secondary">
-            <DownloadIcon className="h-5 w-5 mr-2" />
+            <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
             Exporter
           </button>
         </div>

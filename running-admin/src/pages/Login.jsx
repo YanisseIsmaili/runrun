@@ -1,4 +1,3 @@
-// Fichier: src/pages/Login.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,17 +8,13 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState({ checking: true, success: false });
   const [dbStatus, setDbStatus] = useState({ checking: true, success: false });
   
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  
-  // Si l'utilisateur est déjà connecté, rediriger vers le tableau de bord
-  if (isAuthenticated) {
-    return <Navigate to="/" />;
-  }
   
   // Vérification de la connexion API et DB au chargement
   useEffect(() => {
@@ -48,43 +43,48 @@ const Login = () => {
     checkConnections();
   }, []);
   
-  // Dans la fonction handleSubmit de Login.jsx
+  // Si l'utilisateur est déjà connecté, rediriger vers le tableau de bord
+  if (isAuthenticated) {
+    return <Navigate to="/" />;
+  }
+  
+  // Fonction de connexion modifiée
   const handleSubmit = async (e) => {
-      e.preventDefault();
+    e.preventDefault();
+    
+    if (!email.trim() || !password.trim()) {
+      setError('Veuillez remplir tous les champs');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    
+    try {
+      const result = await login(email, password);
       
-      console.log("Soumission du formulaire de connexion");
-      
-      if (!email.trim() || !password.trim()) {
-        setError('Veuillez remplir tous les champs');
-        return;
-      }
-      
-      setLoading(true);
-      setError('');
-      
-      try {
-        console.log("Tentative de connexion avec:", email);
-        const result = await login(email, password);
-        console.log("Résultat de la connexion:", result);
+      if (result.success) {
+        const userName = result.user?.first_name || 'Utilisateur';
+        setSuccess(`Connexion réussie ! Bienvenue, ${userName}`);
         
-        if (result.success) {
-          console.log("Connexion réussie, redirection vers /");
+        setTimeout(() => {
           navigate('/');
-        } else {
-          console.log("Échec de la connexion:", result.error);
-          setError(result.error);
-        }
-      } catch (err) {
-        console.error('Erreur complète lors de la connexion:', err);
-        
-        if (!err.response) {
-          setError('Erreur réseau: impossible de se connecter au serveur');
-        } else {
-          setError(err.message || 'Une erreur est survenue lors de la connexion');
-        }
-      } finally {
-        setLoading(false);
+        }, 1500);
+      } else {
+        setError(result.error);
       }
+    } catch (err) {
+      console.error('Erreur complète lors de la connexion:', err);
+      
+      if (!err.response) {
+        setError('Erreur réseau: impossible de se connecter au serveur');
+      } else {
+        setError(err.message || 'Une erreur est survenue lors de la connexion');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
   
   // Fonction pour rendre l'indicateur d'état
@@ -159,6 +159,22 @@ const Login = () => {
             </div>
           )}
         </div>
+        
+        {/* Message de succès */}
+        {success && (
+          <div className="rounded-md bg-green-50 p-4 animate-fade-in">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-green-800">{success}</h3>
+              </div>
+            </div>
+          </div>
+        )}
         
         <form className={`mt-8 space-y-6 transition-opacity duration-500 ${(apiStatus.checking || dbStatus.checking) ? 'opacity-50' : 'opacity-100'}`} onSubmit={handleSubmit}>
           <div className="rounded-lg bg-white shadow-sm border border-gray-200 overflow-hidden">

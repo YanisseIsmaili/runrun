@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { Menu, Transition } from '@headlessui/react'
-import { BellIcon, MenuAlt1Icon } from '@heroicons/react/outline'
-import { ChevronDownIcon } from '@heroicons/react/solid'
+import { BellIcon, Bars3Icon } from '@heroicons/react/24/outline'
+import { ChevronDownIcon } from '@heroicons/react/24/solid'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -26,7 +26,7 @@ const Header = ({ setSidebarOpen }) => {
         onClick={() => setSidebarOpen(true)}
       >
         <span className="sr-only">Ouvrir le menu</span>
-        <MenuAlt1Icon className="h-6 w-6" aria-hidden="true" />
+        <Bars3Icon className="h-6 w-6" aria-hidden="true" />
       </button>
       
       <div className="flex-1 px-4 flex justify-between">

@@ -1,14 +1,14 @@
 import { Fragment } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
-import { XIcon } from '@heroicons/react/outline'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 import { 
   HomeIcon, 
   UsersIcon, 
   ClockIcon, 
   CogIcon,
   ChartBarIcon,
-  LocationMarkerIcon
-} from '@heroicons/react/solid'
+  MapPinIcon
+} from '@heroicons/react/24/solid'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -17,7 +17,7 @@ const navigation = [
   { name: 'Utilisateurs', href: '/users', icon: UsersIcon },
   { name: 'Historique des courses', href: '/history', icon: ClockIcon },
   { name: 'Statistiques', href: '/stats', icon: ChartBarIcon },
-  { name: 'Itinéraires', href: '/routes', icon: LocationMarkerIcon },
+  { name: 'Itinéraires', href: '/routes', icon: MapPinIcon },
   { name: 'Paramètres', href: '/settings', icon: CogIcon },
 ]
 
@@ -71,7 +71,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                     onClick={() => setSidebarOpen(false)}
                   >
                     <span className="sr-only">Fermer le menu</span>
-                    <XIcon className="h-6 w-6 text-white" aria-hidden="true" />
+                    <XMarkIcon className="h-6 w-6 text-white" aria-hidden="true" />
                   </button>
                 </div>
               </Transition.Child>

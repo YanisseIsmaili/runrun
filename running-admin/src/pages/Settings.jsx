@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { SaveIcon } from '@heroicons/react/outline'
+import { BookmarkIcon } from '@heroicons/react/24/outline'
 import api from '../services/api'
 
 // Données temporaires pour le développement
@@ -160,7 +160,7 @@ const Settings = () => {
             </span>
           ) : (
             <span className="flex items-center">
-              <SaveIcon className="h-5 w-5 mr-2" />
+              <BookmarkIcon className="h-5 w-5 mr-2" />
               Enregistrer
             </span>
           )}
@@ -281,7 +281,6 @@ const Settings = () => {
                     className="form-input"
                     accept="image/*"
                     onChange={(e) => {
-                      // Dans un projet réel, vous auriez un gestionnaire pour l'upload de fichiers
                       console.log('File selected:', e.target.files[0])
                     }}
                   />
