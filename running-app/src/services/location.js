@@ -197,3 +197,16 @@ export default {
   sendLocationUpdate,
   getAddressFromCoordinates
 };
+
+// Ensure proper cleanup of location subscriptions
+useEffect(() => {
+  return () => {
+    // Cleanup on unmount
+    if (locationSubscription) {
+      locationSubscription.remove();
+    }
+    if (timerInterval) {
+      clearInterval(timerInterval);
+    }
+  };
+}, [locationSubscription, timerInterval]);

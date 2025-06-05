@@ -16,12 +16,14 @@ export const AuthProvider = ({ children }) => {
       try {
         const token = await AsyncStorage.getItem('authToken');
         if (token) {
-          const userData = await authService.getCurrentUser(token);
+          const userData = await authService.getCurrentUser();
           setUser(userData);
           setIsAuthenticated(true);
         }
       } catch (err) {
         console.log('Error checking login status:', err);
+        // Clear invalid token
+        await AsyncStorage.removeItem('authToken');
       } finally {
         setLoading(false);
       }

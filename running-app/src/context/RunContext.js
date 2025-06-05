@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as apiService from '../services/api';
+import * as authService from '../services/auth';
 
 export const RunContext = createContext();
 
@@ -22,9 +23,35 @@ export const RunProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // État de l'authentification
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+
   // Charger l'historique des courses
   useEffect(() => {
     fetchRunHistory();
+  }, []);
+
+  // Vérifier le statut de connexion
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        if (token) {
+          const userData = await authService.getCurrentUser();
+          setUser(userData);
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        console.log('Error checking login status:', err);
+        // Supprimer le token invalide
+        await AsyncStorage.removeItem('authToken');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkLoginStatus();
   }, []);
 
   // Demander la permission d'accéder à la localisation
@@ -301,6 +328,8 @@ export const RunProvider = ({ children }) => {
         runHistory,
         loading,
         error,
+        isAuthenticated,
+        user,
         startRun,
         pauseRun,
         resumeRun,

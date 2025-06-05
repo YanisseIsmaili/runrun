@@ -27,7 +27,18 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    CORS(app, resources={r"/api/*": {"origins": os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")}})
+    
+    # CORS configuration with better error handling
+    try:
+        origins = os.getenv("CORS_ALLOWED_ORIGINS", "*")
+        origins_list = origins.split(",") if origins != "*" else "*"
+        CORS(app, resources={r"/api/*": {"origins": origins_list}})
+        print(f"CORS configured with origins: {origins}")
+    except Exception as e:
+        print(f"Warning: Error configuring CORS: {e}")
+        # Fallback to allow all origins
+        CORS(app)
+        print("Fallback: CORS configured to allow all origins")
     
     # Enregistrement des blueprints
     from app.routes.auth import auth_bp
