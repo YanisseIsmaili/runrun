@@ -86,7 +86,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator size={20} color="white" />
               ) : (
                 <Text style={styles.resetButtonText}>Réinitialiser le mot de passe</Text>
               )}

@@ -2,6 +2,7 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 // Screens - Auth
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -19,6 +20,13 @@ import { useAuth } from '../context/AuthContext';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
+
+// Composant de chargement
+const LoadingScreen = () => (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator size={40} color="#4CAF50" />
+  </View>
+);
 
 // Navigation pour les utilisateurs non authentifiés
 const AuthNavigator = () => (
@@ -88,7 +96,7 @@ const AppNavigator = () => {
   const { isAuthenticated, loading } = useAuth();
   
   if (loading) {
-    return null; // Le splash screen est géré dans App.js
+    return <LoadingScreen />;
   }
   
   return (
@@ -101,5 +109,14 @@ const AppNavigator = () => {
     </Stack.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+});
 
 export default AppNavigator;

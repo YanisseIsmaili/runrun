@@ -130,7 +130,7 @@ const RegisterScreen = ({ navigation }) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator size="small" color="white" />
+              <ActivityIndicator size={20} color="white" />
             ) : (
               <Text style={styles.registerButtonText}>S'inscrire</Text>
             )}

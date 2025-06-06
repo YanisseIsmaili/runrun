@@ -8,6 +8,18 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
 import { RunProvider } from './src/context/RunContext';
 
+// PATCH GLOBAL POUR ACTIVITYINDICATOR
+import { ActivityIndicator as RNActivityIndicator } from 'react-native';
+const OriginalActivityIndicator = RNActivityIndicator;
+
+// Patch pour remplacer automatiquement les valeurs string
+global.ActivityIndicator = (props) => {
+  const newProps = { ...props };
+  if (newProps.size === 'large') newProps.size = 40;
+  if (newProps.size === 'small') newProps.size = 20;
+  return React.createElement(OriginalActivityIndicator, newProps);
+};
+
 // Composant SplashScreen intégré
 const SplashScreen = () => {
   return (
@@ -17,7 +29,7 @@ const SplashScreen = () => {
       </View>
       <Text style={splashStyles.title}>Running App</Text>
       <Text style={splashStyles.subtitle}>Suivez vos performances</Text>
-      <ActivityIndicator size="large" color="#4CAF50" style={splashStyles.loader} />
+      <ActivityIndicator size={50} color="#4CAF50" style={splashStyles.loader} />
     </View>
   );
 };

@@ -144,7 +144,7 @@ const ProfileScreen = () => {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator size={20} color="white" />
               ) : (
                 <>
                   <Ionicons name="checkmark" size={16} color="white" />
