@@ -25,8 +25,8 @@ def get_weekly_stats():
                 Run.start_time < next_day
             ).all()
             
-            day_distance = sum(float(run.distance) for run in day_runs if run.distance) if day_runs else 0
-            day_duration = sum(run.duration for run in day_runs if run.duration) if day_runs else 0
+            day_distance = sum(run.distance for run in day_runs) if day_runs else 0
+            day_duration = sum(run.duration for run in day_runs) if day_runs else 0
             
             days.append({
                 'date': day.strftime('%Y-%m-%d'),
@@ -63,9 +63,9 @@ def get_monthly_stats():
             Run.start_time < last_day
         ).all()
         
-        total_distance = sum(float(run.distance) for run in month_runs if run.distance) if month_runs else 0
-        total_duration = sum(run.duration for run in month_runs if run.duration) if month_runs else 0
-        avg_speed = sum(float(run.avg_speed) for run in month_runs if run.avg_speed) / len(month_runs) if month_runs else 0
+        total_distance = sum(run.distance for run in month_runs) if month_runs else 0
+        total_duration = sum(run.duration for run in month_runs) if month_runs else 0
+        avg_speed = sum(run.avg_speed for run in month_runs) / len(month_runs) if month_runs else 0
         
         return jsonify({
             'status': 'success',
