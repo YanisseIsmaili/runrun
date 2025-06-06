@@ -45,10 +45,16 @@
       ]
     ],
     "scheme": "running-app",
+    "packagerOpts": {
+      "host": "192.168.27.66"
+    },
     "extra": {
       "eas": {
         "projectId": "your-project-id"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
