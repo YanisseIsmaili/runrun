@@ -1,0 +1,20 @@
+# Database configuration
+DB_USERNAME=root
+DB_PASSWORD=root
+DB_HOST=192.168.0.47
+DB_PORT=3306
+DB_NAME=running_app_db
+
+# Flask configuration
+FLASK_APP=run.py
+FLASK_ENV=development
+DEBUG=True
+
+# JWT configuration
+JWT_SECRET_KEY=26HK26HJ2MKL6H23JKL6H9042H890HF942I
+JWT_ACCESS_TOKEN_EXPIRES=3600
+
+# CORS configuration
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+
