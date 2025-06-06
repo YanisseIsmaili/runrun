@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react'
 import { jwtDecode } from 'jwt-decode'
 import api from '../services/api'
@@ -32,6 +33,9 @@ export const AuthProvider = ({ children }) => {
     if (!token) return false
     
     try {
+      // Pour le token mock, on considère qu'il est toujours valide
+      if (token.includes('mock')) return true
+      
       const decoded = jwtDecode(token)
       const currentTime = Date.now() / 1000
       
@@ -106,7 +110,7 @@ export const AuthProvider = ({ children }) => {
     }
   }
   
-  // Fonction de connexion améliorée
+  // Fonction de connexion avec simulation
   const login = async (email, password, remember = false) => {
     setLoading(true)
     try {
@@ -114,53 +118,36 @@ export const AuthProvider = ({ children }) => {
       setError(null)
       setRememberMe(remember)
       
-      console.log("Appel API de login")
-      const response = await api.auth.login(email, password)
-      console.log("Réponse API complète:", response)
+      // Simulation d'une connexion réussie
+      await new Promise(resolve => setTimeout(resolve, 1000)) // Délai réaliste
       
-      // Vérifier le format de la réponse pour s'adapter à l'API
-      const tokenData = response.data?.access_token || response.data?.token
-      const userData = response.data?.user
-      console.log("Token extrait:", tokenData ? "Token présent" : "Token absent")
-      console.log("UserData extrait:", userData)
-      
-      if (!tokenData) {
-        console.error("Aucun token trouvé dans la réponse")
-        throw new Error('Token non trouvé dans la réponse')
+      const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjk5OTk5OTk5OTl9.mock"
+      const mockUser = {
+        id: 1,
+        first_name: "Admin",
+        last_name: "Test", 
+        email: email,
+        username: "admin"
       }
       
-      console.log("Mise à jour du state avec token et userData")
-      setToken(tokenData)
-      setCurrentUser(userData)
+      console.log("Connexion simulée réussie")
+      setToken(mockToken)
+      setCurrentUser(mockUser)
       
       // Sauvegarder les données de session de manière sécurisée
-      const saved = saveSessionData(tokenData, userData, remember)
+      const saved = saveSessionData(mockToken, mockUser, remember)
       if (!saved) {
         console.warn('Impossible de sauvegarder la session, la connexion sera temporaire')
       }
       
       console.log("Login terminé avec succès")
-      return { success: true, user: userData }
+      return { success: true, user: mockUser }
     } catch (error) {
-      console.error('Erreur détaillée de login:', error)
-      
-      // Extraire un message d'erreur utile
-      let errorMessage = 'Une erreur est survenue lors de la connexion'
-      
-      if (error.response) {
-        console.log("Détails de la réponse d'erreur:", error.response.data)
-        errorMessage = error.response.data?.message || 
-                      error.response.data?.error || 
-                      `Erreur ${error.response.status}: ${error.response.statusText}`
-      } else if (error.message) {
-        errorMessage = error.message
-      }
-      
-      console.log("Message d'erreur final:", errorMessage)
-      setError(errorMessage)
+      console.error('Erreur lors de la connexion:', error)
+      setError('Erreur de connexion simulée')
       return {
         success: false,
-        error: errorMessage
+        error: 'Erreur de connexion simulée'
       }
     } finally {
       setLoading(false)
@@ -186,24 +173,18 @@ export const AuthProvider = ({ children }) => {
   const loadUserData = async (authToken) => {
     try {
       console.log("Chargement des données utilisateur")
-      const response = await api.users.getCurrentUser()
-      const userData = response.data || response
-      console.log("Données utilisateur chargées:", userData)
-      setCurrentUser(userData)
       
-      // Mettre à jour les données utilisateur dans le stockage
-      if (rememberMe) {
-        cryptoService.setSecureItem(STORAGE_KEYS.USER_DATA, userData, 24 * 7)
-      } else {
-        cryptoService.setSecureItem(STORAGE_KEYS.USER_DATA, userData, 24)
+      // En mode simulation, retourner les données déjà stockées
+      const userData = cryptoService.getSecureItem(STORAGE_KEYS.USER_DATA)
+      if (userData) {
+        setCurrentUser(userData)
+        return userData
       }
       
-      return userData
+      return null
     } catch (error) {
       console.error('Erreur lors du chargement des données utilisateur:', error)
-      // En cas d'erreur, déconnecter l'utilisateur
-      logout()
-      throw error
+      return null
     }
   }
   
@@ -249,12 +230,6 @@ export const AuthProvider = ({ children }) => {
         
         if (sessionLoaded) {
           console.log("Session existante chargée avec succès")
-          // Optionnel: vérifier les données utilisateur à jour
-          try {
-            await loadUserData(token)
-          } catch (error) {
-            console.log("Impossible de rafraîchir les données utilisateur, utilisation des données mises en cache")
-          }
         } else {
           console.log("Aucune session valide trouvée")
         }
@@ -268,7 +243,7 @@ export const AuthProvider = ({ children }) => {
     }
     
     initAuth()
-  }, []) // Seulement au montage du composant
+  }, [])
   
   // Mettre à jour l'instance axios quand le token change
   useEffect(() => {
