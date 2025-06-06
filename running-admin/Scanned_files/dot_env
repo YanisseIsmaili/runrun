@@ -1,7 +1,0 @@
-
-# Fichier .env pour le frontend (running-admin)
-# URL de l'API - Assurez-vous que cette adresse est correcte
-VITE_API_URL=http://192.168.27.66:5000/api
-
-# Environment (development, production, test)
-VITE_APP_ENV=development

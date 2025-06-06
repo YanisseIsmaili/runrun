@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
-import api from '../services/api';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,11 +62,12 @@ const Login = () => {
     setSuccess('');
     
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, rememberMe);
       
       if (result.success) {
         const userName = result.user?.first_name || 'Utilisateur';
-        setSuccess(`Connexion réussie ! Bienvenue, ${userName}`);
+        const sessionType = rememberMe ? 'session étendue (7 jours)' : 'session standard (24h)';
+        setSuccess(`Connexion réussie ! Bienvenue, ${userName}. ${sessionType}`);
         
         setTimeout(() => {
           navigate('/');
@@ -229,6 +230,29 @@ const Login = () => {
                     />
                   </div>
                 </div>
+
+                {/* Case à cocher "Se souvenir de moi" */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <input
+                      id="remember-me"
+                      name="remember-me"
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      disabled={apiStatus.checking || dbStatus.checking || loading}
+                    />
+                    <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                      Se souvenir de moi (7 jours)
+                    </label>
+                  </div>
+                  <div className="text-sm">
+                    <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
+                      Mot de passe oublié ?
+                    </a>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -247,6 +271,27 @@ const Login = () => {
               </div>
             </div>
           )}
+          
+          {/* Information sur la sécurité des données */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-xs text-blue-700">
+                  <strong>Sécurité :</strong> Vos données de connexion sont chiffrées et stockées de manière sécurisée dans votre navigateur.
+                  {rememberMe && (
+                    <span className="block mt-1">
+                      <strong>Mode étendu :</strong> Votre session restera active pendant 7 jours.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
           
           <div>
             <button
@@ -284,6 +329,7 @@ const Login = () => {
       
       <div className="mt-8 text-center text-xs text-gray-500">
         <p>© {new Date().getFullYear()} Running App - Administration</p>
+        <p className="mt-1">Données sécurisées par chiffrement AES-256</p>
       </div>
     </div>
   );
