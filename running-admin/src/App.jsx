@@ -37,7 +37,6 @@ function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="stats" element={<Stats />} />
         <Route path="/" element={
           <ProtectedRoute>
             <Layout />
@@ -47,6 +46,7 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="users/:userId" element={<UserDetail />} />
           <Route path="history" element={<RunningHistory />} />
+          <Route path="stats" element={<Stats />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<NotFound />} />

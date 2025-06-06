@@ -8,7 +8,8 @@ import UserDetail from './pages/UserDetail'
 import RunningHistory from './pages/RunningHistory'
 import Settings from './pages/Settings'
 import NotFound from './pages/NotFound'
-import ErrorBoundary from './components/ErrorBoundary'
+import ErrorBoundary from './components/ErrorBoundary'  
+import Stats from './pages/Stats'
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth()
@@ -36,6 +37,7 @@ function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="stats" element={<Stats />} />
         <Route path="/" element={
           <ProtectedRoute>
             <Layout />
