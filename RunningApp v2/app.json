@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -13,7 +14,15 @@
       "bundleIdentifier": "com.yourcompany.runningapp"
     },
     "android": {
-      "package": "com.yourcompany.runningapp"
+      "package": "com.yourcompany.runningapp",
+      "adaptiveIcon": {
+        "backgroundColor": "#4CAF50"
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -34,16 +43,10 @@
       ]
     ],
     "scheme": "running-app",
-    "packagerOpts": {
-      "host": "192.168.27.66"
-    },
     "extra": {
       "eas": {
         "projectId": "your-project-id"
       }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
     }
   }
 }

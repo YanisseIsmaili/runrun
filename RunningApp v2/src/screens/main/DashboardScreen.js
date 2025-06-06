@@ -199,7 +199,7 @@ const DashboardScreen = ({ navigation }) => {
         <Text style={styles.sectionTitle}>Vos statistiques</Text>
         
         {loading ? (
-          <ActivityIndicator size="large" color="#4CAF50" style={styles.loader} />
+          <ActivityIndicator size={40} color="#4CAF50" style={styles.loader} />
         ) : (
           <View style={styles.statsGrid}>
             <StatsCard
@@ -502,11 +502,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#757575',
     marginBottom: 4,
-  },
-  runItemPace: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4CAF50',
   },
 });
 

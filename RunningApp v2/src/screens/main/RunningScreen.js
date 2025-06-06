@@ -151,7 +151,7 @@ const RunningScreen = ({ navigation }) => {
       {/* Carte */}
       {loading ? (
         <View style={styles.mapLoadingContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+          <ActivityIndicator size={40} color="#4CAF50" />
           <Text style={styles.loadingText}>Récupération de votre position...</Text>
         </View>
       ) : initialRegion ? (

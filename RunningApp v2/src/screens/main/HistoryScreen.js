@@ -183,7 +183,7 @@ const HistoryScreen = ({ navigation }) => {
     <View style={styles.container}>
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+          <ActivityIndicator size={40} color="#4CAF50" />
           <Text style={styles.loadingText}>Chargement de vos courses...</Text>
         </View>
       ) : (
