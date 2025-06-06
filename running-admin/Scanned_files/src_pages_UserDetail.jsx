@@ -5,10 +5,10 @@ import {
   PencilIcon, 
   TrashIcon, 
   ClockIcon, 
-  LocationMarkerIcon,
+  MapPinIcon,
   CalendarIcon
-} from '@heroicons/react/outline'
-import { ChartBarIcon } from '@heroicons/react/solid'
+} from '@heroicons/react/24/outline'
+import { ChartBarIcon } from '@heroicons/react/24/solid'
 import api from '../services/api'
 
 // Utilisateur temporaire pour le développement

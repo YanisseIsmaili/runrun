@@ -1,5 +1,3 @@
-// Modification à apporter au fichier: src/pages/Login.jsx
-
 import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,18 +8,13 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(''); // Ajout d'un état pour le message de succès
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState({ checking: true, success: false });
   const [dbStatus, setDbStatus] = useState({ checking: true, success: false });
   
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  
-  // Si l'utilisateur est déjà connecté, rediriger vers le tableau de bord
-  if (isAuthenticated) {
-    return <Navigate to="/" />;
-  }
   
   // Vérification de la connexion API et DB au chargement
   useEffect(() => {
@@ -50,11 +43,14 @@ const Login = () => {
     checkConnections();
   }, []);
   
+  // Si l'utilisateur est déjà connecté, rediriger vers le tableau de bord
+  if (isAuthenticated) {
+    return <Navigate to="/" />;
+  }
+  
   // Fonction de connexion modifiée
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    console.log("Soumission du formulaire de connexion");
     
     if (!email.trim() || !password.trim()) {
       setError('Veuillez remplir tous les champs');
@@ -63,26 +59,19 @@ const Login = () => {
     
     setLoading(true);
     setError('');
-    setSuccess(''); // Réinitialiser le message de succès
+    setSuccess('');
     
     try {
-      console.log("Tentative de connexion avec:", email);
       const result = await login(email, password);
-      console.log("Résultat de la connexion:", result);
       
       if (result.success) {
-        console.log("Connexion réussie");
-        // Afficher un message de succès
         const userName = result.user?.first_name || 'Utilisateur';
         setSuccess(`Connexion réussie ! Bienvenue, ${userName}`);
         
-        // Attendre un court instant pour que l'utilisateur puisse voir le message de succès
         setTimeout(() => {
-          console.log("Redirection vers le tableau de bord");
           navigate('/');
-        }, 1500); // 1.5 secondes de délai
+        }, 1500);
       } else {
-        console.log("Échec de la connexion:", result.error);
         setError(result.error);
       }
     } catch (err) {

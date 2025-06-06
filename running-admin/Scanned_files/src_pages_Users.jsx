@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { SearchIcon, FilterIcon } from '@heroicons/react/outline'
+import { MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import api from '../services/api'
+import ErrorMessage from '../components/ErrorMessage'
+import { useApiCall } from '../hooks/useErrorHandler'
 
 // Données temporaires pour le développement
 const tempUsers = Array.from({ length: 25 }, (_, i) => ({
@@ -23,34 +25,13 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [sortField, setSortField] = useState('last_activity')
   const [sortDirection, setSortDirection] = useState('desc')
   const usersPerPage = 10
   
+  const { callApi, loading, error, retry, clearError } = useApiCall()
+  
   useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true)
-      setError(null)
-      
-      try {
-        // Dans un projet réel, remplacez ceci par un appel API pour obtenir les données réelles
-        // const response = await api.users.getAll(currentPage, usersPerPage)
-        // setUsers(response.data.users)
-        // setTotalPages(Math.ceil(response.data.total / usersPerPage))
-        
-        // Utilisation des données temporaires pour le développement
-        setUsers(tempUsers)
-        setTotalPages(Math.ceil(tempUsers.length / usersPerPage))
-      } catch (err) {
-        console.error('Erreur lors du chargement des utilisateurs', err)
-        setError('Impossible de charger la liste des utilisateurs')
-      } finally {
-        setLoading(false)
-      }
-    }
-    
     fetchUsers()
   }, [currentPage])
   
@@ -95,6 +76,29 @@ const Users = () => {
     
     setFilteredUsers(result)
   }, [users, searchTerm, sortField, sortDirection])
+
+  const fetchUsers = async () => {
+    await callApi(
+      async () => {
+        // Simulation API
+        await new Promise(resolve => setTimeout(resolve, 800))
+        
+        // Simuler parfois une erreur
+        if (Math.random() < 0.05) {
+          throw new Error('Erreur de chargement des utilisateurs')
+        }
+        
+        return tempUsers
+      },
+      {
+        onSuccess: (data) => {
+          setUsers(data)
+          setTotalPages(Math.ceil(data.length / usersPerPage))
+        },
+        errorMessage: 'Impossible de charger la liste des utilisateurs'
+      }
+    )
+  }
   
   // Fonction pour gérer le tri
   const handleSort = (field) => {
@@ -124,24 +128,22 @@ const Users = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement des utilisateurs...</p>
+        </div>
       </div>
     )
   }
   
   if (error) {
     return (
-      <div className="bg-red-50 p-4 rounded-md">
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">{error}</h3>
-          </div>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <ErrorMessage 
+          error={error}
+          onRetry={() => retry(fetchUsers)}
+          onDismiss={clearError}
+        />
       </div>
     )
   }
@@ -159,7 +161,7 @@ const Users = () => {
       <div className="flex flex-col md:flex-row justify-between mb-6 gap-4">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <SearchIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
           </div>
           <input
             type="text"
@@ -172,7 +174,7 @@ const Users = () => {
         
         <div className="flex gap-2">
           <button className="btn btn-secondary">
-            <FilterIcon className="h-5 w-5 mr-2" />
+            <FunnelIcon className="h-5 w-5 mr-2" />
             Filtres
           </button>
           <button className="btn btn-primary">
