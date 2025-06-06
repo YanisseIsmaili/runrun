@@ -2,7 +2,8 @@ import 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
-import { View, Text, Image, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
 import { RunProvider } from './src/context/RunContext';
@@ -11,11 +12,9 @@ import { RunProvider } from './src/context/RunContext';
 const SplashScreen = () => {
   return (
     <View style={splashStyles.container}>
-      <Image
-        source={require('./assets/icon.png')}
-        style={splashStyles.logo}
-        resizeMode="contain"
-      />
+      <View style={splashStyles.logoContainer}>
+        <Ionicons name="fitness" size={80} color="#4CAF50" />
+      </View>
       <Text style={splashStyles.title}>Running App</Text>
       <Text style={splashStyles.subtitle}>Suivez vos performances</Text>
       <ActivityIndicator size="large" color="#4CAF50" style={splashStyles.loader} />
@@ -30,9 +29,13 @@ const splashStyles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'white',
   },
-  logo: {
+  logoContainer: {
     width: 150,
     height: 150,
+    borderRadius: 75,
+    backgroundColor: '#E8F5E8',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 20,
   },
   title: {
