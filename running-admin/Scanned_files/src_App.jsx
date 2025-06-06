@@ -1,3 +1,4 @@
+// running-admin/src/App.jsx
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
@@ -10,6 +11,7 @@ import Settings from './pages/Settings'
 import NotFound from './pages/NotFound'
 import ErrorBoundary from './components/ErrorBoundary'  
 import Stats from './pages/Stats'
+import RoutesPage from './pages/Routes'
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth()
@@ -47,6 +49,7 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="users/:userId" element={<UserDetail />} />
           <Route path="history" element={<RunningHistory />} />
+          <Route path="routes" element={<RoutesPage />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<NotFound />} />

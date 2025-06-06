@@ -1,8 +1,7 @@
-// Fichier: running-admin/src/services/api.js
 import axios from 'axios';
+import emergencyService from './emergencyService';
 
-// URL de base de l'API
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 console.log('API URL configurée:', API_URL);
 
@@ -11,23 +10,29 @@ const instance = axios.create({
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 10000,
-  // Temporairement désactivé pour résoudre les problèmes CORS
-  // withCredentials: true
+  timeout: 10000
 });
 
-// Intercepteur pour ajouter le token d'authentification à chaque requête
+// Intercepteur pour ajouter le token d'authentification
 instance.interceptors.request.use(
   (config) => {
     console.log('Envoi de requête à:', config.url);
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+    
+    try {
+      const token = localStorage.getItem('running_app_token');
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.warn('Erreur lors de la récupération du token:', error);
+      emergencyService.logError(error, 'token_retrieval');
     }
+    
     return config;
   },
   (error) => {
     console.error('Erreur lors de la préparation de la requête:', error);
+    emergencyService.logError(error, 'request_preparation');
     return Promise.reject(error);
   }
 );
@@ -52,8 +57,13 @@ instance.interceptors.response.use(
       });
       
       if (error.response.status === 401) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+        try {
+          localStorage.removeItem('running_app_token');
+          window.location.href = '/login';
+        } catch (storageError) {
+          emergencyService.logError(storageError, 'logout_cleanup');
+          window.location.href = '/login';
+        }
       }
     } else if (error.request) {
       console.error('Erreur de réseau - Aucune réponse reçue:', {
@@ -65,6 +75,7 @@ instance.interceptors.response.use(
       error.userMessage = 'Impossible de se connecter au serveur. Veuillez vérifier votre connexion réseau et l\'état du serveur API.';
     } else {
       console.error('Erreur de requête:', error.message);
+      emergencyService.logError(error, 'api_error');
     }
     
     if (!error.userMessage) {
@@ -114,6 +125,18 @@ const runs = {
   delete: (id) => instance.delete(`/runs/${id}`)
 };
 
+// Service des itinéraires
+const routes = {
+  getAll: (page = 1, limit = 10) => instance.get(`/routes?page=${page}&limit=${limit}`),
+  getById: (id) => instance.get(`/routes/${id}`),
+  create: (routeData) => instance.post('/routes', routeData),
+  update: (id, routeData) => instance.put(`/routes/${id}`, routeData),
+  delete: (id) => instance.delete(`/routes/${id}`),
+  toggleStatus: (id) => instance.patch(`/routes/${id}/toggle-status`),
+  getActiveRuns: () => instance.get('/routes/active-runs'),
+  getRouteStats: (id) => instance.get(`/routes/${id}/stats`)
+};
+
 // Service des statistiques
 const stats = {
   getGlobal: () => instance.get('/admin/stats'),
@@ -138,7 +161,7 @@ const settings = {
   update: (settingsData) => instance.put('/settings', settingsData)
 };
 
-// Fonction de test réseau pour diagnostiquer les problèmes de connexion
+// Fonction de test réseau
 const testConnection = async () => {
   try {
     const response = await instance.get('/health');
@@ -150,6 +173,7 @@ const testConnection = async () => {
     };
   } catch (error) {
     console.error('Test de connexion échoué:', error);
+    emergencyService.logError(error, 'connection_test');
     return {
       success: false,
       message: error.userMessage || 'Échec de la connexion à l\'API',
@@ -162,6 +186,7 @@ export default {
   auth,
   users,
   runs,
+  routes,
   stats,
   admin,
   settings,

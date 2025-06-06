@@ -4,3 +4,9 @@ VITE_API_URL=http://localhost:5000/api
 
 # Environment (development, production, test)
 VITE_APP_ENV=development
+
+# Configuration du debugging
+VITE_DEBUG_MODE=true
+
+# Configuration de sécurité
+VITE_ENABLE_CRYPTO=true

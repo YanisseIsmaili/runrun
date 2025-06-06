@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import emergencyService from '../services/emergencyService'
 
 export const useErrorHandler = () => {
   const [error, setError] = useState(null)
@@ -22,6 +23,9 @@ export const useErrorHandler = () => {
       return result
     } catch (err) {
       console.error('Erreur capturée:', err)
+      
+      // Enregistrer l'erreur dans le service d'urgence
+      emergencyService.logError(err, 'useErrorHandler')
       
       let userFriendlyMessage = errorMessage
       

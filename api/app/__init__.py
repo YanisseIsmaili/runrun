@@ -1,3 +1,4 @@
+# api/app/__init__.py - Version mise à jour
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -63,7 +64,7 @@ def create_app(config_name=None):
     CORS(app, resources={
         r"/api/*": {
             "origins": cors_origins,
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
             "allow_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True
         }
@@ -76,9 +77,9 @@ def create_app(config_name=None):
         
         # Permettre les requêtes CORS avec credentials
         if origin and origin in cors_origins:
-            response.headers.add('Access-Control-Allow-Origin', origin)
+            response.headers['Access-Control-Allow-Origin'] = origin
             response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH')
             response.headers.add('Access-Control-Allow-Credentials', 'true')
             
         # Ajouter des headers de sécurité supplémentaires
@@ -130,12 +131,14 @@ def create_app(config_name=None):
     from app.routes.runs import runs_bp
     from app.routes.stats import stats_bp
     from app.routes.admin import admin_bp
+    from app.routes.routes import routes_bp  # Nouveau blueprint ajouté
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(runs_bp, url_prefix='/api/runs')
     app.register_blueprint(stats_bp, url_prefix='/api/stats')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(routes_bp, url_prefix='/api/routes')  # Nouveau blueprint
     
     # Route pour vérifier l'état de l'API et de la base de données
     @app.route('/api/health')
