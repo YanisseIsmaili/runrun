@@ -5,12 +5,36 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRun } from '../../context/RunContext';
 import { useAuth } from '../../context/AuthContext';
+
+// Composant ActivityIndicator personnalisé
+const CustomActivityIndicator = ({ size = 40, color = "#4CAF50", style }) => {
+  const indicatorSize = typeof size === 'string' ? (size === 'large' ? 40 : 20) : size;
+  
+  return (
+    <View style={[{ 
+      width: indicatorSize, 
+      height: indicatorSize,
+      justifyContent: 'center',
+      alignItems: 'center'
+    }, style]}>
+      <View
+        style={{
+          width: indicatorSize,
+          height: indicatorSize,
+          borderRadius: indicatorSize / 2,
+          borderWidth: 2,
+          borderColor: color,
+          borderTopColor: 'transparent',
+        }}
+      />
+    </View>
+  );
+};
 
 const DashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -199,7 +223,7 @@ const DashboardScreen = ({ navigation }) => {
         <Text style={styles.sectionTitle}>Vos statistiques</Text>
         
         {loading ? (
-          <ActivityIndicator size={40} color="#4CAF50" style={styles.loader} />
+          <CustomActivityIndicator size={40} color="#4CAF50" style={styles.loader} />
         ) : (
           <View style={styles.statsGrid}>
             <StatsCard
@@ -502,6 +526,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#757575',
     marginBottom: 4,
+  },
+  runItemPace: {
+    fontSize: 12,
+    color: '#757575',
   },
 });
 

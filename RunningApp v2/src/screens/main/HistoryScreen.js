@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
   Modal,
   Share,
   Alert
@@ -14,6 +13,31 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRun } from '../../context/RunContext';
 import MapView, { Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+
+// Composant ActivityIndicator personnalisé
+const CustomActivityIndicator = ({ size = 40, color = "#4CAF50", style }) => {
+  const indicatorSize = typeof size === 'string' ? (size === 'large' ? 40 : 20) : size;
+  
+  return (
+    <View style={[{ 
+      width: indicatorSize, 
+      height: indicatorSize,
+      justifyContent: 'center',
+      alignItems: 'center'
+    }, style]}>
+      <View
+        style={{
+          width: indicatorSize,
+          height: indicatorSize,
+          borderRadius: indicatorSize / 2,
+          borderWidth: 2,
+          borderColor: color,
+          borderTopColor: 'transparent',
+        }}
+      />
+    </View>
+  );
+};
 
 const HistoryScreen = ({ navigation }) => {
   const { runHistory, loading, fetchRunHistory, formatDuration, deleteRun } = useRun();
@@ -183,7 +207,7 @@ const HistoryScreen = ({ navigation }) => {
     <View style={styles.container}>
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size={40} color="#4CAF50" />
+          <CustomActivityIndicator size={40} color="#4CAF50" />
           <Text style={styles.loadingText}>Chargement de vos courses...</Text>
         </View>
       ) : (

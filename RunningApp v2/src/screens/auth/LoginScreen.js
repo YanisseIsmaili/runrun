@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Alert,
@@ -14,6 +13,31 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+
+// Composant ActivityIndicator personnalisé
+const CustomActivityIndicator = ({ size = 40, color = "#4CAF50", style }) => {
+  const indicatorSize = typeof size === 'string' ? (size === 'large' ? 40 : 20) : size;
+  
+  return (
+    <View style={[{ 
+      width: indicatorSize, 
+      height: indicatorSize,
+      justifyContent: 'center',
+      alignItems: 'center'
+    }, style]}>
+      <View
+        style={{
+          width: indicatorSize,
+          height: indicatorSize,
+          borderRadius: indicatorSize / 2,
+          borderWidth: 2,
+          borderColor: color,
+          borderTopColor: 'transparent',
+        }}
+      />
+    </View>
+  );
+};
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -94,7 +118,7 @@ const LoginScreen = ({ navigation }) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator size="small" color="white" />
+              <CustomActivityIndicator size={20} color="white" />
             ) : (
               <Text style={styles.loginButtonText}>Se connecter</Text>
             )}

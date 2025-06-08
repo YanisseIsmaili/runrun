@@ -4,49 +4,57 @@
     "slug": "running-app",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.runningapp"
+      "bundleIdentifier": "com.runningapp.mobile"
     },
     "android": {
-      "package": "com.yourcompany.runningapp",
       "adaptiveIcon": {
-        "backgroundColor": "#4CAF50"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
       },
+      "package": "com.runningapp.mobile",
       "permissions": [
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.RECORD_AUDIO"
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "FOREGROUND_SERVICE"
       ]
     },
     "web": {
-      "bundler": "metro"
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
     },
     "plugins": [
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Permettez à l'application de suivre votre position pour enregistrer vos courses.",
-          "isIosBackgroundLocationEnabled": true
+          "locationAlwaysAndWhenInUsePermission": "Allow Running App to use your location to track your runs."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "L'application a besoin d'accéder à vos photos pour mettre à jour votre photo de profil."
+          "photosPermission": "The app accesses your photos to let you select profile pictures."
         }
       ]
     ],
-    "scheme": "running-app",
-    "extra": {
-      "eas": {
-        "projectId": "your-project-id"
-      }
-    }
+    "experiments": {
+      "reactCompiler": false
+    },
+    "newArchEnabled": true
   }
 }

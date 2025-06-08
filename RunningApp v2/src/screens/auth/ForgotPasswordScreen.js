@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Alert,
@@ -13,6 +12,31 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as authService from '../../services/auth';
+
+// Composant ActivityIndicator personnalisé
+const CustomActivityIndicator = ({ size = 40, color = "#4CAF50", style }) => {
+  const indicatorSize = typeof size === 'string' ? (size === 'large' ? 40 : 20) : size;
+  
+  return (
+    <View style={[{ 
+      width: indicatorSize, 
+      height: indicatorSize,
+      justifyContent: 'center',
+      alignItems: 'center'
+    }, style]}>
+      <View
+        style={{
+          width: indicatorSize,
+          height: indicatorSize,
+          borderRadius: indicatorSize / 2,
+          borderWidth: 2,
+          borderColor: color,
+          borderTopColor: 'transparent',
+        }}
+      />
+    </View>
+  );
+};
 
 const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -86,7 +110,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator size={20} color="white" />
+                <CustomActivityIndicator size={20} color="white" />
               ) : (
                 <Text style={styles.resetButtonText}>Réinitialiser le mot de passe</Text>
               )}
@@ -221,4 +245,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ForgotPasswordScreen;
+export default ForgotPasswordScreen; 

@@ -2,22 +2,31 @@ import 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
 import { RunProvider } from './src/context/RunContext';
 
-// PATCH GLOBAL POUR ACTIVITYINDICATOR
-import { ActivityIndicator as RNActivityIndicator } from 'react-native';
-const OriginalActivityIndicator = RNActivityIndicator;
-
-// Patch pour remplacer automatiquement les valeurs string
-global.ActivityIndicator = (props) => {
-  const newProps = { ...props };
-  if (newProps.size === 'large') newProps.size = 40;
-  if (newProps.size === 'small') newProps.size = 20;
-  return React.createElement(OriginalActivityIndicator, newProps);
+// Composant ActivityIndicator personnalisé pour éviter les problèmes de taille
+const CustomActivityIndicator = ({ size = 40, color = "#4CAF50", style }) => {
+  const indicatorSize = typeof size === 'string' ? (size === 'large' ? 40 : 20) : size;
+  
+  return (
+    <View style={[{ width: indicatorSize, height: indicatorSize }, style]}>
+      <View
+        style={{
+          width: indicatorSize,
+          height: indicatorSize,
+          borderRadius: indicatorSize / 2,
+          borderWidth: 2,
+          borderColor: color,
+          borderTopColor: 'transparent',
+          transform: [{ rotate: '0deg' }],
+        }}
+      />
+    </View>
+  );
 };
 
 // Composant SplashScreen intégré
@@ -29,7 +38,7 @@ const SplashScreen = () => {
       </View>
       <Text style={splashStyles.title}>Running App</Text>
       <Text style={splashStyles.subtitle}>Suivez vos performances</Text>
-      <ActivityIndicator size={50} color="#4CAF50" style={splashStyles.loader} />
+      <CustomActivityIndicator size={50} color="#4CAF50" style={splashStyles.loader} />
     </View>
   );
 };
