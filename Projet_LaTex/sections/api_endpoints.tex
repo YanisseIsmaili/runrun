@@ -1,0 +1,591 @@
+\section{Annexe A - Référence Complète des Endpoints API}
+
+\subsection{Authentification - /api/auth}
+
+\subsubsection{POST /api/auth/login}
+
+\paragraph{Description}
+Authentification d'un utilisateur avec email/username et mot de passe.
+
+\paragraph{Paramètres}
+\begin{lstlisting}[language=json]
+{
+    "email": "user@example.com",     // ou "username": "john_doe"
+    "password": "motdepasse"
+}
+\end{lstlisting}
+
+\paragraph{Réponse Succès (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Connexion réussie",
+    "data": {
+        "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+        "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+        "expires_in": 3600,
+        "user": {
+            "id": 1,
+            "username": "john_doe",
+            "email": "user@example.com",
+            "first_name": "John",
+            "last_name": "Doe",
+            "is_admin": false
+        }
+    }
+}
+\end{lstlisting}
+
+\paragraph{Erreur Authentification (401)}
+\begin{lstlisting}[language=json]
+{
+    "status": "error",
+    "message": "Identifiants incorrects",
+    "errors": {
+        "auth": "Email ou mot de passe invalide"
+    }
+}
+\end{lstlisting}
+
+\subsubsection{POST /api/auth/register}
+
+\paragraph{Description}
+Inscription d'un nouvel utilisateur.
+
+\paragraph{Paramètres}
+\begin{lstlisting}[language=json]
+{
+    "username": "nouveau_user",
+    "email": "nouveau@example.com",
+    "password": "MotDePasse123!",
+    "first_name": "Nouveau",
+    "last_name": "Utilisateur",
+    "date_of_birth": "1990-01-15",
+    "height": 175.5,
+    "weight": 70.0
+}
+\end{lstlisting}
+
+\paragraph{Validation}
+\begin{itemize}
+    \item Username : 3-64 caractères, unique
+    \item Email : format valide, unique
+    \item Password : minimum 8 caractères, complexité requise
+    \item Height : 100-250 cm (optionnel)
+    \item Weight : 30-200 kg (optionnel)
+\end{itemize}
+
+\subsubsection{POST /api/auth/refresh}
+
+\paragraph{Description}
+Renouvellement du token d'accès avec le refresh token.
+
+\paragraph{Headers}
+\begin{lstlisting}[language=http]
+Authorization: Bearer <refresh_token>
+\end{lstlisting}
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Token renouvelé",
+    "data": {
+        "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+        "expires_in": 3600
+    }
+}
+\end{lstlisting}
+
+\subsection{Utilisateurs - /api/users}
+
+\subsubsection{GET /api/users/profile}
+
+\paragraph{Description}
+Récupération du profil de l'utilisateur connecté.
+
+\paragraph{Headers}
+\begin{lstlisting}[language=http]
+Authorization: Bearer <access_token>
+\end{lstlisting}
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Profil récupéré",
+    "data": {
+        "id": 1,
+        "username": "john_doe",
+        "email": "john@example.com",
+        "first_name": "John",
+        "last_name": "Doe",
+        "date_of_birth": "1990-01-15",
+        "height": 175.5,
+        "weight": 70.0,
+        "profile_picture": null,
+        "created_at": "2024-01-01T10:00:00Z",
+        "updated_at": "2024-01-15T14:30:00Z"
+    }
+}
+\end{lstlisting}
+
+\subsubsection{PUT /api/users/profile}
+
+\paragraph{Description}
+Mise à jour du profil utilisateur.
+
+\paragraph{Paramètres}
+\begin{lstlisting}[language=json]
+{
+    "first_name": "Nouveau Prénom",
+    "last_name": "Nouveau Nom",
+    "date_of_birth": "1990-01-15",
+    "height": 180.0,
+    "weight": 75.0
+}
+\end{lstlisting}
+
+\paragraph{Note}
+Les champs email et username ne peuvent pas être modifiés via cette route.
+
+\subsubsection{PUT /api/users/change-password}
+
+\paragraph{Description}
+Changement du mot de passe utilisateur.
+
+\paragraph{Paramètres}
+\begin{lstlisting}[language=json]
+{
+    "current_password": "ancien_mot_de_passe",
+    "new_password": "nouveau_mot_de_passe"
+}
+\end{lstlisting}
+
+\subsection{Courses - /api/runs}
+
+\subsubsection{GET /api/runs}
+
+\paragraph{Description}
+Liste paginée des courses de l'utilisateur connecté.
+
+\paragraph{Paramètres Query}
+\begin{itemize}
+    \item \texttt{page} : Numéro de page (défaut: 1)
+    \item \texttt{per\_page} : Éléments par page (défaut: 10, max: 100)
+    \item \texttt{start\_date} : Date début filtrage (ISO 8601)
+    \item \texttt{end\_date} : Date fin filtrage (ISO 8601)
+\end{itemize}
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Courses récupérées",
+    "data": {
+        "runs": [
+            {
+                "id": 1,
+                "start_time": "2024-01-15T08:00:00Z",
+                "end_time": "2024-01-15T08:30:00Z",
+                "duration": 1800,
+                "distance": 5000.0,
+                "avg_speed": 2.78,
+                "max_speed": 3.5,
+                "calories": 350,
+                "route_data": [...]
+            }
+        ],
+        "pagination": {
+            "total": 45,
+            "pages": 5,
+            "current_page": 1,
+            "per_page": 10,
+            "has_next": true,
+            "has_prev": false
+        }
+    }
+}
+\end{lstlisting}
+
+\subsubsection{POST /api/runs}
+
+\paragraph{Description}
+Création d'une nouvelle course.
+
+\paragraph{Paramètres}
+\begin{lstlisting}[language=json]
+{
+    "start_time": "2024-01-15T08:00:00Z",
+    "end_time": "2024-01-15T08:30:00Z",
+    "duration": 1800,
+    "distance": 5000.0,
+    "avg_speed": 2.78,
+    "max_speed": 3.5,
+    "calories": 350,
+    "route_data": [
+        {
+            "latitude": 48.856614,
+            "longitude": 2.3522219,
+            "altitude": 35.2,
+            "timestamp": "2024-01-15T08:00:00Z",
+            "accuracy": 5.0
+        }
+    ]
+}
+\end{lstlisting}
+
+\paragraph{Validation}
+\begin{itemize}
+    \item \texttt{start\_time} : Requis, format ISO 8601
+    \item \texttt{duration} : 1-86400 secondes
+    \item \texttt{distance} : 0.01-500000 mètres
+    \item \texttt{route\_data} : Tableau de coordonnées GPS
+\end{itemize}
+
+\subsubsection{GET /api/runs/\{id\}}
+
+\paragraph{Description}
+Détails d'une course spécifique.
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Course récupérée",
+    "data": {
+        "id": 1,
+        "user_id": 1,
+        "start_time": "2024-01-15T08:00:00Z",
+        "end_time": "2024-01-15T08:30:00Z",
+        "duration": 1800,
+        "distance": 5000.0,
+        "avg_speed": 2.78,
+        "max_speed": 3.5,
+        "calories": 350,
+        "route_data": [...],
+        "created_at": "2024-01-15T08:35:00Z",
+        "updated_at": "2024-01-15T08:35:00Z"
+    }
+}
+\end{lstlisting}
+
+\subsubsection{DELETE /api/runs/\{id\}}
+
+\paragraph{Description}
+Suppression d'une course.
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Course supprimée avec succès",
+    "data": {}
+}
+\end{lstlisting}
+
+\subsection{Statistiques - /api/stats}
+
+\subsubsection{GET /api/stats}
+
+\paragraph{Description}
+Statistiques globales de l'utilisateur connecté.
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Statistiques récupérées",
+    "data": {
+        "total_runs": 45,
+        "total_distance": 225000.0,
+        "total_duration": 81000,
+        "avg_speed": 2.78,
+        "max_speed": 4.2,
+        "total_calories": 15750,
+        "current_month": {
+            "runs": 12,
+            "distance": 60000.0,
+            "duration": 21600
+        },
+        "personal_records": {
+            "longest_run": 21000.0,
+            "fastest_pace": "4:12",
+            "best_speed": 4.2
+        }
+    }
+}
+\end{lstlisting}
+
+\subsubsection{GET /api/stats/weekly}
+
+\paragraph{Description}
+Statistiques par jour pour la semaine en cours.
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Statistiques hebdomadaires",
+    "data": {
+        "week_start": "2024-01-15",
+        "week_end": "2024-01-21",
+        "daily_stats": [
+            {
+                "date": "2024-01-15",
+                "day_name": "Monday",
+                "runs_count": 1,
+                "distance": 5000.0,
+                "duration": 1800,
+                "calories": 350
+            },
+            {
+                "date": "2024-01-16",
+                "day_name": "Tuesday",
+                "runs_count": 0,
+                "distance": 0.0,
+                "duration": 0,
+                "calories": 0
+            }
+        ],
+        "week_totals": {
+            "runs": 3,
+            "distance": 18000.0,
+            "duration": 6480,
+            "calories": 1260
+        }
+    }
+}
+\end{lstlisting}
+
+\subsubsection{GET /api/stats/monthly}
+
+\paragraph{Description}
+Statistiques mensuelles avec paramètres optionnels.
+
+\paragraph{Paramètres Query}
+\begin{itemize}
+    \item \texttt{year} : Année (défaut: année courante)
+    \item \texttt{month} : Mois 1-12 (défaut: mois courant)
+\end{itemize}
+
+\subsection{Administration - /api/admin}
+
+\subsubsection{GET /api/admin/stats}
+
+\paragraph{Description}
+Statistiques globales de l'application (accès admin requis).
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Statistiques globales",
+    "data": {
+        "total_users": 1250,
+        "active_users": 875,
+        "total_runs": 15680,
+        "total_distance": 125600000.0,
+        "average_pace": "5:24",
+        "new_users_this_month": 45,
+        "runs_this_month": 2150,
+        "distance_this_month": 10800000.0
+    }
+}
+\end{lstlisting}
+
+\subsubsection{GET /api/admin/users}
+
+\paragraph{Description}
+Liste paginée de tous les utilisateurs (admin requis).
+
+\paragraph{Paramètres Query}
+\begin{itemize}
+    \item \texttt{page} : Numéro de page
+    \item \texttt{per\_page} : Éléments par page
+    \item \texttt{search} : Recherche par nom/email
+    \item \texttt{sort} : Tri (created\_at, last\_activity)
+\end{itemize}
+
+\subsection{Courses Proposées - /api/proposed-runs}
+
+\subsubsection{GET /api/proposed-runs}
+
+\paragraph{Description}
+Liste des courses proposées selon les critères de filtrage.
+
+\paragraph{Paramètres Query}
+\begin{itemize}
+    \item \texttt{difficulty} : beginner, intermediate, advanced, all
+    \item \texttt{duration} : short, medium, long, all
+    \item \texttt{type} : endurance, interval, speed, all
+\end{itemize}
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "6 courses proposées",
+    "data": {
+        "runs": [
+            {
+                "id": "run_001",
+                "title": "Course matinale légère",
+                "description": "Une course douce pour bien commencer la journée",
+                "difficulty": "beginner",
+                "type": "endurance",
+                "duration_minutes": 20,
+                "distance_km": 3.0,
+                "calories_estimate": 240,
+                "estimated_pace": "6.7 min/km",
+                "instructions": [
+                    "Échauffement 5 minutes de marche rapide",
+                    "Course légère pendant 15 minutes",
+                    "Retour au calme 5 minutes de marche"
+                ],
+                "tips": [
+                    "Gardez un rythme conversationnel",
+                    "Hydratez-vous bien avant et après"
+                ]
+            }
+        ],
+        "total": 6,
+        "filters_applied": {
+            "difficulty": "beginner",
+            "duration": "all",
+            "type": "all"
+        }
+    }
+}
+\end{lstlisting}
+
+\subsubsection{GET /api/proposed-runs/categories}
+
+\paragraph{Description}
+Liste des catégories de courses disponibles.
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Catégories de courses",
+    "data": {
+        "difficulties": [
+            {
+                "id": "beginner",
+                "name": "Débutant",
+                "description": "Pour commencer ou reprendre"
+            },
+            {
+                "id": "intermediate",
+                "name": "Intermédiaire",
+                "description": "Pour progresser"
+            },
+            {
+                "id": "advanced",
+                "name": "Avancé",
+                "description": "Pour les coureurs expérimentés"
+            }
+        ],
+        "types": [
+            {
+                "id": "endurance",
+                "name": "Endurance",
+                "description": "Course continue"
+            },
+            {
+                "id": "interval",
+                "name": "Intervalles",
+                "description": "Alternance effort/récupération"
+            },
+            {
+                "id": "speed",
+                "name": "Vitesse",
+                "description": "Améliorer la vitesse de pointe"
+            }
+        ],
+        "durations": [
+            {
+                "id": "short",
+                "name": "Court",
+                "description": "Moins de 25 minutes"
+            },
+            {
+                "id": "medium",
+                "name": "Moyen",
+                "description": "25 à 45 minutes"
+            },
+            {
+                "id": "long",
+                "name": "Long",
+                "description": "Plus de 45 minutes"
+            }
+        ]
+    }
+}
+\end{lstlisting}
+
+\subsection{Monitoring - /api/health}
+
+\subsubsection{GET /api/health}
+
+\paragraph{Description}
+Vérification de l'état de santé de l'API et de ses dépendances.
+
+\paragraph{Réponse Saine (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "healthy",
+    "timestamp": 1705312800.123,
+    "components": {
+        "api": {
+            "status": "healthy",
+            "message": "Running App API is running"
+        },
+        "database": {
+            "status": "healthy",
+            "message": "Database connection is working"
+        },
+        "blueprints": {
+            "registered": 6,
+            "failed": 0,
+            "list": [
+                "auth_bp -> /api/auth",
+                "users_bp -> /api/users",
+                "runs_bp -> /api/runs",
+                "stats_bp -> /api/stats",
+                "admin_bp -> /api/admin",
+                "proposed_runs_bp -> /api/proposed-runs"
+            ]
+        }
+    }
+}
+\end{lstlisting}
+
+\subsubsection{GET /api/routes}
+
+\paragraph{Description}
+Liste de toutes les routes disponibles dans l'API.
+
+\paragraph{Réponse (200)}
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "42 routes disponibles",
+    "data": {
+        "routes": [
+            {
+                "endpoint": "auth.login",
+                "methods": ["POST", "OPTIONS"],
+                "url": "/api/auth/login"
+            },
+            {
+                "endpoint": "users.get_profile",
+                "methods": ["GET", "OPTIONS"],
+                "url": "/api/users/profile"
+            }
+        ],
+        "total": 42
+    }
+}
+\end{lstlisting}

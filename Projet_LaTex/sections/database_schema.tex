@@ -1,0 +1,576 @@
+\section{Annexe B - Schéma Complet de la Base de Données}
+
+\subsection{Script de Création des Tables}
+
+\subsubsection{Table Users}
+
+\begin{lstlisting}[language=sql]
+CREATE TABLE users (
+    id INTEGER AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(64) NOT NULL UNIQUE,
+    email VARCHAR(120) NOT NULL UNIQUE,
+    password_hash VARCHAR(128) NOT NULL,
+    first_name VARCHAR(64),
+    last_name VARCHAR(64),
+    date_of_birth DATE,
+    height FLOAT COMMENT 'Taille en centimètres',
+    weight FLOAT COMMENT 'Poids en kilogrammes',
+    profile_picture VARCHAR(255),
+    is_admin BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Index pour les performances
+    INDEX idx_users_email (email),
+    INDEX idx_users_username (username),
+    INDEX idx_users_admin (is_admin),
+    INDEX idx_users_created (created_at),
+    
+    -- Contraintes
+    CONSTRAINT chk_users_height CHECK (height IS NULL OR (height >= 100 AND height <= 250)),
+    CONSTRAINT chk_users_weight CHECK (weight IS NULL OR (weight >= 30 AND weight <= 200)),
+    CONSTRAINT chk_users_email_format CHECK (email REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+\end{lstlisting}
+
+\subsubsection{Table Runs}
+
+\begin{lstlisting}[language=sql]
+CREATE TABLE runs (
+    id INTEGER AUTO_INCREMENT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME,
+    duration INTEGER COMMENT 'Durée en secondes',
+    distance FLOAT COMMENT 'Distance en mètres',
+    avg_speed FLOAT COMMENT 'Vitesse moyenne en m/s',
+    max_speed FLOAT COMMENT 'Vitesse maximale en m/s',
+    calories INTEGER COMMENT 'Calories brûlées (estimation)',
+    route_data JSON COMMENT 'Coordonnées GPS au format JSON',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Clés étrangères
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    
+    -- Index pour les performances
+    INDEX idx_runs_user_id (user_id),
+    INDEX idx_runs_start_time (start_time),
+    INDEX idx_runs_distance (distance),
+    INDEX idx_runs_user_date (user_id, start_time DESC),
+    INDEX idx_runs_timerange (start_time, end_time),
+    
+    -- Contraintes métier
+    CONSTRAINT chk_runs_duration CHECK (duration IS NULL OR duration > 0),
+    CONSTRAINT chk_runs_distance CHECK (distance IS NULL OR distance >= 0),
+    CONSTRAINT chk_runs_speeds CHECK (
+        (avg_speed IS NULL OR avg_speed >= 0) AND 
+        (max_speed IS NULL OR max_speed >= 0) AND
+        (avg_speed IS NULL OR max_speed IS NULL OR max_speed >= avg_speed)
+    ),
+    CONSTRAINT chk_runs_calories CHECK (calories IS NULL OR calories >= 0),
+    CONSTRAINT chk_runs_time_order CHECK (end_time IS NULL OR end_time >= start_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+\end{lstlisting}
+
+\subsubsection{Table Admin\_Logs}
+
+\begin{lstlisting}[language=sql]
+CREATE TABLE admin_logs (
+    id INTEGER AUTO_INCREMENT PRIMARY KEY,
+    admin_id INTEGER NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    resource_type VARCHAR(50) NOT NULL,
+    resource_id INTEGER,
+    details TEXT,
+    ip_address VARCHAR(45) COMMENT 'Support IPv4 et IPv6',
+    user_agent VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Clés étrangères
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    
+    -- Index pour les performances
+    INDEX idx_admin_logs_admin_id (admin_id),
+    INDEX idx_admin_logs_action (action),
+    INDEX idx_admin_logs_resource (resource_type, resource_id),
+    INDEX idx_admin_logs_date (created_at),
+    INDEX idx_admin_logs_admin_date (admin_id, created_at DESC),
+    
+    -- Contraintes
+    CONSTRAINT chk_admin_logs_action CHECK (action IN (
+        'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN', 'LOGOUT', 
+        'EXPORT', 'IMPORT', 'BACKUP', 'RESTORE', 'CONFIG_CHANGE'
+    )),
+    CONSTRAINT chk_admin_logs_resource CHECK (resource_type IN (
+        'USER', 'RUN', 'ADMIN_LOG', 'SYSTEM', 'DATABASE', 'CONFIG'
+    ))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+\end{lstlisting}
+
+\subsection{Vues Matérialisées et Procédures}
+
+\subsubsection{Vue User\_Stats}
+
+\begin{lstlisting}[language=sql]
+-- Vue pour les statistiques utilisateur optimisées
+CREATE VIEW user_stats AS
+SELECT 
+    u.id as user_id,
+    u.username,
+    u.email,
+    COUNT(r.id) as total_runs,
+    COALESCE(SUM(r.distance), 0) as total_distance,
+    COALESCE(SUM(r.duration), 0) as total_duration,
+    COALESCE(AVG(r.avg_speed), 0) as overall_avg_speed,
+    COALESCE(MAX(r.max_speed), 0) as personal_best_speed,
+    COALESCE(SUM(r.calories), 0) as total_calories,
+    COALESCE(MAX(r.distance), 0) as longest_run,
+    COALESCE(MIN(CASE WHEN r.distance > 0 AND r.duration > 0 
+                     THEN (r.duration / 60) / (r.distance / 1000) 
+                     ELSE NULL END), 0) as best_pace_min_per_km,
+    -- Statistiques du mois en cours
+    COUNT(CASE WHEN r.start_time >= DATE_FORMAT(CURDATE(), '%Y-%m-01') 
+               THEN 1 END) as current_month_runs,
+    COALESCE(SUM(CASE WHEN r.start_time >= DATE_FORMAT(CURDATE(), '%Y-%m-01') 
+                     THEN r.distance ELSE 0 END), 0) as current_month_distance,
+    -- Dernière activité
+    MAX(r.start_time) as last_run_date,
+    u.created_at as registration_date
+FROM users u
+LEFT JOIN runs r ON u.id = r.user_id
+GROUP BY u.id, u.username, u.email, u.created_at;
+\end{lstlisting}
+
+\subsubsection{Vue Monthly\_Stats}
+
+\begin{lstlisting}[language=sql]
+-- Vue pour les statistiques mensuelles
+CREATE VIEW monthly_stats AS
+SELECT 
+    user_id,
+    YEAR(start_time) as year,
+    MONTH(start_time) as month,
+    COUNT(*) as runs_count,
+    SUM(distance) as total_distance,
+    SUM(duration) as total_duration,
+    AVG(avg_speed) as avg_speed,
+    MAX(max_speed) as max_speed,
+    SUM(calories) as total_calories,
+    AVG(CASE WHEN distance > 0 AND duration > 0 
+             THEN (duration / 60) / (distance / 1000) 
+             ELSE NULL END) as avg_pace_min_per_km,
+    MIN(start_time) as first_run_date,
+    MAX(start_time) as last_run_date
+FROM runs 
+WHERE start_time IS NOT NULL 
+GROUP BY user_id, YEAR(start_time), MONTH(start_time)
+ORDER BY user_id, year DESC, month DESC;
+\end{lstlisting}
+
+\subsection{Triggers et Procédures Stockées}
+
+\subsubsection{Trigger de Validation}
+
+\begin{lstlisting}[language=sql]
+-- Trigger pour calculs automatiques
+DELIMITER //
+
+CREATE TRIGGER tr_runs_before_insert
+BEFORE INSERT ON runs
+FOR EACH ROW
+BEGIN
+    -- Calcul automatique de la durée si manquante
+    IF NEW.duration IS NULL AND NEW.start_time IS NOT NULL AND NEW.end_time IS NOT NULL THEN
+        SET NEW.duration = TIMESTAMPDIFF(SECOND, NEW.start_time, NEW.end_time);
+    END IF;
+    
+    -- Calcul automatique de la vitesse moyenne
+    IF NEW.avg_speed IS NULL AND NEW.distance IS NOT NULL AND NEW.duration IS NOT NULL AND NEW.duration > 0 THEN
+        SET NEW.avg_speed = NEW.distance / NEW.duration;
+    END IF;
+    
+    -- Estimation des calories si manquante (formule simplifiée)
+    IF NEW.calories IS NULL AND NEW.distance IS NOT NULL THEN
+        -- Approximation : 1 km = 60 kcal pour une personne de 70kg
+        SET NEW.calories = ROUND((NEW.distance / 1000) * 60);
+    END IF;
+    
+    -- Validation que end_time >= start_time
+    IF NEW.end_time IS NOT NULL AND NEW.start_time IS NOT NULL AND NEW.end_time < NEW.start_time THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'end_time must be >= start_time';
+    END IF;
+    
+    -- Validation distance réaliste
+    IF NEW.distance IS NOT NULL AND NEW.distance > 500000 THEN  -- > 500km
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Distance exceeds realistic maximum (500km)';
+    END IF;
+    
+    -- Validation vitesse réaliste
+    IF NEW.max_speed IS NOT NULL AND NEW.max_speed > 20 THEN  -- > 72 km/h
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Speed exceeds realistic maximum for running';
+    END IF;
+END//
+
+CREATE TRIGGER tr_runs_before_update
+BEFORE UPDATE ON runs
+FOR EACH ROW
+BEGIN
+    -- Mêmes validations que pour l'insertion
+    IF NEW.duration IS NULL AND NEW.start_time IS NOT NULL AND NEW.end_time IS NOT NULL THEN
+        SET NEW.duration = TIMESTAMPDIFF(SECOND, NEW.start_time, NEW.end_time);
+    END IF;
+    
+    IF NEW.avg_speed IS NULL AND NEW.distance IS NOT NULL AND NEW.duration IS NOT NULL AND NEW.duration > 0 THEN
+        SET NEW.avg_speed = NEW.distance / NEW.duration;
+    END IF;
+    
+    -- Mise à jour automatique du timestamp
+    SET NEW.updated_at = CURRENT_TIMESTAMP;
+END//
+
+DELIMITER ;
+\end{lstlisting}
+
+\subsubsection{Procédures de Maintenance}
+
+\begin{lstlisting}[language=sql]
+DELIMITER //
+
+-- Procédure de nettoyage des anciennes données
+CREATE PROCEDURE sp_cleanup_old_data(IN days_retention INT)
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE deleted_count INT DEFAULT 0;
+    
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+    
+    START TRANSACTION;
+    
+    -- Suppression des logs d'admin anciens
+    DELETE FROM admin_logs 
+    WHERE created_at < DATE_SUB(NOW(), INTERVAL days_retention DAY);
+    
+    SET deleted_count = ROW_COUNT();
+    
+    -- Log de l'opération
+    INSERT INTO admin_logs (admin_id, action, resource_type, details)
+    VALUES (1, 'CLEANUP', 'SYSTEM', 
+            CONCAT('Deleted ', deleted_count, ' old admin logs'));
+    
+    COMMIT;
+    
+    SELECT CONCAT('Cleanup completed. Deleted ', deleted_count, ' records.') as result;
+END//
+
+-- Procédure de calcul des statistiques
+CREATE PROCEDURE sp_update_user_statistics(IN target_user_id INT)
+BEGIN
+    DECLARE total_runs INT DEFAULT 0;
+    DECLARE total_distance DECIMAL(10,2) DEFAULT 0;
+    DECLARE total_duration INT DEFAULT 0;
+    
+    -- Calcul des totaux
+    SELECT 
+        COUNT(*),
+        COALESCE(SUM(distance), 0),
+        COALESCE(SUM(duration), 0)
+    INTO total_runs, total_distance, total_duration
+    FROM runs 
+    WHERE user_id = target_user_id;
+    
+    -- Mise à jour d'une table de cache (à créer si nécessaire)
+    INSERT INTO user_statistics_cache (
+        user_id, total_runs, total_distance, total_duration, last_updated
+    ) VALUES (
+        target_user_id, total_runs, total_distance, total_duration, NOW()
+    ) ON DUPLICATE KEY UPDATE
+        total_runs = VALUES(total_runs),
+        total_distance = VALUES(total_distance),
+        total_duration = VALUES(total_duration),
+        last_updated = VALUES(last_updated);
+        
+    SELECT 'Statistics updated successfully' as result;
+END//
+
+-- Procédure de backup des données utilisateur
+CREATE PROCEDURE sp_export_user_data(IN target_user_id INT)
+BEGIN
+    DECLARE user_exists INT DEFAULT 0;
+    
+    -- Vérifier que l'utilisateur existe
+    SELECT COUNT(*) INTO user_exists FROM users WHERE id = target_user_id;
+    
+    IF user_exists = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User not found';
+    END IF;
+    
+    -- Export des données utilisateur
+    SELECT 'user_profile' as data_type, 
+           JSON_OBJECT(
+               'id', id,
+               'username', username,
+               'email', email,
+               'first_name', first_name,
+               'last_name', last_name,
+               'date_of_birth', date_of_birth,
+               'height', height,
+               'weight', weight,
+               'created_at', created_at,
+               'updated_at', updated_at
+           ) as data
+    FROM users WHERE id = target_user_id
+    
+    UNION ALL
+    
+    -- Export des courses
+    SELECT 'runs' as data_type,
+           JSON_ARRAYAGG(
+               JSON_OBJECT(
+                   'id', id,
+                   'start_time', start_time,
+                   'end_time', end_time,
+                   'duration', duration,
+                   'distance', distance,
+                   'avg_speed', avg_speed,
+                   'max_speed', max_speed,
+                   'calories', calories,
+                   'route_data', route_data,
+                   'created_at', created_at
+               )
+           ) as data
+    FROM runs WHERE user_id = target_user_id;
+END//
+
+DELIMITER ;
+\end{lstlisting}
+
+\subsection{Index et Optimisations}
+
+\subsubsection{Index Composés Avancés}
+
+\begin{lstlisting}[language=sql]
+-- Index optimisés pour les requêtes fréquentes
+
+-- Index pour les requêtes de dashboard (courses récentes par utilisateur)
+CREATE INDEX idx_runs_dashboard 
+ON runs(user_id, start_time DESC, distance DESC);
+
+-- Index pour les statistiques mensuelles
+CREATE INDEX idx_runs_monthly_stats 
+ON runs(user_id, start_time, distance, duration, calories);
+
+-- Index pour la recherche par plage de dates
+CREATE INDEX idx_runs_date_range 
+ON runs(start_time, end_time, user_id);
+
+-- Index pour les requêtes d'administration
+CREATE INDEX idx_admin_logs_monitoring 
+ON admin_logs(created_at DESC, action, admin_id);
+
+-- Index partiel pour les courses terminées seulement
+CREATE INDEX idx_runs_completed 
+ON runs(user_id, start_time DESC) 
+WHERE end_time IS NOT NULL;
+
+-- Index fonctionnel pour le calcul de l'allure
+CREATE INDEX idx_runs_pace 
+ON runs(user_id, ((duration / 60) / (distance / 1000))) 
+WHERE distance > 0 AND duration > 0;
+\end{lstlisting}
+
+\subsubsection{Partitioning Strategy}
+
+\begin{lstlisting}[language=sql]
+-- Partitioning de la table runs par année (pour de gros volumes)
+ALTER TABLE runs PARTITION BY RANGE (YEAR(start_time)) (
+    PARTITION p2022 VALUES LESS THAN (2023),
+    PARTITION p2023 VALUES LESS THAN (2024),
+    PARTITION p2024 VALUES LESS THAN (2025),
+    PARTITION p2025 VALUES LESS THAN (2026),
+    PARTITION p2026 VALUES LESS THAN (2027),
+    PARTITION p_future VALUES LESS THAN MAXVALUE
+);
+
+-- Partitioning des logs par trimestre
+ALTER TABLE admin_logs PARTITION BY RANGE (TO_DAYS(created_at)) (
+    PARTITION p2024_q1 VALUES LESS THAN (TO_DAYS('2024-04-01')),
+    PARTITION p2024_q2 VALUES LESS THAN (TO_DAYS('2024-07-01')),
+    PARTITION p2024_q3 VALUES LESS THAN (TO_DAYS('2024-10-01')),
+    PARTITION p2024_q4 VALUES LESS THAN (TO_DAYS('2025-01-01')),
+    PARTITION p_current VALUES LESS THAN MAXVALUE
+);
+\end{lstlisting}
+
+\subsection{Requêtes d'Analyse Avancées}
+
+\subsubsection{Analyses de Performance}
+
+\begin{lstlisting}[language=sql]
+-- Évolution des performances utilisateur
+SELECT 
+    user_id,
+    DATE(start_time) as run_date,
+    distance / 1000 as distance_km,
+    duration / 60 as duration_minutes,
+    (duration / 60) / (distance / 1000) as pace_min_per_km,
+    -- Moyenne mobile sur 5 courses
+    AVG((duration / 60) / (distance / 1000)) 
+        OVER (PARTITION BY user_id 
+              ORDER BY start_time 
+              ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) as avg_pace_5_runs,
+    -- Comparaison avec la course précédente
+    LAG((duration / 60) / (distance / 1000)) 
+        OVER (PARTITION BY user_id ORDER BY start_time) as previous_pace,
+    -- Rang de la performance
+    RANK() OVER (PARTITION BY user_id ORDER BY (duration / 60) / (distance / 1000)) as pace_rank
+FROM runs
+WHERE distance > 1000 AND duration > 0  -- Minimum 1km
+ORDER BY user_id, start_time;
+
+-- Top utilisateurs par distance mensuelle
+SELECT 
+    u.username,
+    u.email,
+    YEAR(r.start_time) as year,
+    MONTH(r.start_time) as month,
+    COUNT(r.id) as runs_count,
+    ROUND(SUM(r.distance) / 1000, 2) as total_km,
+    ROUND(AVG(r.distance) / 1000, 2) as avg_km_per_run,
+    ROUND(MIN((r.duration / 60) / (r.distance / 1000)), 2) as best_pace,
+    -- Ranking mensuel
+    RANK() OVER (PARTITION BY YEAR(r.start_time), MONTH(r.start_time) 
+                 ORDER BY SUM(r.distance) DESC) as monthly_rank
+FROM users u
+JOIN runs r ON u.id = r.user_id
+WHERE r.start_time >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+  AND r.distance > 0
+GROUP BY u.id, YEAR(r.start_time), MONTH(r.start_time)
+HAVING runs_count >= 3  -- Minimum 3 courses dans le mois
+ORDER BY year DESC, month DESC, total_km DESC
+LIMIT 50;
+\end{lstlisting}
+
+\subsubsection{Requêtes de Monitoring}
+
+\begin{lstlisting}[language=sql]
+-- Monitoring de l'activité système
+SELECT 
+    DATE(created_at) as date,
+    COUNT(*) as total_runs,
+    COUNT(DISTINCT user_id) as active_users,
+    ROUND(AVG(distance) / 1000, 2) as avg_distance_km,
+    ROUND(AVG(duration) / 60, 2) as avg_duration_minutes,
+    -- Détection d'anomalies
+    CASE 
+        WHEN COUNT(*) > (SELECT AVG(daily_runs) * 2 FROM (
+            SELECT DATE(created_at) as d, COUNT(*) as daily_runs 
+            FROM runs 
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            GROUP BY DATE(created_at)
+        ) t) THEN 'HIGH_ACTIVITY'
+        WHEN COUNT(*) < (SELECT AVG(daily_runs) * 0.5 FROM (
+            SELECT DATE(created_at) as d, COUNT(*) as daily_runs 
+            FROM runs 
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            GROUP BY DATE(created_at)
+        ) t) THEN 'LOW_ACTIVITY'
+        ELSE 'NORMAL'
+    END as activity_level
+FROM runs
+WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+GROUP BY DATE(created_at)
+ORDER BY date DESC;
+
+-- Détection d'utilisateurs suspects (performances irréalistes)
+SELECT 
+    u.username,
+    u.email,
+    COUNT(r.id) as total_runs,
+    MAX(r.max_speed * 3.6) as max_speed_kmh,  -- Conversion en km/h
+    MIN((r.duration / 60) / (r.distance / 1000)) as best_pace_min_km,
+    MAX(r.distance / 1000) as longest_run_km,
+    'SUSPICIOUS' as flag_reason
+FROM users u
+JOIN runs r ON u.id = r.user_id
+WHERE r.distance > 0 AND r.duration > 0
+GROUP BY u.id
+HAVING 
+    max_speed_kmh > 50 OR          -- Vitesse > 50 km/h (irréaliste)
+    best_pace_min_km < 2.5 OR      -- Allure < 2:30 min/km (record mondial)
+    longest_run_km > 200           -- Course > 200km
+ORDER BY max_speed_kmh DESC;
+\end{lstlisting}
+
+\subsection{Scripts de Maintenance}
+
+\subsubsection{Optimisation des Performances}
+
+\begin{lstlisting}[language=sql]
+-- Script d'optimisation à exécuter régulièrement
+
+-- Analyse des tables
+ANALYZE TABLE users, runs, admin_logs;
+
+-- Optimisation des tables
+OPTIMIZE TABLE users, runs, admin_logs;
+
+-- Vérification de l'utilisation des index
+SELECT 
+    TABLE_NAME,
+    INDEX_NAME,
+    CARDINALITY,
+    CASE 
+        WHEN CARDINALITY = 0 THEN 'UNUSED'
+        WHEN CARDINALITY < 10 THEN 'LOW_SELECTIVITY'
+        ELSE 'GOOD'
+    END as index_status
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = 'running_app_db'
+  AND TABLE_NAME IN ('users', 'runs', 'admin_logs')
+ORDER BY TABLE_NAME, INDEX_NAME;
+
+-- Identification des requêtes lentes
+SELECT 
+    DIGEST_TEXT,
+    COUNT_STAR as execution_count,
+    ROUND(AVG_TIMER_WAIT / 1000000000, 2) as avg_duration_seconds,
+    ROUND(MAX_TIMER_WAIT / 1000000000, 2) as max_duration_seconds,
+    ROUND(SUM_ROWS_EXAMINED / COUNT_STAR, 0) as avg_rows_examined
+FROM performance_schema.events_statements_summary_by_digest
+WHERE DIGEST_TEXT LIKE '%runs%' OR DIGEST_TEXT LIKE '%users%'
+ORDER BY avg_duration_seconds DESC
+LIMIT 10;
+\end{lstlisting}
+
+\subsubsection{Backup et Archivage}
+
+\begin{lstlisting}[language=sql]
+-- Script de préparation pour backup
+
+-- Création d'une table d'archivage pour les anciennes courses
+CREATE TABLE runs_archive LIKE runs;
+
+-- Archivage des courses de plus de 2 ans
+INSERT INTO runs_archive 
+SELECT * FROM runs 
+WHERE start_time < DATE_SUB(CURDATE(), INTERVAL 2 YEAR);
+
+-- Vérification de l'intégrité avant suppression
+SELECT 
+    COUNT(*) as total_to_archive,
+    MIN(start_time) as oldest_run,
+    MAX(start_time) as newest_in_archive
+FROM runs 
+WHERE start_time < DATE_SUB(CURDATE(), INTERVAL 2 YEAR);
+
+-- Suppression après confirmation manuelle
+-- DELETE FROM runs WHERE start_time < DATE_SUB(CURDATE(), INTERVAL 2 YEAR);
+
+-- Compression de l'archive (commande système)
+-- mysqldump running_app_db runs_archive | gzip > runs_archive_$(date +%Y%m%d).sql.gz
+\end{lstlisting}

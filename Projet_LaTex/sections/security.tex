@@ -1,0 +1,506 @@
+\section{Sécurité de l'Application}
+
+\subsection{Architecture de Sécurité}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=2cm]
+    % Client
+    \node[rectangle, draw, fill=green!20, text width=2.5cm, text centered] (client) {
+        \textbf{Mobile App}\\
+        \small Token Storage\\
+        \small Input Validation
+    };
+    
+    % Internet
+    \node[cloud, draw, fill=gray!20, text width=2cm, text centered, right of=client, xshift=2cm] (internet) {
+        \textbf{Internet}\\
+        \small HTTPS/TLS
+    };
+    
+    % Load Balancer
+    \node[rectangle, draw, fill=blue!20, text width=2.5cm, text centered, right of=internet, xshift=2cm] (lb) {
+        \textbf{Load Balancer}\\
+        \small SSL Termination\\
+        \small Rate Limiting
+    };
+    
+    % API
+    \node[rectangle, draw, fill=blue!30, text width=2.5cm, text centered, below of=lb] (api) {
+        \textbf{API Flask}\\
+        \small JWT Validation\\
+        \small CORS Policy
+    };
+    
+    % Database
+    \node[rectangle, draw, fill=orange!20, text width=2.5cm, text centered, below of=api] (db) {
+        \textbf{MySQL}\\
+        \small Encrypted Storage\\
+        \small Access Control
+    };
+    
+    % Arrows
+    \draw[->, thick] (client) -- (internet);
+    \draw[->, thick] (internet) -- (lb);
+    \draw[->, thick] (lb) -- (api);
+    \draw[->, thick] (api) -- (db);
+    
+    % Security labels
+    \node[text=red, above of=client, yshift=-0.5cm] {\small Validation};
+    \node[text=red, above of=internet, yshift=-0.5cm] {\small Chiffrement};
+    \node[text=red, above of=lb, yshift=-0.5cm] {\small Protection};
+    \node[text=red, right of=api, xshift=1cm] {\small Autorisation};
+    \node[text=red, right of=db, xshift=1cm] {\small Persistance};
+    
+\end{tikzpicture}
+\caption{Couches de Sécurité Running App}
+\end{figure}
+
+\subsection{Authentification et Autorisation}
+
+\subsubsection{JSON Web Tokens (JWT)}
+
+\paragraph{Implémentation JWT}
+\begin{lstlisting}[language=python]
+# Configuration JWT sécurisée
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+app.config['JWT_BLACKLIST_ENABLED'] = True
+app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
+
+# Génération de token sécurisé
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    # Validation des credentials
+    user = authenticate_user(email, password)
+    if user and user.verify_password(password):
+        access_token = create_access_token(
+            identity=user.id,
+            additional_claims={'role': user.role}
+        )
+        refresh_token = create_refresh_token(identity=user.id)
+        return jsonify({
+            'access_token': access_token,
+            'refresh_token': refresh_token
+        })
+\end{lstlisting}
+
+\paragraph{Avantages JWT}
+\begin{itemize}
+    \item \textbf{Stateless} : Pas de stockage serveur requis
+    \item \textbf{Scalabilité} : Distribution sur plusieurs serveurs
+    \item \textbf{Performance} : Validation locale sans base de données
+    \item \textbf{Standards} : RFC 7519, interopérabilité
+\end{itemize}
+
+\paragraph{Gestion des Tokens Côté Client}
+\begin{lstlisting}[language=javascript]
+// Stockage sécurisé des tokens
+const storeTokens = async (accessToken, refreshToken) => {
+    await AsyncStorage.setItem('access_token', accessToken);
+    await AsyncStorage.setItem('refresh_token', refreshToken);
+};
+
+// Intercepteur pour renouvellement automatique
+axios.interceptors.response.use(
+    response => response,
+    async error => {
+        if (error.response?.status === 401) {
+            const refreshToken = await AsyncStorage.getItem('refresh_token');
+            if (refreshToken) {
+                try {
+                    const response = await refreshAccessToken(refreshToken);
+                    await storeTokens(response.access_token, refreshToken);
+                    // Retry original request
+                    return axios.request(error.config);
+                } catch (refreshError) {
+                    await logout(); // Force logout
+                }
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+\end{lstlisting}
+
+\subsubsection{Gestion des Mots de Passe}
+
+\paragraph{Hachage Sécurisé}
+\begin{lstlisting}[language=python]
+from werkzeug.security import generate_password_hash, check_password_hash
+
+class User(db.Model):
+    password_hash = db.Column(db.String(128), nullable=False)
+    
+    @property
+    def password(self):
+        raise AttributeError('password is not a readable attribute')
+    
+    @password.setter
+    def password(self, password):
+        # Validation de la complexité
+        if not self._validate_password_strength(password):
+            raise ValueError('Password does not meet requirements')
+        # Hachage avec salt automatique
+        self.password_hash = generate_password_hash(
+            password, 
+            method='pbkdf2:sha256:260000'  # 260k iterations
+        )
+    
+    def verify_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    def _validate_password_strength(self, password):
+        """Validation de la force du mot de passe"""
+        import re
+        return (
+            len(password) >= 8 and
+            re.search(r'[A-Z]', password) and    # Majuscule
+            re.search(r'[a-z]', password) and    # Minuscule  
+            re.search(r'[0-9]', password) and    # Chiffre
+            re.search(r'[!@#$%^&*]', password)   # Caractère spécial
+        )
+\end{lstlisting}
+
+\paragraph{Politique de Mots de Passe}
+\begin{itemize}
+    \item \textbf{Longueur minimum} : 8 caractères
+    \item \textbf{Complexité} : Majuscules, minuscules, chiffres, caractères spéciaux
+    \item \textbf{Historique} : Interdiction des 5 derniers mots de passe
+    \item \textbf{Expiration} : Recommandation de changement tous les 6 mois
+    \item \textbf{Tentatives} : Blocage après 5 tentatives échouées
+\end{itemize}
+
+\subsection{Protection contre les Attaques}
+
+\subsubsection{CORS (Cross-Origin Resource Sharing)}
+
+\begin{lstlisting}[language=python]
+# Configuration CORS sécurisée
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "https://runningapp.com",
+            "https://app.runningapp.com",
+            "http://localhost:3000"  # Dev uniquement
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+        "max_age": 600  # Cache preflight 10 minutes
+    }
+})
+
+# Headers de sécurité supplémentaires
+@app.after_request
+def security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = \
+        'max-age=31536000; includeSubDomains'
+    return response
+\end{lstlisting}
+
+\subsubsection{Rate Limiting}
+
+\begin{lstlisting}[language=python]
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["1000 per hour", "100 per minute"]
+)
+
+# Limites spécifiques par endpoint
+@auth_bp.route('/login', methods=['POST'])
+@limiter.limit("5 per minute")  # Protection force brute
+def login():
+    pass
+
+@runs_bp.route('', methods=['POST'])
+@limiter.limit("10 per minute")  # Limite création courses
+@jwt_required()
+def create_run():
+    pass
+\end{lstlisting}
+
+\subsubsection{Validation et Sanitization}
+
+\begin{lstlisting}[language=python]
+from marshmallow import Schema, fields, validate
+
+class RunSchema(Schema):
+    start_time = fields.DateTime(required=True)
+    end_time = fields.DateTime()
+    duration = fields.Integer(validate=validate.Range(min=1, max=86400))
+    distance = fields.Float(validate=validate.Range(min=0.01, max=500000))
+    route_data = fields.List(fields.Dict())
+    
+    class Meta:
+        # Champs inconnus rejetés
+        unknown = marshmallow.EXCLUDE
+
+# Validation automatique
+@runs_bp.route('', methods=['POST'])
+@jwt_required()
+def create_run():
+    schema = RunSchema()
+    try:
+        data = schema.load(request.json)
+    except ValidationError as err:
+        return jsonify({'errors': err.messages}), 400
+\end{lstlisting}
+
+\subsection{Sécurité des Données}
+
+\subsubsection{Chiffrement en Transit}
+
+\begin{itemize}
+    \item \textbf{HTTPS obligatoire} : TLS 1.3 minimum
+    \item \textbf{Certificate Pinning} : Validation stricte des certificats
+    \item \textbf{HSTS} : Strict Transport Security activé
+    \item \textbf{Perfect Forward Secrecy} : Rotation des clés de session
+\end{itemize}
+
+\begin{lstlisting}[language=javascript]
+// Certificate Pinning React Native
+import { NetworkingModule } from 'react-native';
+
+const certificatePinner = {
+    hostname: 'api.runningapp.com',
+    publicKeyHash: 'sha256/ABC123...'  // Hash de la clé publique
+};
+
+// Configuration Axios avec pinning
+const apiClient = axios.create({
+    baseURL: 'https://api.runningapp.com',
+    httpsAgent: certificatePinner
+});
+\end{lstlisting}
+
+\subsubsection{Chiffrement au Repos}
+
+\begin{lstlisting}[language=sql]
+-- Chiffrement base de données MySQL
+CREATE TABLE users (
+    id INT PRIMARY KEY,
+    username VARCHAR(64),
+    email VARCHAR(120),
+    -- Données sensibles chiffrées
+    personal_data JSON 
+) ENCRYPTION='Y' TABLESPACE=encrypted_ts;
+
+-- Configuration MySQL avec chiffrement
+[mysqld]
+early-plugin-load=keyring_file.so
+keyring_file_data=/var/lib/mysql-keyring/keyring
+innodb_undo_log_encrypt=ON
+innodb_redo_log_encrypt=ON
+binlog_encryption=ON
+\end{lstlisting}
+
+\subsubsection{Protection des Données Personnelles (RGPD)}
+
+\paragraph{Mesures Techniques}
+\begin{itemize}
+    \item \textbf{Pseudonymisation} : Identifiants non réversibles
+    \item \textbf{Minimisation} : Collecte limitée aux données nécessaires
+    \item \textbf{Rétention} : Suppression automatique après 5 ans
+    \item \textbf{Portabilité} : Export des données utilisateur
+    \item \textbf{Droit à l'oubli} : Suppression complète sur demande
+\end{itemize}
+
+\begin{lstlisting}[language=python]
+# Service de gestion RGPD
+class GDPRService:
+    def export_user_data(self, user_id):
+        """Export de toutes les données utilisateur"""
+        user = User.query.get(user_id)
+        runs = Run.query.filter_by(user_id=user_id).all()
+        
+        return {
+            'personal_data': user.to_dict(include_sensitive=True),
+            'runs_data': [run.to_dict() for run in runs],
+            'export_date': datetime.utcnow().isoformat()
+        }
+    
+    def anonymize_user_data(self, user_id):
+        """Anonymisation des données (alternative à la suppression)"""
+        user = User.query.get(user_id)
+        user.email = f"anonymized_{user_id}@deleted.local"
+        user.username = f"user_{user_id}_deleted"
+        user.first_name = "ANONYMIZED"
+        user.last_name = "ANONYMIZED"
+        db.session.commit()
+    
+    def delete_user_completely(self, user_id):
+        """Suppression complète (cascade)"""
+        user = User.query.get(user_id)
+        db.session.delete(user)  # Cascade delete runs
+        db.session.commit()
+\end{lstlisting}
+
+\subsection{Logging et Monitoring de Sécurité}
+
+\subsubsection{Logs de Sécurité}
+
+\begin{lstlisting}[language=python]
+import logging
+from datetime import datetime
+
+# Configuration logging sécurisé
+security_logger = logging.getLogger('security')
+security_handler = logging.FileHandler('/var/log/running-app/security.log')
+security_formatter = logging.Formatter(
+    '%(asctime)s - %(levelname)s - %(message)s - IP:%(remote_addr)s'
+)
+security_handler.setFormatter(security_formatter)
+security_logger.addHandler(security_handler)
+
+# Middleware de logging sécurisé
+@app.before_request
+def log_security_events():
+    # Log des tentatives de connexion
+    if request.endpoint == 'auth.login':
+        security_logger.info(
+            f"Login attempt for {request.json.get('email', 'unknown')}",
+            extra={'remote_addr': request.remote_addr}
+        )
+    
+    # Log des accès admin
+    if request.path.startswith('/api/admin'):
+        security_logger.warning(
+            f"Admin access to {request.path}",
+            extra={'remote_addr': request.remote_addr}
+        )
+
+# Log des événements critiques
+def log_security_event(event_type, user_id=None, details=None):
+    security_logger.critical(
+        f"SECURITY_EVENT: {event_type}",
+        extra={
+            'user_id': user_id,
+            'details': details,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+    )
+\end{lstlisting}
+
+\subsubsection{Monitoring et Alertes}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Événement} & \textbf{Seuil} & \textbf{Action} & \textbf{Gravité} \\
+\hline
+Tentatives de connexion & 5/min/IP & Blocage IP 15min & Moyenne \\
+Échecs JWT & 10/min & Alerte admin & Élevée \\
+Accès admin & Chaque accès & Log détaillé & Info \\
+Erreurs 500 & 10/min & Alerte technique & Élevée \\
+Requêtes suspectes & Pattern ML & Analyse approfondie & Variable \\
+\hline
+\end{tabular}
+\caption{Règles de Monitoring Sécurisé}
+\end{table}
+
+\subsection{Tests de Sécurité}
+
+\subsubsection{Tests Automatisés}
+
+\begin{lstlisting}[language=python]
+# Tests de sécurité automatisés
+class SecurityTestCase(unittest.TestCase):
+    
+    def test_sql_injection_protection(self):
+        """Test protection injection SQL"""
+        malicious_payload = "'; DROP TABLE users; --"
+        response = self.client.post('/api/auth/login', json={
+            'email': malicious_payload,
+            'password': 'test'
+        })
+        # Vérifier que l'injection échoue
+        self.assertEqual(response.status_code, 400)
+    
+    def test_xss_protection(self):
+        """Test protection XSS"""
+        xss_payload = "<script>alert('xss')</script>"
+        response = self.client.put('/api/users/profile', 
+            headers={'Authorization': f'Bearer {self.token}'},
+            json={'first_name': xss_payload}
+        )
+        # Vérifier sanitization
+        user = User.query.get(self.user_id)
+        self.assertNotIn('<script>', user.first_name)
+    
+    def test_jwt_expiration(self):
+        """Test expiration des tokens JWT"""
+        with freeze_time("2024-01-01 12:00:00"):
+            token = create_access_token(identity=1)
+        
+        with freeze_time("2024-01-01 14:00:00"):  # +2h
+            response = self.client.get('/api/users/profile',
+                headers={'Authorization': f'Bearer {token}'})
+            self.assertEqual(response.status_code, 401)
+\end{lstlisting}
+
+\subsubsection{Audit de Sécurité}
+
+\paragraph{Processus d'Audit}
+\begin{enumerate}
+    \item \textbf{Scan automatique} : OWASP ZAP, Nessus
+    \item \textbf{Review code} : Analyse statique avec Bandit (Python)
+    \item \textbf{Penetration testing} : Tests d'intrusion manuels
+    \item \textbf{Audit de configuration} : Serveurs et base de données
+    \item \textbf{Formation équipe} : Sensibilisation sécurité développeurs
+\end{enumerate}
+
+\paragraph{Checklist OWASP Top 10}
+\begin{itemize}
+    \item ✓ A01 - Broken Access Control : JWT + RBAC
+    \item ✓ A02 - Cryptographic Failures : TLS + Hachage
+    \item ✓ A03 - Injection : Validation + ORM
+    \item ✓ A04 - Insecure Design : Architecture sécurisée
+    \item ✓ A05 - Security Misconfiguration : Hardening
+    \item ✓ A06 - Vulnerable Components : Audit dépendances
+    \item ✓ A07 - Authentication Failures : Politique forte
+    \item ✓ A08 - Software Integrity Failures : CI/CD sécurisé
+    \item ✓ A09 - Logging Failures : Monitoring complet
+    \item ✓ A10 - SSRF : Validation URLs externes
+\end{itemize}
+
+\subsection{Plan de Réponse aux Incidents}
+
+\subsubsection{Procédure d'Urgence}
+
+\begin{enumerate}
+    \item \textbf{Détection} : Alertes automatiques + monitoring
+    \item \textbf{Évaluation} : Classification gravité (1-4)
+    \item \textbf{Isolation} : Mise en quarantaine système compromis
+    \item \textbf{Investigation} : Analyse logs + forensique
+    \item \textbf{Correction} : Patch + mise à jour sécurité
+    \item \textbf{Communication} : Notification utilisateurs si nécessaire
+    \item \textbf{Post-mortem} : Analyse et amélioration processus
+\end{enumerate}
+
+\subsubsection{Contacts d'Urgence}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Rôle} & \textbf{Responsabilité} & \textbf{Délai} \\
+\hline
+Security Officer & Coordination incident & 15 minutes \\
+Lead Developer & Analyse technique & 30 minutes \\
+DevOps Engineer & Infrastructure & 30 minutes \\
+Legal Team & Conformité RGPD & 2 heures \\
+Communication & Utilisateurs & 4 heures \\
+\hline
+\end{tabular}
+\caption{Équipe de Réponse aux Incidents}
+\end{table}
