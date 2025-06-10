@@ -1,0 +1,304 @@
+\section{Technologies et Justifications}
+
+\subsection{Stack Technologique Globale}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.5cm]
+    % Frontend
+    \node[rectangle, draw, fill=green!20, text width=3cm, text centered] (rn) {
+        \textbf{React Native}\\
+        \small Frontend Mobile
+    };
+    \node[rectangle, draw, fill=green!10, text width=2.5cm, text centered, right of=rn, xshift=1cm] (expo) {
+        \textbf{Expo}\\
+        \small Toolchain
+    };
+    
+    % Backend
+    \node[rectangle, draw, fill=blue!20, text width=3cm, text centered, below of=rn] (flask) {
+        \textbf{Flask}\\
+        \small API Backend
+    };
+    \node[rectangle, draw, fill=blue!10, text width=2.5cm, text centered, right of=flask, xshift=1cm] (sql) {
+        \textbf{SQLAlchemy}\\
+        \small ORM
+    };
+    
+    % Database
+    \node[rectangle, draw, fill=orange!20, text width=3cm, text centered, below of=flask] (mysql) {
+        \textbf{MySQL}\\
+        \small Base de Données
+    };
+    \node[rectangle, draw, fill=orange!10, text width=2.5cm, text centered, right of=mysql, xshift=1cm] (redis) {
+        \textbf{Redis}\\
+        \small Cache (futur)
+    };
+    
+    % Arrows
+    \draw[->, thick] (rn) -- (flask);
+    \draw[->, thick] (flask) -- (mysql);
+    \draw[<->, thick] (rn) -- (expo);
+    \draw[<->, thick] (flask) -- (sql);
+    \draw[-->, dashed] (flask) -- (redis);
+    
+\end{tikzpicture}
+\caption{Stack Technologique Running App}
+\end{figure}
+
+\subsection{Frontend Mobile - React Native}
+
+\subsubsection{Choix de React Native}
+
+\paragraph{Justifications Techniques}
+\begin{itemize}
+    \item \textbf{Performance native} : Rendu optimisé pour iOS et Android
+    \item \textbf{Écosystème riche} : Nombreuses bibliothèques spécialisées
+    \item \textbf{Hot Reload} : Développement rapide avec rechargement instantané
+    \item \textbf{Communauté active} : Support Meta et communauté Open Source
+    \item \textbf{Courbe d'apprentissage} : Syntaxe React familière
+\end{itemize}
+
+\paragraph{Justifications Business}
+\begin{itemize}
+    \item \textbf{Time-to-market} : Développement simultané iOS/Android
+    \item \textbf{Maintenance} : Une seule codebase à maintenir
+    \item \textbf{Équipe} : Compétences JavaScript réutilisables
+    \item \textbf{Budget} : Coût de développement réduit vs développement natif
+\end{itemize}
+
+\subsubsection{Bibliothèques Principales}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Bibliothèque} & \textbf{Version} & \textbf{Usage} & \textbf{Justification} \\
+\hline
+React Navigation & 6.x & Navigation & Standard de facto, performance \\
+Expo Location & 17.x & GPS/Géoloc & API unifiée, permissions simplifiées \\
+React Native Maps & 1.14.x & Cartographie & Intégration Google/Apple Maps \\
+AsyncStorage & 1.23.x & Stockage local & Persistance simple et rapide \\
+Axios & 1.7.x & HTTP & Intercepteurs, gestion d'erreurs \\
+React Hook Form & 7.x & Formulaires & Performance, validation native \\
+\hline
+\end{tabular}
+\caption{Dépendances Frontend Principales}
+\end{table}
+
+\subsubsection{Architecture Frontend}
+
+\paragraph{Structure des Dossiers}
+\begin{lstlisting}[language=bash]
+src/
+├── components/          # Composants réutilisables
+│   ├── common/         # Composants génériques
+│   └── forms/          # Composants de formulaires
+├── screens/            # Écrans de l'application
+│   ├── auth/          # Authentification
+│   └── main/          # Écrans principaux
+├── navigation/         # Configuration navigation
+├── context/           # Context API (état global)
+├── services/          # Services API et utilitaires
+├── utils/             # Fonctions utilitaires
+└── constants/         # Constantes et configuration
+\end{lstlisting}
+
+\paragraph{Gestion d'État}
+\begin{description}
+    \item[\textbf{Context API}] État global partagé (authentification, courses)
+    \item[\textbf{useState/useReducer}] État local des composants
+    \item[\textbf{AsyncStorage}] Persistance locale (tokens, données offline)
+\end{description}
+
+\subsection{Backend API - Python Flask}
+
+\subsubsection{Choix de Flask}
+
+\paragraph{Avantages de Flask}
+\begin{itemize}
+    \item \textbf{Minimalisme} : Framework léger et flexible
+    \item \textbf{Modularité} : Architecture par blueprints
+    \item \textbf{Écosystème Python} : Bibliothèques scientifiques (calculs de performance)
+    \item \textbf{Simplicité} : Configuration et déploiement simplifiés
+    \item \textbf{Performance} : Optimisé pour les APIs REST
+\end{itemize}
+
+\paragraph{Comparaison avec les Alternatives}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Framework} & \textbf{Simplicité} & \textbf{Performance} & \textbf{Écosystème} & \textbf{Choix} \\
+\hline
+Flask & ✓✓✓ & ✓✓ & ✓✓✓ & \textcolor{green}{\textbf{Retenu}} \\
+Django & ✓ & ✓✓ & ✓✓✓ & Trop lourd \\
+FastAPI & ✓✓ & ✓✓✓ & ✓✓ & Moins mature \\
+Express.js & ✓✓✓ & ✓✓ & ✓✓ & Stack mixte \\
+\hline
+\end{tabular}
+\caption{Comparaison des frameworks backend}
+\end{table}
+
+\subsubsection{Extensions Flask Utilisées}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Extension} & \textbf{Version} & \textbf{Rôle} \\
+\hline
+Flask-SQLAlchemy & 3.1.x & ORM et gestion base de données \\
+Flask-Migrate & 4.0.x & Migrations automatiques du schéma \\
+Flask-JWT-Extended & 4.6.x & Authentification JWT sécurisée \\
+Flask-CORS & 4.0.x & Gestion des requêtes cross-origin \\
+Flask-Limiter & 3.5.x & Rate limiting et protection DDoS \\
+Marshmallow & 3.20.x & Sérialisation/validation des données \\
+\hline
+\end{tabular}
+\caption{Extensions Flask Principales}
+\end{table}
+
+\subsubsection{Architecture Backend}
+
+\paragraph{Pattern de Organisation}
+\begin{lstlisting}[language=python]
+app/
+├── __init__.py         # Factory pattern, configuration
+├── config.py          # Configuration environnements
+├── models/            # Modèles SQLAlchemy
+│   ├── user.py
+│   └── run.py
+├── routes/            # Blueprints (contrôleurs)
+│   ├── auth.py
+│   ├── users.py
+│   └── runs.py
+├── services/          # Logique métier
+│   ├── auth_service.py
+│   └── run_service.py
+├── utils/             # Utilitaires et helpers
+│   ├── decorators.py
+│   └── validators.py
+└── tests/             # Tests automatisés
+    ├── test_auth.py
+    └── test_runs.py
+\end{lstlisting}
+
+\subsection{Base de Données - MySQL}
+
+\subsubsection{Choix de MySQL}
+
+\paragraph{Critères de Décision}
+\begin{itemize}
+    \item \textbf{Robustesse} : SGBD mature et éprouvé en production
+    \item \textbf{Performance} : Optimisé pour les requêtes relationnelles
+    \item \textbf{Support JSON} : Stockage efficace des données GPS
+    \item \textbf{Scaling} : Réplication master-slave, clustering
+    \item \textbf{Communauté} : Documentation extensive, support commercial
+    \item \textbf{Écosystème} : Intégration native avec SQLAlchemy
+\end{itemize}
+
+\paragraph{Configuration Optimisée}
+\begin{lstlisting}[language=ini]
+# my.cnf - Configuration MySQL pour Running App
+[mysqld]
+innodb_buffer_pool_size = 1G
+innodb_log_file_size = 256M
+innodb_flush_log_at_trx_commit = 2
+query_cache_type = 1
+query_cache_size = 128M
+max_connections = 200
+slow_query_log = 1
+long_query_time = 2
+\end{lstlisting}
+
+\subsubsection{Alternatives Considérées}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|c|l|}
+\hline
+\textbf{SGBD} & \textbf{Performance} & \textbf{JSON} & \textbf{Scaling} & \textbf{Complexité} & \textbf{Décision} \\
+\hline
+MySQL & ✓✓✓ & ✓✓ & ✓✓✓ & ✓✓ & \textcolor{green}{\textbf{Retenu}} \\
+PostgreSQL & ✓✓✓ & ✓✓✓ & ✓✓✓ & ✓ & Alternative valide \\
+MongoDB & ✓✓ & ✓✓✓ & ✓✓ & ✓✓✓ & NoSQL non requis \\
+SQLite & ✓ & ✓ & ✓ & ✓✓✓ & Dev uniquement \\
+\hline
+\end{tabular}
+\caption{Comparaison des SGBD}
+\end{table}
+
+\subsection{Outils de Développement}
+
+\subsubsection{Environnement de Développement}
+
+\begin{description}
+    \item[\textbf{IDE}] Visual Studio Code avec extensions React Native et Python
+    \item[\textbf{Versioning}] Git avec GitHub pour le hosting et CI/CD
+    \item[\textbf{Package Managers}] npm/yarn (JS), pip/pipenv (Python)
+    \item[\textbf{Debugging}] Flipper (React Native), Flask debugger
+    \item[\textbf{Testing}] Jest (JS), pytest (Python)
+\end{description}
+
+\subsubsection{DevOps et Déploiement}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Outil} & \textbf{Usage} & \textbf{Avantage} \\
+\hline
+Docker & Containerisation & Reproductibilité environnements \\
+GitHub Actions & CI/CD Pipeline & Intégration native GitHub \\
+Expo EAS & Build mobile & Distribution automatisée \\
+Heroku/AWS & Hosting API & Scaling automatique \\
+CloudFlare & CDN/DNS & Performance globale \\
+\hline
+\end{tabular}
+\caption{Outils DevOps}
+\end{table}
+
+\subsection{Choix d'Architecture}
+
+\subsubsection{Architecture Microservices vs Monolithique}
+
+\paragraph{Décision : Monolithe Modulaire}
+\begin{itemize}
+    \item \textbf{Simplicité} : Une seule application à déployer et maintenir
+    \item \textbf{Performance} : Pas de latence réseau entre services
+    \item \textbf{Développement} : Setup et debugging simplifiés
+    \item \textbf{Évolution} : Possibilité de migration future vers microservices
+\end{itemize}
+
+\subsubsection{Patterns Architecturaux Appliqués}
+
+\begin{description}
+    \item[\textbf{Repository Pattern}] Séparation logique métier / accès données
+    \item[\textbf{Factory Pattern}] Configuration modulaire de Flask
+    \item[\textbf{Decorator Pattern}] Authentification et autorisation
+    \item[\textbf{Observer Pattern}] Context API pour la réactivité UI
+\end{description}
+
+\subsection{Justifications des Choix}
+
+\subsubsection{Critères de Décision}
+
+\begin{enumerate}
+    \item \textbf{Performance} : Réactivité de l'interface utilisateur
+    \item \textbf{Maintenabilité} : Code propre et architecture modulaire
+    \item \textbf{Scalabilité} : Capacité de montée en charge
+    \item \textbf{Sécurité} : Protection des données utilisateur
+    \item \textbf{Time-to-market} : Rapidité de développement
+    \item \textbf{Coût} : Licensing et infrastructure
+\end{enumerate}
+
+\subsubsection{Trade-offs Assumés}
+
+\begin{itemize}
+    \item \textbf{React Native vs Natif} : Performance légèrement moindre contre développement unifié
+    \item \textbf{Monolithe vs Microservices} : Simplicité contre flexibilité architecturale
+    \item \textbf{MySQL vs NoSQL} : Cohérence des données contre flexibilité du schéma
+    \item \textbf{JWT vs Sessions} : Stateless contre simplicité de révocation
+\end{itemize}
