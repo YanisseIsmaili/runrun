@@ -1,0 +1,161 @@
+% Fichier : sections/05_technologies.tex
+\section{Technologies et Justification des Choix Techniques}
+
+\subsection{Vue d'ensemble de la stack technique}
+
+Le choix de notre stack technologique résulte d'une analyse approfondie des besoins du projet, des contraintes de performance, de la maintenabilité du code et de l'évolutivité du système. Cette sélection privilégie des technologies matures et largement adoptées qui garantissent la stabilité du projet tout en offrant la flexibilité nécessaire pour les évolutions futures.
+
+Notre approche technique s'articule autour de trois piliers principaux : la performance pour assurer une expérience utilisateur fluide, la sécurité pour protéger les données sensibles des utilisateurs, et la maintenabilité pour faciliter les évolutions et corrections futures. Ces critères ont guidé chaque décision technique, depuis le choix du framework mobile jusqu'à la configuration de la base de données.
+
+La cohérence entre les technologies choisies facilite l'intégration et réduit la complexité globale du système. L'utilisation de JavaScript/TypeScript côté client et Python côté serveur offre un équilibre optimal entre productivité de développement et performance d'exécution, tout en permettant à l'équipe de maîtriser un nombre limité de langages.
+
+\begin{infobox}[Critères de sélection technologique]
+\begin{itemize}[leftmargin=1cm]
+\item Maturité et stabilité des technologies
+\item Performance et scalabilité du système
+\item Facilité de maintenance et d'évolution
+\item Disponibilité des compétences dans l'équipe
+\item Écosystème et support communautaire
+\item Coût total de possession (TCO)
+\end{itemize}
+\end{infobox}
+
+\subsection{Frontend mobile : React Native}
+
+Le choix de React Native pour le développement de l'application mobile répond à plusieurs impératifs stratégiques qui optimisent à la fois le time-to-market et la qualité du produit final.
+
+React Native permet de développer simultanément pour iOS et Android avec une base de code largement partagée, réduisant significativement les coûts de développement et de maintenance. Cette approche cross-platform ne compromet pas la qualité de l'expérience utilisateur grâce à l'utilisation de composants natifs réels plutôt que d'une WebView, garantissant des performances proche du natif pur.
+
+L'écosystème React Native offre un accès simplifié aux fonctionnalités spécifiques des smartphones nécessaires à notre application. L'intégration avec les services de géolocalisation, les capteurs de mouvement et les APIs de santé (HealthKit, Google Fit) s'effectue via des modules bien maintenus qui encapsulent la complexité des APIs natives.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Avantage} & \textbf{Impact sur le projet} \\
+\hline
+Code partagé & Réduction de 60\% du temps de développement mobile \\
+\hline
+Performance & Rendu natif garantissant 60fps pour les animations \\
+\hline
+Hot Reload & Cycle de développement accéléré et débogage facilité \\
+\hline
+Écosystème & Large gamme de modules pour fonctionnalités spécialisées \\
+\hline
+Compétences & Réutilisation des connaissances React de l'équipe \\
+\hline
+\end{tabular}
+\caption{Avantages de React Native pour Running App}
+\end{table}
+
+La gestion de l'état de l'application utilise les hooks React modernes qui simplifient la logique de composants tout en maintenant des performances optimales. Cette approche évite la complexité d'un gestionnaire d'état externe pour notre cas d'usage tout en préparant une migration future vers Redux si la complexité de l'application l'exige.
+
+L'architecture de navigation s'appuie sur React Navigation, une solution mature qui gère élégamment les transitions entre écrans et l'état de navigation. Cette bibliothèque offre une API déclarative qui s'intègre naturellement avec l'approche composant de React tout en supportant les patterns de navigation natifs de chaque plateforme.
+
+\subsection{Backend API : Flask et Python}
+
+Flask constitue le cœur de notre backend grâce à sa philosophie minimaliste qui permet de construire exactement l'architecture nécessaire sans surcharge inutile. Cette approche micro-framework offre une flexibilité maximale pour adapter le système aux besoins spécifiques de Running App.
+
+Python apporte plusieurs avantages déterminants pour notre projet. La richesse de son écosystème facilite l'intégration de fonctionnalités avancées comme l'analyse de données pour les recommandations de courses ou le machine learning pour la personnalisation future. La syntaxe claire et expressive de Python améliore la maintenabilité du code et réduit les risques d'erreurs de développement.
+
+\begin{lstlisting}[language=python, caption=Exemple de structure Blueprint Flask]
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+runs_bp = Blueprint('runs', __name__)
+
+@runs_bp.route('', methods=['GET'])
+@jwt_required()
+def get_user_runs():
+    user_id = get_jwt_identity()
+    # Logique métier claire et concise
+    runs = Run.query.filter_by(user_id=user_id).all()
+    return jsonify({
+        "status": "success",
+        "data": [run.to_dict() for run in runs]
+    })
+\end{lstlisting}
+
+L'organisation modulaire en blueprints facilite la collaboration en équipe en permettant de développer différentes fonctionnalités de manière indépendante. Cette architecture favorise également les tests unitaires en isolant clairement les responsabilités de chaque module.
+
+Flask-SQLAlchemy fournit une couche d'abstraction élégante pour les interactions avec la base de données. L'ORM simplifie les requêtes complexes tout en offrant la possibilité d'optimiser les performances avec du SQL natif quand nécessaire. Cette flexibilité s'avère particulièrement utile pour les requêtes d'agrégation des statistiques de course.
+
+Les extensions Flask enrichissent le framework de base avec des fonctionnalités essentielles comme l'authentification JWT (Flask-JWT-Extended), la gestion des migrations (Flask-Migrate) et la validation des données (Flask-Marshmallow). Cette approche modulaire permet d'ajouter uniquement les fonctionnalités nécessaires sans alourdir l'application.
+
+\subsection{Base de données : MySQL}
+
+MySQL s'impose comme choix naturel pour notre système grâce à sa maturité, ses performances éprouvées et son excellente intégration avec l'écosystème Python/Flask. Cette base de données relationnelle offre la robustesse nécessaire pour gérer les données critiques de l'application tout en maintenant des performances optimales même avec une large base d'utilisateurs.
+
+La cohérence ACID de MySQL garantit l'intégrité des données lors des opérations concurrentes, un aspect crucial pour une application mobile où plusieurs utilisateurs peuvent interagir simultanément avec le système. Cette fiabilité s'avère particulièrement importante pour l'enregistrement des courses et la gestion des comptes utilisateur où aucune perte de données n'est acceptable.
+
+Les capacités d'optimisation avancées de MySQL, notamment ses algorithmes d'indexation sophistiqués et son optimiseur de requêtes, permettent de maintenir des temps de réponse rapides même avec des volumes de données importants. Le support natif des index JSON facilite le stockage et la recherche dans les données de parcours GPS sans compromettre les performances des requêtes relationnelles traditionnelles.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Caractéristique} & \textbf{Bénéfice pour Running App} \\
+\hline
+Transactions ACID & Intégrité garantie des données de course et utilisateur \\
+\hline
+Optimiseur de requêtes & Performance optimale pour les statistiques complexes \\
+\hline
+Support JSON & Stockage flexible des données GPS et métadonnées \\
+\hline
+Réplication & Haute disponibilité et sauvegarde automatique \\
+\hline
+Écosystème mature & Outils d'administration et monitoring éprouvés \\
+\hline
+\end{tabular}
+\caption{Avantages de MySQL pour notre architecture}
+\end{table}
+
+La stratégie de réplication MySQL permet de configurer facilement une architecture haute disponibilité avec des serveurs de lecture dédiés pour les requêtes analytiques. Cette séparation des charges améliore les performances globales en dédiant le serveur principal aux opérations d'écriture critiques tout en distribuant les lectures sur plusieurs instances.
+
+\subsection{Outils de développement et infrastructure}
+
+L'outillage de développement constitue un facteur déterminant pour la productivité de l'équipe et la qualité du code produit. Notre sélection d'outils privilégie l'intégration et l'automatisation pour réduire les tâches répétitives et minimiser les erreurs humaines.
+
+Git avec GitHub centralise la gestion de versions en offrant des fonctionnalités collaboratives avancées comme les pull requests, les revues de code et l'intégration continue. Cette plateforme facilite le suivi des modifications, la résolution des conflits et la maintenance de multiples branches de développement parallèles.
+
+L'environnement de développement s'appuie sur des conteneurs Docker qui garantissent la cohérence entre les postes de développement, les environnements de test et la production. Cette approche élimine les problèmes classiques de "ça marche sur ma machine" et facilite l'onboarding de nouveaux développeurs dans l'équipe.
+
+Expo CLI simplifie considérablement le développement React Native en fournissant un environnement de développement unifié qui gère automatiquement la compilation, le déploiement sur les appareils de test et la publication sur les app stores. Cette intégration réduit la complexité technique et permet aux développeurs de se concentrer sur la logique métier.
+
+Le monitoring de production utilise une combinaison d'outils open source et de services managés pour surveiller les performances, détecter les erreurs et analyser l'usage. Sentry capture automatiquement les exceptions côté client et serveur avec un contexte détaillé qui facilite le débogage. Prometheus collecte les métriques système et applicatives pour alimenter des tableaux de bord Grafana qui visualisent l'état du système en temps réel.
+
+\subsection{Justification des choix architecturaux}
+
+Chaque décision architecturale résulte d'une analyse coût-bénéfice qui prend en compte les contraintes spécifiques de notre projet. L'architecture monolithique choisie pour le backend, bien que moins trendy que les microservices, s'avère plus appropriée pour notre équipe réduite et notre domaine métier cohérent.
+
+Cette approche monolithique simplifie considérablement le déploiement, le debugging et la gestion des transactions qui s'étendent sur plusieurs entités. La complexité additionnelle des microservices ne se justifie pas à notre échelle actuelle, tout en gardant la possibilité d'évoluer vers cette architecture si la croissance l'exige.
+
+Le choix du stockage relationnel plutôt que NoSQL reflète la nature structurée de nos données et l'importance des relations entre entités. Les données de course présentent un schéma stable et des besoins de cohérence forte qui correspondent parfaitement au modèle relationnel. L'ajout du support JSON dans MySQL offre la flexibilité nécessaire pour les données semi-structurées sans sacrifier les avantages du relationnel.
+
+L'authentification basée sur JWT plutôt que sur des sessions serveur s'aligne avec notre architecture stateless et facilite la scalabilité horizontale future. Cette approche simplifie également l'architecture en éliminant le besoin d'un store de sessions partagé entre les instances de serveur.
+
+\subsection{Stratégie de déploiement et DevOps}
+
+Notre stratégie de déploiement privilégie la simplicité et la fiabilité avec un pipeline CI/CD automatisé qui réduit les risques d'erreurs humaines et accélère les cycles de livraison.
+
+Le pipeline de déploiement s'articule autour de GitHub Actions qui orchestrent automatiquement les tests, la construction des artefacts et le déploiement selon les branches. Cette intégration native avec notre repository simplifie la configuration et évite la complexité d'outils externes supplémentaires.
+
+L'environnement de production utilise une approche de déploiement blue-green qui permet des mises à jour sans interruption de service. Cette stratégie maintient deux environnements identiques dont un seul reçoit le trafic utilisateur, permettant de basculer instantanément en cas de problème avec la nouvelle version.
+
+La conteneurisation avec Docker facilite la portabilité entre environnements et simplifie la gestion des dépendances. Chaque composant de l'application est packagé avec ses dépendances exactes, garantissant un comportement identique quel que soit l'environnement d'exécution.
+
+\subsection{Sécurité et conformité}
+
+La sécurité constitue une préoccupation transversale qui influence chaque aspect de notre architecture technique. Notre approche de sécurité en profondeur combine plusieurs couches de protection pour protéger les données utilisateur et maintenir la confiance.
+
+Le chiffrement des données en transit utilise TLS 1.3 avec des suites cryptographiques modernes qui résistent aux attaques actuelles. Cette protection s'étend à toutes les communications, incluant les connexions à la base de données et les APIs externes.
+
+La gestion des secrets utilise des variables d'environnement et un système de vault pour éviter le stockage de credentials en dur dans le code. Cette approche facilite la rotation des clés et réduit les risques de compromission lors des déploiements.
+
+La validation des entrées s'effectue à plusieurs niveaux avec des bibliothèques spécialisées qui empêchent les injections SQL, les attaques XSS et autres vecteurs d'attaque classiques. Cette validation multicouche garantit qu'aucune donnée malveillante ne peut atteindre les couches sensibles du système.
+
+Les audits de sécurité automatisés analysent régulièrement les dépendances pour détecter les vulnérabilités connues et proposer des mises à jour. Cette surveillance proactive permet de maintenir un niveau de sécurité élevé même avec l'évolution constante de l'écosystème logiciel.
+
+\begin{successbox}[Mesures de sécurité implémentées]
+Notre architecture intègre des mesures de sécurité à tous les niveaux, depuis le chiffrement des communications jusqu'à la validation stricte des entrées utilisateur. Cette approche multicouche garantit une protection robuste des données sensibles tout en maintenant une expérience utilisateur fluide. Les audits réguliers et la surveillance continue permettent de détecter et corriger proactivement les vulnérabilités potentielles.
+\end{successbox}

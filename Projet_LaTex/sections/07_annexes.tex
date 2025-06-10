@@ -1,0 +1,1293 @@
+% Fichier : sections/07_annexes_techniques.tex
+\section{Annexes Techniques}
+
+\subsection{Configuration et installation}
+
+Cette section fournit les informations détaillées nécessaires pour reproduire l'environnement de développement et comprendre les dépendances techniques du projet Running App. Ces informations constituent une ressource précieuse pour l'évaluation technique et la poursuite éventuelle du développement.
+
+L'environnement de développement de Running App nécessite une configuration spécifique qui équilibre simplicité d'installation et robustesse technique. Cette approche garantit que les développeurs peuvent rapidement démarrer leur travail tout en bénéficiant d'un environnement stable et reproductible.
+
+\subsubsection{Prérequis système}
+
+L'installation complète de l'environnement de développement nécessite plusieurs composants qui doivent être configurés dans un ordre spécifique pour garantir le bon fonctionnement de l'ensemble du système. Cette séquence d'installation évite les conflits de dépendances et assure une configuration optimale.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Composant} & \textbf{Version} & \textbf{Description} \\
+\hline
+Node.js & 18.x ou supérieur & Runtime JavaScript pour React Native \\
+\hline
+Python & 3.9 ou supérieur & Interpréteur pour le backend Flask \\
+\hline
+MySQL & 8.0 ou supérieur & Base de données relationnelle \\
+\hline
+Git & 2.30 ou supérieur & Gestionnaire de versions \\
+\hline
+Android Studio & Dernière version & IDE pour le développement Android \\
+\hline
+Xcode & 14 ou supérieur & IDE pour le développement iOS (macOS uniquement) \\
+\hline
+\end{tabular}
+\caption{Prérequis techniques pour l'environnement de développement}
+\end{table}
+
+La configuration de ces outils suit une séquence logique qui évite les conflits de dépendances et assure une installation stable. Python constitue le point de départ car Flask et ses extensions en dépendent directement. La configuration de MySQL nécessite une attention particulière aux droits d'accès et à la configuration de sécurité pour permettre le développement local tout en préparant le déploiement en production.
+
+Node.js et ses outils associés forment l'écosystème React Native qui permet le développement cross-platform. L'installation d'Android Studio et Xcode complète l'environnement en fournissant les SDK nécessaires pour compiler et tester l'application sur les appareils mobiles réels et les simulateurs.
+
+\subsubsection{Installation du backend}
+
+L'installation du backend Flask nécessite la création d'un environnement virtuel Python qui isole les dépendances du projet et évite les conflits avec d'autres applications Python installées sur le système. Cette approche représente une bonne pratique qui facilite la maintenance et le déploiement.
+
+\begin{lstlisting}[language=bash, caption=Installation du backend Flask]
+# Création de l'environnement virtuel
+python -m venv venv
+
+# Activation de l'environnement (Windows)
+venv\Scripts\activate
+
+# Activation de l'environnement (macOS/Linux)
+source venv/bin/activate
+
+# Installation des dépendances
+pip install -r requirements.txt
+
+# Configuration de la base de données
+python create_tables.py
+
+# Création d'un utilisateur administrateur
+python scripts/create_admin.py admin admin@test.com Admin123!
+
+# Lancement du serveur de développement
+python run.py
+\end{lstlisting}
+
+Le fichier requirements.txt contient toutes les dépendances Python nécessaires avec leurs versions spécifiques pour garantir la reproductibilité de l'environnement. Cette approche évite les problèmes de compatibilité qui pourraient survenir avec des versions différentes des bibliothèques. La spécification des versions exactes assure que tous les développeurs travaillent avec le même environnement technique.
+
+La création des tables de base de données s'effectue via un script dédié qui utilise les modèles SQLAlchemy pour générer automatiquement la structure appropriée. Cette automatisation réduit les erreurs manuelles et facilite la mise en place d'environnements de développement multiples.
+
+\subsubsection{Installation du frontend mobile}
+
+L'installation de l'application React Native s'appuie sur Node.js et npm pour gérer les dépendances JavaScript. L'utilisation d'Expo CLI simplifie considérablement la configuration de l'environnement de développement mobile en encapsulant la complexité des outils natifs.
+
+\begin{lstlisting}[language=bash, caption=Installation du frontend React Native]
+# Installation d'Expo CLI globalement
+npm install -g @expo/cli
+
+# Installation des dépendances du projet
+npm install
+
+# Configuration des variables d'environnement
+cp .env.example .env
+
+# Lancement en mode développement
+npx expo start
+
+# Lancement sur un simulateur iOS (macOS uniquement)
+npx expo run:ios
+
+# Lancement sur un émulateur Android
+npx expo run:android
+\end{lstlisting}
+
+La configuration des variables d'environnement permet d'adapter l'application aux différents environnements de développement, test et production sans modifier le code source. Cette approche facilite le déploiement et améliore la sécurité en évitant le stockage de credentials dans le repository. Le fichier .env.example sert de template qui guide les développeurs dans la configuration de leur environnement local.
+
+\subsection{Extraits de code significatifs}
+
+Cette section présente des extraits de code représentatifs qui illustrent les patterns architecturaux et les bonnes pratiques implémentées dans le projet. Ces exemples démontrent la qualité technique du développement et facilitent la compréhension de l'architecture globale du système.
+
+\subsubsection{Authentification JWT côté serveur}
+
+L'implémentation de l'authentification JWT illustre l'approche sécurisée adoptée pour protéger les endpoints de l'API. Ce code démontre la validation des credentials, la génération de tokens et la gestion structurée des erreurs qui améliore l'expérience développeur.
+
+\begin{lstlisting}[language=python, caption=Endpoint d'authentification avec JWT]
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import create_access_token
+from werkzeug.security import check_password_hash
+from app.models import User
+
+auth_bp = Blueprint('auth', __name__)
+
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    """Authentification utilisateur et génération du token JWT"""
+    try:
+        # Validation des données d'entrée avec messages explicites
+        data = request.get_json()
+        if not data or not data.get('email') or not data.get('password'):
+            return jsonify({
+                "status": "error",
+                "message": "Email et mot de passe requis",
+                "errors": {"auth": "Données manquantes"}
+            }), 400
+        
+        # Recherche de l'utilisateur en base avec gestion de la casse
+        user = User.query.filter_by(email=data['email'].lower()).first()
+        
+        # Vérification sécurisée des credentials
+        if not user or not check_password_hash(user.password_hash, data['password']):
+            return jsonify({
+                "status": "error",
+                "message": "Identifiants incorrects",
+                "errors": {"auth": "Identifiants invalides"}
+            }), 401
+        
+        # Génération du token JWT avec claims personnalisés
+        access_token = create_access_token(
+            identity=user.id,
+            additional_claims={
+                "username": user.username,
+                "email": user.email,
+                "is_admin": user.is_admin
+            }
+        )
+        
+        # Réponse structurée avec informations utilisateur
+        return jsonify({
+            "status": "success",
+            "message": "Connexion réussie",
+            "data": {
+                "access_token": access_token,
+                "user": user.to_dict()
+            }
+        }), 200
+        
+    except Exception as e:
+        # Logging de l'erreur pour le débogage
+        app.logger.error(f"Erreur lors de la connexion: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": "Erreur lors de la connexion",
+            "errors": {"server": "Erreur interne"}
+        }), 500
+\end{lstlisting}
+
+Ce code illustre plusieurs bonnes pratiques importantes. La validation des entrées s'effectue dès le début de la fonction pour éviter les traitements inutiles. La recherche utilisateur normalise l'email en minuscules pour éviter les problèmes de casse. La gestion d'erreurs distingue clairement les erreurs client des erreurs serveur tout en protégeant les informations sensibles.
+
+\subsubsection{Composant React Native pour l'enregistrement de course}
+
+Ce composant illustre l'intégration avec les APIs natives du smartphone et la gestion de l'état complexe nécessaire pour l'enregistrement en temps réel des données de course. L'implémentation démontre les bonnes pratiques React Native pour les applications de fitness.
+
+\begin{lstlisting}[language=javascript, caption=Composant d'enregistrement de course]
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import * as Location from 'expo-location';
+import { useAuth } from '../contexts/AuthContext';
+import { runAPI } from '../services/api';
+
+const RunRecorder = () => {
+  // État du composant pour gérer l'enregistrement
+  const [isRecording, setIsRecording] = useState(false);
+  const [startTime, setStartTime] = useState(null);
+  const [distance, setDistance] = useState(0);
+  const [routeData, setRouteData] = useState([]);
+  const [duration, setDuration] = useState(0);
+  const [currentSpeed, setCurrentSpeed] = useState(0);
+  
+  // Référence pour le subscription GPS (nettoyage automatique)
+  const locationSubscription = useRef(null);
+  
+  const { user, token } = useAuth();
+
+  // Effet pour mettre à jour la durée pendant l'enregistrement
+  useEffect(() => {
+    let interval;
+    if (isRecording && startTime) {
+      interval = setInterval(() => {
+        setDuration(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording, startTime]);
+
+  // Nettoyage automatique lors du démontage du composant
+  useEffect(() => {
+    return () => {
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
+  }, []);
+
+  // Fonction pour démarrer l'enregistrement avec gestion d'erreurs robuste
+  const startRecording = async () => {
+    try {
+      // Demander les permissions de géolocalisation avec message explicite
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission requise', 
+          'L\'accès à la géolocalisation est nécessaire pour enregistrer vos courses.'
+        );
+        return;
+      }
+
+      // Vérifier la disponibilité du GPS
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        Alert.alert(
+          'GPS désactivé', 
+          'Veuillez activer la géolocalisation dans les paramètres.'
+        );
+        return;
+      }
+
+      // Initialiser l'enregistrement avec état cohérent
+      setIsRecording(true);
+      setStartTime(Date.now());
+      setDistance(0);
+      setRouteData([]);
+      setDuration(0);
+      setCurrentSpeed(0);
+
+      // Configuration optimisée pour le suivi de course
+      locationSubscription.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 1000,  // Mise à jour chaque seconde
+          distanceInterval: 1, // Sensibilité au mètre
+        },
+        (location) => {
+          // Validation de la qualité des données GPS
+          if (location.coords.accuracy > 50) {
+            // Ignorer les positions peu précises
+            return;
+          }
+
+          // Créer un nouveau point GPS avec métadonnées
+          const newPoint = {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            timestamp: location.timestamp,
+            accuracy: location.coords.accuracy,
+            speed: location.coords.speed || 0
+          };
+          
+          setRouteData(prevData => {
+            const newData = [...prevData, newPoint];
+            
+            // Calculer la distance incrémentale si on a au moins 2 points
+            if (newData.length > 1) {
+              const lastPoint = newData[newData.length - 2];
+              const distanceToAdd = calculateDistance(lastPoint, newPoint);
+              
+              // Filtrer les distances aberrantes (plus de 100m en 1 seconde)
+              if (distanceToAdd < 100) {
+                setDistance(prevDistance => prevDistance + distanceToAdd);
+              }
+            }
+            
+            return newData;
+          });
+
+          // Mettre à jour la vitesse instantanée
+          setCurrentSpeed(location.coords.speed * 3.6 || 0); // Conversion m/s vers km/h
+        }
+      );
+      
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de démarrer l\'enregistrement');
+      console.error('Erreur démarrage course:', error);
+      
+      // Réinitialiser l'état en cas d'erreur
+      setIsRecording(false);
+    }
+  };
+
+  // Fonction pour arrêter et sauvegarder la course
+  const stopRecording = async () => {
+    try {
+      // Arrêter le suivi GPS immédiatement
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+        locationSubscription.current = null;
+      }
+
+      setIsRecording(false);
+      const endTime = Date.now();
+      
+      // Validation des données avant sauvegarde
+      if (duration < 30) {
+        Alert.alert(
+          'Course trop courte', 
+          'La course doit durer au moins 30 secondes pour être enregistrée.'
+        );
+        return;
+      }
+
+      if (distance < 50) {
+        Alert.alert(
+          'Distance insuffisante', 
+          'La distance parcourue doit être d\'au moins 50 mètres.'
+        );
+        return;
+      }
+      
+      // Préparer les données avec calculs de performance
+      const avgSpeed = distance > 0 ? distance / duration : 0;
+      const maxSpeed = Math.max(...routeData.map(point => point.speed || 0));
+      
+      const runData = {
+        start_time: new Date(startTime).toISOString(),
+        end_time: new Date(endTime).toISOString(),
+        duration,
+        distance: Math.round(distance),
+        route_data: routeData,
+        avg_speed: avgSpeed,
+        max_speed: maxSpeed * 3.6, // Conversion en km/h
+        calories: Math.round(distance * 0.06 * (user.weight || 70) / 70) // Estimation basée sur le poids
+      };
+
+      // Sauvegarder avec indicateur de progression
+      const result = await runAPI.createRun(runData, token);
+      
+      if (result.success) {
+        Alert.alert(
+          'Succès', 
+          `Course enregistrée!\nDistance: ${(distance/1000).toFixed(2)} km\nDurée: ${formatDuration(duration)}`
+        );
+        
+        // Réinitialiser complètement l'état
+        resetState();
+      } else {
+        Alert.alert('Erreur', 'Échec de l\'enregistrement de la course');
+      }
+      
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de sauvegarder la course');
+      console.error('Erreur sauvegarde course:', error);
+    }
+  };
+
+  // Fonction utilitaire pour réinitialiser l'état
+  const resetState = () => {
+    setStartTime(null);
+    setDistance(0);
+    setRouteData([]);
+    setDuration(0);
+    setCurrentSpeed(0);
+  };
+
+  // Calcul de distance optimisé avec formule de Haversine
+  const calculateDistance = (point1, point2) => {
+    const R = 6371e3; // Rayon de la Terre en mètres
+    const φ1 = point1.latitude * Math.PI/180;
+    const φ2 = point2.latitude * Math.PI/180;
+    const Δφ = (point2.latitude-point1.latitude) * Math.PI/180;
+    const Δλ = (point2.longitude-point1.longitude) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c;
+  };
+
+  // Formatage de la durée pour l'affichage
+  const formatDuration = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Enregistrement de Course</Text>
+      
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Durée</Text>
+          <Text style={styles.statValue}>{formatDuration(duration)}</Text>
+        </View>
+        
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Distance</Text>
+          <Text style={styles.statValue}>{(distance / 1000).toFixed(2)} km</Text>
+        </View>
+        
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Allure</Text>
+          <Text style={styles.statValue}>
+            {distance > 0 ? (duration / (distance / 1000) / 60).toFixed(2) : '0.00'} min/km
+          </Text>
+        </View>
+        
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Vitesse</Text>
+          <Text style={styles.statValue}>{currentSpeed.toFixed(1)} km/h</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.button, isRecording ? styles.stopButton : styles.startButton]}
+        onPress={isRecording ? stopRecording : startRecording}
+        disabled={false}
+      >
+        <Text style={styles.buttonText}>
+          {isRecording ? 'Arrêter la course' : 'Démarrer la course'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+export default RunRecorder;
+\end{lstlisting}
+
+Ce composant démontre plusieurs aspects techniques importants. La gestion des permissions utilisateur suit les meilleures pratiques avec des messages explicites. Le suivi GPS utilise des paramètres optimisés pour la course à pied avec filtrage des données aberrantes. La gestion de l'état React utilise des hooks appropriés avec nettoyage automatique des ressources.
+
+\subsection{Métriques et indicateurs de performance}
+
+Le monitoring des performances constitue un aspect crucial pour maintenir la qualité de service et identifier proactivement les problèmes potentiels. Cette section présente les métriques clés surveillées et leurs seuils d'alerte qui guident les décisions d'optimisation.
+
+\subsubsection{Métriques backend}
+
+Les métriques serveur permettent de surveiller la santé globale de l'API et d'identifier les goulots d'étranglement avant qu'ils n'impactent l'expérience utilisateur. Cette approche préventive améliore la fiabilité du système.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Métrique} & \textbf{Objectif} & \textbf{Seuil d'alerte} & \textbf{Seuil critique} \\
+\hline
+Temps de réponse API & < 200ms & 500ms & 1000ms \\
+\hline
+Taux d'erreur & < 1\% & 2\% & 5\% \\
+\hline
+Utilisation CPU & < 70\% & 80\% & 90\% \\
+\hline
+Utilisation mémoire & < 80\% & 85\% & 95\% \\
+\hline
+Connexions DB actives & < 50 & 75 & 100 \\
+\hline
+Temps de requête DB & < 50ms & 100ms & 200ms \\
+\hline
+Débit de requêtes & Variable & > 1000/min & > 2000/min \\
+\hline
+Taille du cache Redis & < 500MB & 750MB & 1GB \\
+\hline
+\end{tabular}
+\caption{Métriques de performance backend}
+\end{table}
+
+Ces métriques sont collectées en temps réel via des agents de monitoring qui agrègent les données sur différentes fenêtres temporelles. Cette approche permet de détecter aussi bien les pics ponctuels que les dégradations progressives de performance. L'historique de ces métriques facilite l'analyse des tendances et la planification de la capacité future.
+
+Les seuils d'alerte sont calibrés selon l'expérience opérationnelle et ajustés régulièrement selon l'évolution du système. Les alertes de niveau critique déclenchent des interventions immédiates tandis que les alertes préventives permettent de planifier les optimisations.
+
+\subsubsection{Métriques frontend mobile}
+
+Le monitoring de l'application mobile se concentre sur l'expérience utilisateur et la performance perçue, aspects critiques pour l'adoption et la rétention des utilisateurs dans l'écosystème mobile compétitif.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|p{5cm}|}
+\hline
+\textbf{Métrique} & \textbf{Objectif} & \textbf{Description et importance} \\
+\hline
+Temps de démarrage & < 3 secondes & Durée critique entre le lancement et l'écran principal utilisable \\
+\hline
+Fluidité d'animation & 60 FPS & Maintien des 60 images par seconde pour une expérience native \\
+\hline
+Consommation batterie & < 5\%/heure & Impact sur l'autonomie pendant l'usage normal de l'application \\
+\hline
+Taux de crash & < 0.5\% & Pourcentage de sessions interrompues par un crash application \\
+\hline
+Précision GPS & < 5 mètres & Écart moyen de localisation par rapport à la position réelle \\
+\hline
+Latence réseau & < 300ms & Temps de réponse des requêtes API depuis l'application \\
+\hline
+Taille de l'app & < 50MB & Espace de stockage occupé après installation complète \\
+\hline
+\end{tabular}
+\caption{Métriques de performance mobile}
+\end{table}
+
+Ces métriques mobile nécessitent des outils spécialisés qui intègrent avec les plateformes natives pour collecter les données de performance réelle. La mesure s'effectue sur des appareils représentatifs de la base utilisateur pour assurer la pertinence des données collectées.
+
+\subsection{Procédures de déploiement}
+
+La documentation des procédures de déploiement garantit la reproductibilité des mises en production et réduit les risques d'erreurs lors des livraisons. Ces procédures évoluent avec le projet pour intégrer les leçons apprises et les améliorations process.
+
+\subsubsection{Déploiement backend en production}
+
+Le déploiement du backend suit un processus automatisé qui minimise les interventions manuelles et les risques d'erreurs. Cette procédure inclut les vérifications de sécurité et les tests de non-régression obligatoires.
+
+\begin{lstlisting}[language=bash, caption=Script de déploiement backend production]
+#!/bin/bash
+# Script de déploiement automatisé pour le backend Flask
+# Fichier: deploy_backend.sh
+
+set -e  # Arrêt immédiat en cas d'erreur
+
+echo "🚀 Début du déploiement backend Running App"
+echo "Environnement: PRODUCTION"
+echo "Date: $(date '+%Y-%m-%d %H:%M:%S')"
+
+# Vérification des prérequis système
+echo "📋 Vérification de l'environnement de production"
+python --version || exit 1
+mysql --version || exit 1
+nginx -v || exit 1
+
+# Vérification des variables d'environnement critiques
+if [[ -z "$DB_PASSWORD" || -z "$JWT_SECRET_KEY" ]]; then
+    echo "❌ Variables d'environnement manquantes"
+    exit 1
+fi
+
+# Sauvegarde complète de la base de données
+echo "💾 Sauvegarde de la base de données"
+BACKUP_FILE="backup_$(date +%Y%m%d_%H%M%S).sql"
+mysqldump -u $DB_USER -p$DB_PASSWORD running_app_db > backups/$BACKUP_FILE
+echo "Sauvegarde créée: $BACKUP_FILE"
+
+# Mise à jour du code source avec vérification
+echo "📥 Récupération du code source"
+git fetch origin
+CURRENT_COMMIT=$(git rev-parse HEAD)
+git checkout main
+git pull origin main
+NEW_COMMIT=$(git rev-parse HEAD)
+
+echo "Commit précédent: $CURRENT_COMMIT"
+echo "Nouveau commit: $NEW_COMMIT"
+
+# Installation des dépendances avec cache pip
+echo "📦 Installation des dépendances"
+pip install --upgrade pip
+pip install -r requirements.txt --no-deps
+
+# Exécution des migrations avec vérification
+echo "🔄 Application des migrations de base de données"
+flask db upgrade
+
+# Vérification de l'intégrité de la base après migration
+echo "🔍 Vérification de l'intégrité de la base de données"
+python scripts/verify_db_integrity.py || exit 1
+
+# Tests de validation complets
+echo "🧪 Exécution des tests de validation"
+python -m pytest tests/ -v --tb=short || exit 1
+
+# Tests d'intégration avec base de données réelle
+echo "🔗 Tests d'intégration"
+python -m pytest tests/integration/ -v || exit 1
+
+# Collecte des fichiers statiques
+echo "📁 Collecte des fichiers statiques"
+python manage.py collectstatic --noinput
+
+# Redémarrage gracieux des services
+echo "🔄 Redémarrage des services"
+sudo systemctl reload nginx
+sudo systemctl restart running-app-backend
+sudo systemctl restart running-app-worker  # Worker Celery si applicable
+
+# Attente de la stabilisation des services
+sleep 10
+
+# Vérifications de santé post-déploiement
+echo "🏥 Vérifications de santé de l'API"
+for i in {1..5}; do
+    if curl -f -s http://localhost:5000/api/health > /dev/null; then
+        echo "✅ API opérationnelle (tentative $i)"
+        break
+    else
+        echo "⏳ Attente de l'API (tentative $i/5)"
+        sleep 5
+    fi
+done
+
+# Test des endpoints critiques
+echo "🔍 Test des endpoints critiques"
+curl -f http://localhost:5000/api/auth/health || exit 1
+curl -f http://localhost:5000/api/runs/health || exit 1
+curl -f http://localhost:5000/api/proposed-runs/categories || exit 1
+
+# Monitoring post-déploiement
+echo "📊 Initialisation du monitoring post-déploiement"
+python scripts/post_deploy_monitoring.py
+
+echo "✅ Déploiement terminé avec succès"
+echo "🆔 Commit déployé: $NEW_COMMIT"
+echo "📝 Logs disponibles dans: /var/log/running-app/"
+\end{lstlisting}
+
+\subsubsection{Publication sur les app stores}
+
+La publication de l'application mobile suit des processus spécifiques à chaque plateforme qui nécessitent une préparation minutieuse et des tests approfondis sur différents appareils et versions de système.
+
+Pour l'App Store iOS, la procédure inclut plusieurs étapes critiques. La configuration des certificats de distribution nécessite une attention particulière aux dates d'expiration et aux profils de provisioning. La génération du build avec Xcode suit des paramètres spécifiques pour optimiser la taille et les performances de l'application finale.
+
+La soumission via App Store Connect implique la préparation de métadonnées détaillées, screenshots sur différentes tailles d'écran et la configuration des informations de publication. Le processus de review d'Apple peut prendre de 24 heures à plusieurs jours selon la complexité de l'application et les éventuels problèmes détectés.
+
+Pour Google Play Store, le processus utilise Android Studio pour générer l'APK ou l'AAB signé avec les clés de production. La configuration des métadonnées inclut les descriptions multilingues, les catégories appropriées et les informations de classification par âge.
+
+Le déploiement progressif sur Google Play permet de limiter l'impact d'éventuels problèmes en déployant d'abord sur un pourcentage limité d'utilisateurs avant le déploiement complet. Cette approche graduelle améliore la qualité des mises à jour et permet de détecter les problèmes sur un échantillon réduit.
+
+\subsection{Tests et validation}
+
+La stratégie de tests garantit la qualité du code et la stabilité des fonctionnalités tout au long du cycle de développement. Cette approche multicouche couvre les tests unitaires, d'intégration et end-to-end pour assurer une couverture complète des cas d'usage.
+
+\subsubsection{Tests backend}
+
+Les tests backend valident la logique métier, les endpoints API et l'intégration avec la base de données. Ces tests utilisent pytest et des fixtures pour créer des environnements de test reproductibles et isolés.
+
+\begin{lstlisting}[language=python, caption=Suite de tests API complète]
+import pytest
+import json
+from datetime import datetime, timedelta
+from app import create_app, db
+from app.models import User, Run
+
+@pytest.fixture(scope='function')
+def test_app():
+    """Application Flask configurée pour les tests"""
+    app = create_app('testing')
+    with app.app_context():
+        db.create_all()
+        yield app
+        db.session.remove()
+        db.drop_all()
+
+@pytest.fixture
+def client(test_app):
+    """Client de test Flask"""
+    return test_app.test_client()
+
+@pytest.fixture
+def test_user(test_app):
+    """Utilisateur de test en base de données"""
+    user = User(
+        username="testuser",
+        email="test@example.com",
+        first_name="Test",
+        last_name="User",
+        password_hash=generate_password_hash("Test123!")
+    )
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+@pytest.fixture
+def auth_headers(client, test_user):
+    """Headers d'authentification JWT valides"""
+    response = client.post('/api/auth/login', json={
+        "email": "test@example.com",
+        "password": "Test123!"
+    })
+    
+    assert response.status_code == 200
+    token = response.get_json()['data']['access_token']
+    return {"Authorization": f"Bearer {token}"}
+
+@pytest.fixture
+def sample_run_data():
+    """Données de course valides pour les tests"""
+    now = datetime.utcnow()
+    return {
+        "start_time": now.isoformat() + "Z",
+        "end_time": (now + timedelta(minutes=30)).isoformat() + "Z",
+        "duration": 1800,
+        "distance": 5000,
+        "avg_speed": 2.78,
+        "max_speed": 3.5,
+        "calories": 350,
+        "route_data": [
+            {"latitude": 48.856614, "longitude": 2.3522219, "timestamp": now.timestamp()},
+            {"latitude": 48.857614, "longitude": 2.3532219, "timestamp": (now + timedelta(minutes=15)).timestamp()},
+            {"latitude": 48.858614, "longitude": 2.3542219, "timestamp": (now + timedelta(minutes=30)).timestamp()}
+        ]
+    }
+
+class TestAuthenticationAPI:
+    """Tests de l'authentification et autorisation"""
+    
+    def test_successful_login(self, client, test_user):
+        """Test de connexion réussie"""
+        response = client.post('/api/auth/login', json={
+            "email": "test@example.com",
+            "password": "Test123!"
+        })
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['status'] == 'success'
+        assert 'access_token' in data['data']
+        assert data['data']['user']['email'] == 'test@example.com'
+
+    def test_invalid_credentials(self, client, test_user):
+        """Test de connexion avec identifiants invalides"""
+        response = client.post('/api/auth/login', json={
+            "email": "test@example.com",
+            "password": "WrongPassword"
+        })
+        
+        assert response.status_code == 401
+        data = response.get_json()
+        assert data['status'] == 'error'
+        assert 'access_token' not in data.get('data', {})
+
+    def test_missing_credentials(self, client):
+        """Test de connexion avec données manquantes"""
+        response = client.post('/api/auth/login', json={
+            "email": "test@example.com"
+        })
+        
+        assert response.status_code == 400
+        data = response.get_json()
+        assert data['status'] == 'error'
+
+class TestRunsAPI:
+    """Tests des endpoints de gestion des courses"""
+    
+    def test_create_run_success(self, client, auth_headers, sample_run_data):
+        """Test de création d'une course valide"""
+        response = client.post('/api/runs', 
+                             json=sample_run_data, 
+                             headers=auth_headers)
+        
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data['status'] == 'success'
+        assert data['data']['distance'] == 5000
+        assert data['data']['duration'] == 1800
+
+    def test_create_run_invalid_data(self, client, auth_headers):
+        """Test de création avec données invalides"""
+        invalid_data = {
+            "start_time": "invalid-date",
+            "duration": -100,  # Durée négative
+            "distance": "not-a-number"
+        }
+        
+        response = client.post('/api/runs', 
+                             json=invalid_data, 
+                             headers=auth_headers)
+        
+        assert response.status_code == 400
+        data = response.get_json()
+        assert data['status'] == 'error'
+
+    def test_get_user_runs(self, client, auth_headers, test_user):
+        """Test de récupération des courses utilisateur"""
+        # Créer quelques courses de test
+        for i in range(3):
+            run = Run(
+                user_id=test_user.id,
+                start_time=datetime.utcnow() - timedelta(days=i),
+                end_time=datetime.utcnow() - timedelta(days=i) + timedelta(minutes=30),
+                duration=1800,
+                distance=5000 + i * 1000
+            )
+            db.session.add(run)
+        db.session.commit()
+        
+        response = client.get('/api/runs', headers=auth_headers)
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['status'] == 'success'
+        assert len(data['data']['runs']) == 3
+
+    def test_get_run_statistics(self, client, auth_headers, test_user):
+        """Test des statistiques de course"""
+        response = client.get('/api/runs/stats', headers=auth_headers)
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['status'] == 'success'
+        assert 'total_runs' in data['data']
+        assert 'total_distance' in data['data']
+
+    def test_unauthorized_access(self, client, sample_run_data):
+        """Test d'accès non autorisé"""
+        response = client.post('/api/runs', json=sample_run_data)
+        
+        assert response.status_code == 401
+
+class TestProposedRunsAPI:
+    """Tests des courses proposées"""
+    
+    def test_get_proposed_runs_public(self, client):
+        """Test d'accès public aux courses proposées"""
+        response = client.get('/api/proposed-runs')
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['status'] == 'success'
+        assert 'runs' in data['data']
+        assert len(data['data']['runs']) > 0
+
+    def test_get_proposed_runs_filtered(self, client):
+        """Test de filtrage des courses proposées"""
+        response = client.get('/api/proposed-runs?difficulty=beginner&type=endurance')
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['status'] == 'success'
+        
+        # Vérifier que le filtrage est appliqué
+        for run in data['data']['runs']:
+            assert run['difficulty'] == 'beginner'
+            assert run['type'] == 'endurance'
+
+    def test_get_run_categories(self, client):
+        """Test de récupération des catégories"""
+        response = client.get('/api/proposed-runs/categories')
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['status'] == 'success'
+        assert 'difficulties' in data['data']
+        assert 'types' in data['data']
+        assert 'durations' in data['data']
+
+class TestDataValidation:
+    """Tests de validation des données"""
+    
+    def test_email_validation(self, client):
+        """Test de validation des emails"""
+        invalid_emails = [
+            "invalid-email",
+            "@domain.com",
+            "user@",
+            "user space@domain.com"
+        ]
+        
+        for email in invalid_emails:
+            response = client.post('/api/auth/register', json={
+                "username": "testuser",
+                "email": email,
+                "password": "Test123!",
+                "first_name": "Test",
+                "last_name": "User"
+            })
+            
+            assert response.status_code == 400
+
+    def test_password_strength(self, client):
+        """Test de validation de la force du mot de passe"""
+        weak_passwords = [
+            "123456",      # Trop simple
+            "password",    # Pas de chiffres
+            "Pass1",       # Trop court
+            "PASSWORD123"  # Pas de minuscules
+        ]
+        
+        for password in weak_passwords:
+            response = client.post('/api/auth/register', json={
+                "username": "testuser",
+                "email": "test@example.com",
+                "password": password,
+                "first_name": "Test",
+                "last_name": "User"
+            })
+            
+            assert response.status_code == 400
+
+class TestPerformance:
+    """Tests de performance et charge"""
+    
+    def test_api_response_time(self, client, auth_headers):
+        """Test des temps de réponse API"""
+        import time
+        
+        start_time = time.time()
+        response = client.get('/api/runs', headers=auth_headers)
+        end_time = time.time()
+        
+        response_time = end_time - start_time
+        assert response_time < 1.0  # Moins d'une seconde
+        assert response.status_code == 200
+
+    def test_bulk_data_handling(self, client, auth_headers, test_user):
+        """Test de gestion de volumes importants de données"""
+        # Créer un grand nombre de courses
+        runs = []
+        for i in range(100):
+            run = Run(
+                user_id=test_user.id,
+                start_time=datetime.utcnow() - timedelta(days=i),
+                end_time=datetime.utcnow() - timedelta(days=i) + timedelta(minutes=30),
+                duration=1800,
+                distance=5000
+            )
+            runs.append(run)
+        
+        db.session.add_all(runs)
+        db.session.commit()
+        
+        # Tester la pagination
+        response = client.get('/api/runs?page=1&per_page=20', headers=auth_headers)
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert len(data['data']['runs']) == 20
+
+# Configuration pytest
+def pytest_configure(config):
+    """Configuration globale des tests"""
+    import warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# Exécution des tests avec coverage
+if __name__ == "__main__":
+    pytest.main([
+        "--verbose",
+        "--tb=short",
+        "--cov=app",
+        "--cov-report=html",
+        "--cov-report=term-missing"
+    ])
+\end{lstlisting}
+
+Cette suite de tests couvre les aspects critiques de l'application avec une attention particulière à la sécurité, la validation des données et les performances. L'utilisation de fixtures pytest facilite la réutilisation du code de test et garantit l'isolation entre les tests.
+
+\subsubsection{Tests frontend mobile}
+
+Les tests de l'application React Native combinent tests unitaires des composants, tests d'intégration et tests end-to-end pour valider l'expérience utilisateur complète.
+
+\begin{lstlisting}[language=javascript, caption=Tests React Native avec Jest et React Native Testing Library]
+import React from 'react';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import * as Location from 'expo-location';
+
+// Mocks des dépendances externes
+jest.mock('expo-location');
+jest.mock('../services/api');
+jest.mock('../contexts/AuthContext');
+
+import RunRecorder from '../components/RunRecorder';
+import { runAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+
+describe('RunRecorder Component', () => {
+  // Configuration des mocks
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Mock du contexte d'authentification
+    useAuth.mockReturnValue({
+      user: { id: 1, weight: 70 },
+      token: 'mock-jwt-token'
+    });
+    
+    // Mock des permissions GPS
+    Location.requestForegroundPermissionsAsync.mockResolvedValue({
+      status: 'granted'
+    });
+    
+    Location.hasServicesEnabledAsync.mockResolvedValue(true);
+  });
+
+  test('renders initial state correctly', () => {
+    const { getByText, getByTestId } = render(<RunRecorder />);
+    
+    expect(getByText('Enregistrement de Course')).toBeTruthy();
+    expect(getByText('Démarrer la course')).toBeTruthy();
+    expect(getByText('0:00')).toBeTruthy(); // Durée initiale
+    expect(getByText('0.00 km')).toBeTruthy(); // Distance initiale
+  });
+
+  test('starts recording when start button is pressed', async () => {
+    // Mock du suivi GPS
+    const mockLocationSubscription = {
+      remove: jest.fn()
+    };
+    
+    Location.watchPositionAsync.mockResolvedValue(mockLocationSubscription);
+    
+    const { getByText } = render(<RunRecorder />);
+    const startButton = getByText('Démarrer la course');
+    
+    fireEvent.press(startButton);
+    
+    await waitFor(() => {
+      expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalled();
+      expect(Location.watchPositionAsync).toHaveBeenCalled();
+      expect(getByText('Arrêter la course')).toBeTruthy();
+    });
+  });
+
+  test('handles GPS permission denial', async () => {
+    // Mock du refus de permission
+    Location.requestForegroundPermissionsAsync.mockResolvedValue({
+      status: 'denied'
+    });
+    
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    
+    const { getByText } = render(<RunRecorder />);
+    fireEvent.press(getByText('Démarrer la course'));
+    
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Permission requise',
+        'L\'accès à la géolocalisation est nécessaire pour enregistrer vos courses.'
+      );
+    });
+  });
+
+  test('calculates distance correctly during recording', async () => {
+    const mockLocationSubscription = {
+      remove: jest.fn()
+    };
+    
+    // Mock de la fonction de callback GPS
+    let locationCallback;
+    Location.watchPositionAsync.mockImplementation((options, callback) => {
+      locationCallback = callback;
+      return Promise.resolve(mockLocationSubscription);
+    });
+    
+    const { getByText } = render(<RunRecorder />);
+    fireEvent.press(getByText('Démarrer la course'));
+    
+    await waitFor(() => {
+      expect(locationCallback).toBeDefined();
+    });
+    
+    // Simuler des points GPS
+    const point1 = {
+      coords: {
+        latitude: 48.856614,
+        longitude: 2.3522219,
+        accuracy: 5,
+        speed: 2.5
+      },
+      timestamp: Date.now()
+    };
+    
+    const point2 = {
+      coords: {
+        latitude: 48.857614,
+        longitude: 2.3532219,
+        accuracy: 5,
+        speed: 2.8
+      },
+      timestamp: Date.now() + 1000
+    };
+    
+    // Envoyer les points GPS
+    locationCallback(point1);
+    locationCallback(point2);
+    
+    // Vérifier que la distance est calculée
+    await waitFor(() => {
+      const distanceText = getByText(/\d+\.\d+ km/);
+      expect(distanceText).toBeTruthy();
+    });
+  });
+
+  test('saves run data when stopped', async () => {
+    // Mock de l'API de sauvegarde
+    runAPI.createRun.mockResolvedValue({ success: true });
+    
+    const mockLocationSubscription = {
+      remove: jest.fn()
+    };
+    
+    Location.watchPositionAsync.mockResolvedValue(mockLocationSubscription);
+    
+    const { getByText } = render(<RunRecorder />);
+    
+    // Démarrer l'enregistrement
+    fireEvent.press(getByText('Démarrer la course'));
+    
+    await waitFor(() => {
+      expect(getByText('Arrêter la course')).toBeTruthy();
+    });
+    
+    // Attendre suffisamment pour avoir une course valide (>30s)
+    jest.advanceTimersByTime(35000);
+    
+    // Arrêter l'enregistrement
+    fireEvent.press(getByText('Arrêter la course'));
+    
+    await waitFor(() => {
+      expect(runAPI.createRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          duration: expect.any(Number),
+          distance: expect.any(Number),
+          route_data: expect.any(Array)
+        }),
+        'mock-jwt-token'
+      );
+    });
+  });
+
+  test('prevents saving short runs', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    
+    const { getByText } = render(<RunRecorder />);
+    
+    // Démarrer puis arrêter immédiatement
+    fireEvent.press(getByText('Démarrer la course'));
+    
+    await waitFor(() => {
+      expect(getByText('Arrêter la course')).toBeTruthy();
+    });
+    
+    // Avancer de seulement 20 secondes (insuffisant)
+    jest.advanceTimersByTime(20000);
+    
+    fireEvent.press(getByText('Arrêter la course'));
+    
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Course trop courte',
+        'La course doit durer au moins 30 secondes pour être enregistrée.'
+      );
+    });
+    
+    expect(runAPI.createRun).not.toHaveBeenCalled();
+  });
+
+  test('handles API errors gracefully', async () => {
+    // Mock d'une erreur API
+    runAPI.createRun.mockRejectedValue(new Error('Network error'));
+    
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    
+    const { getByText } = render(<RunRecorder />);
+    
+    fireEvent.press(getByText('Démarrer la course'));
+    
+    await waitFor(() => {
+      expect(getByText('Arrêter la course')).toBeTruthy();
+    });
+    
+    jest.advanceTimersByTime(35000);
+    fireEvent.press(getByText('Arrêter la course'));
+    
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Erreur',
+        'Impossible de sauvegarder la course'
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Erreur sauvegarde course:',
+        expect.any(Error)
+      );
+    });
+  });
+});
+
+// Tests d'intégration
+describe('RunRecorder Integration Tests', () => {
+  test('complete recording workflow', async () => {
+    // Test complet du workflow d'enregistrement
+    const { getByText } = render(<RunRecorder />);
+    
+    // 1. Démarrer l'enregistrement
+    fireEvent.press(getByText('Démarrer la course'));
+    
+    // 2. Simuler une course complète
+    await waitFor(() => {
+      expect(getByText('Arrêter la course')).toBeTruthy();
+    });
+    
+    // 3. Avancer le temps et simuler des données GPS
+    jest.advanceTimersByTime(60000); // 1 minute
+    
+    // 4. Arrêter et sauvegarder
+    fireEvent.press(getByText('Arrêter la course'));
+    
+    // 5. Vérifier le retour à l'état initial
+    await waitFor(() => {
+      expect(getByText('Démarrer la course')).toBeTruthy();
+    });
+  });
+});
+\end{lstlisting}
+
+\subsection{Glossaire technique}
+
+Ce glossaire définit les termes techniques spécifiques utilisés dans le projet pour faciliter la compréhension et maintenir une terminologie cohérente entre les membres de l'équipe et les parties prenantes.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|p{3cm}|X|}
+\hline
+\textbf{Terme} & \textbf{Définition} \\
+\hline
+JWT & JSON Web Token - Standard de sécurité RFC 7519 pour l'authentification stateless qui encapsule les informations d'identité dans un token signé cryptographiquement \\
+\hline
+REST & Representational State Transfer - Style d'architecture pour les APIs web qui utilise les verbes HTTP standard et représente les ressources par des URLs \\
+\hline
+ORM & Object-Relational Mapping - Technique de programmation qui permet de mapper les objets d'un langage orienté objet avec les tables d'une base de données relationnelle \\
+\hline
+GPS & Global Positioning System - Système de géolocalisation par satellite qui fournit des coordonnées précises de latitude et longitude \\
+\hline
+Endpoint & Point d'accès spécifique d'une API REST identifié par une URL unique et associé à une méthode HTTP \\
+\hline
+Blueprint & Module Flask qui organise les routes par domaine fonctionnel et facilite la modularité du code \\
+\hline
+Middleware & Composant logiciel qui intercepte et traite les requêtes HTTP avant qu'elles n'atteignent le contrôleur final \\
+\hline
+Hook & Fonction React qui permet d'utiliser l'état et les effets de bord dans les composants fonctionnels \\
+\hline
+Hot Reload & Fonctionnalité de développement qui recharge automatiquement l'application lors des modifications du code source \\
+\hline
+CI/CD & Continuous Integration/Continuous Deployment - Pratiques DevOps d'intégration et déploiement continus qui automatisent les tests et les mises en production \\
+\hline
+Fixture & Données ou état prédéfinis utilisés dans les tests pour assurer la reproductibilité et l'isolation \\
+\hline
+Mock & Objet simulé utilisé dans les tests pour remplacer des dépendances externes et contrôler leur comportement \\
+\hline
+Haversine & Formule mathématique pour calculer la distance orthodromique entre deux points sur une sphère à partir de leurs coordonnées \\
+\hline
+CORS & Cross-Origin Resource Sharing - Mécanisme de sécurité web qui permet aux ressources d'un domaine d'être accessibles depuis un autre domaine \\
+\hline
+\end{tabularx}
+\caption{Glossaire des termes techniques}
+\end{table}
+
+\subsection{Ressources et documentation externe}
+
+Cette section référence les ressources externes essentielles pour comprendre les technologies utilisées et poursuivre le développement du projet. Ces références constituent une bibliothèque technique pour l'équipe de développement.
+
+\subsubsection{Documentation des frameworks principaux}
+
+\begin{itemize}[leftmargin=1cm]
+\item \textbf{Flask Documentation Officielle} : \url{https://flask.palletsprojects.com/} - Documentation complète du micro-framework web Python incluant les guides d'installation, tutoriels et références API
+\item \textbf{React Native Documentation} : \url{https://reactnative.dev/} - Guide complet pour le développement d'applications mobiles cross-platform avec React Native
+\item \textbf{Expo Documentation} : \url{https://docs.expo.dev/} - Plateforme de développement React Native qui simplifie la configuration et le déploiement
+\item \textbf{SQLAlchemy Documentation} : \url{https://docs.sqlalchemy.org/} - ORM Python utilisé pour l'abstraction de la base de données
+\end{itemize}
+
+\subsubsection{Standards et spécifications}
+
+\begin{itemize}[leftmargin=1cm]
+\item \textbf{RFC 7519 - JSON Web Token} : \url{https://tools.ietf.org/html/rfc7519} - Spécification officielle du standard JWT pour l'authentification
+\item \textbf{OpenAPI Specification} : \url{https://spec.openapis.org/oas/v3.1.0} - Standard pour documenter les APIs REST
+\item \textbf{W3C Geolocation API} : \url{https://www.w3.org/TR/geolocation-API/} - Spécification de l'API de géolocalisation web
+\end{itemize}
+
+\subsubsection{Outils de développement}
+
+\begin{itemize}[leftmargin=1cm]
+\item \textbf{Jest Testing Framework} : \url{https://jestjs.io/} - Framework de test JavaScript utilisé pour les tests unitaires React Native
+\item \textbf{Pytest Documentation} : \url{https://docs.pytest.org/} - Framework de test Python pour les tests backend
+\item \textbf{Docker Documentation} : \url{https://docs.docker.com/} - Plateforme de conteneurisation pour le déploiement
+\end{itemize}
+
+\begin{successbox}[Documentation technique complète]
+Cette documentation technique fournit une base solide pour comprendre, maintenir et faire évoluer l'application Running App. Les exemples de code, procédures de déploiement et suites de tests constituent des références pratiques pour le développement futur et l'optimisation continue du système. La structure modulaire facilite la mise à jour de sections spécifiques sans impacter l'ensemble de la documentation.
+\end{successbox}
+
+\begin{warningbox}[Maintenance de la documentation]
+Cette documentation doit être maintenue à jour avec l'évolution du projet. Chaque modification significative de l'architecture, des APIs ou des procédures doit être reflétée dans les sections correspondantes. Une revue trimestrielle de la documentation est recommandée pour assurer sa pertinence et son exactitude.
+\end{warningbox}

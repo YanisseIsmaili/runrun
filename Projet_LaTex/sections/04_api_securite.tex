@@ -1,0 +1,171 @@
+% Fichier : sections/04_api_securite.tex
+\section{API REST et Sécurité}
+
+\subsection{Conception de l'API REST}
+
+L'API REST de Running App respecte les principes fondamentaux de l'architecture REST pour offrir une interface cohérente, prévisible et facilement maintenable. Cette approche facilite non seulement le développement de l'application mobile actuelle, mais prépare également l'intégration future avec d'autres clients ou services tiers.
+
+Notre API s'organise autour de ressources clairement définies qui correspondent aux entités métier de l'application. Chaque ressource est accessible via une URL unique qui respecte les conventions REST, utilisant les verbes HTTP appropriés pour différencier les opérations. Cette conception permet une compréhension intuitive de l'API par les développeurs et facilite la documentation automatique.
+
+La structure des endpoints suit une hiérarchie logique qui reflète les relations entre les données. Par exemple, les courses d'un utilisateur sont accessibles via \texttt{/api/users/\{id\}/runs}, créant une navigation naturelle dans les ressources liées. Cette approche améliore la cohérence de l'API et réduit la complexité côté client.
+
+Les réponses de l'API utilisent un format JSON standardisé qui encapsule les données dans une structure cohérente incluant le statut de la requête, un message descriptif et les données proprement dites. Cette standardisation facilite le traitement côté client et améliore la robustesse de l'application face aux erreurs.
+
+\begin{infobox}[Principes REST appliqués]
+\begin{itemize}[leftmargin=1cm]
+\item URLs représentant des ressources plutôt que des actions
+\item Utilisation appropriée des verbes HTTP (GET, POST, PUT, DELETE)
+\item Réponses stateless sans état côté serveur
+\item Format JSON standardisé pour toutes les réponses
+\item Codes de statut HTTP significatifs et cohérents
+\end{itemize}
+\end{infobox}
+
+\subsection{Documentation des endpoints principaux}
+
+L'API expose plusieurs groupes d'endpoints organisés par domaine fonctionnel, chacun gérant un aspect spécifique de l'application. Cette organisation modulaire facilite la maintenance et permet une évolution indépendante des différentes fonctionnalités.
+
+\subsubsection{Endpoints d'authentification}
+
+Les endpoints d'authentification gèrent l'inscription, la connexion et la gestion des sessions utilisateur. Ces endpoints constituent le point d'entrée obligatoire pour accéder aux fonctionnalités personnalisées de l'application.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|l|l|X|l|}
+\hline
+\textbf{Endpoint} & \textbf{Méthode} & \textbf{Description} & \textbf{Auth} \\
+\hline
+/api/auth/register & POST & Inscription d'un nouvel utilisateur & Non \\
+\hline
+/api/auth/login & POST & Connexion et génération de token JWT & Non \\
+\hline
+/api/auth/logout & POST & Invalidation du token utilisateur & Oui \\
+\hline
+/api/auth/refresh & POST & Renouvellement du token JWT & Oui \\
+\hline
+/api/auth/forgot-password & POST & Demande de réinitialisation de mot de passe & Non \\
+\hline
+\end{tabularx}
+\caption{Endpoints d'authentification}
+\end{table}
+
+\subsubsection{Endpoints de gestion des courses}
+
+Ces endpoints permettent l'enregistrement, la consultation et la modification des données de course. Ils constituent le cœur fonctionnel de l'application et sont optimisés pour les accès fréquents.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|l|l|X|l|}
+\hline
+\textbf{Endpoint} & \textbf{Méthode} & \textbf{Description} & \textbf{Auth} \\
+\hline
+/api/runs & GET & Liste paginée des courses de l'utilisateur & Oui \\
+\hline
+/api/runs & POST & Enregistrement d'une nouvelle course & Oui \\
+\hline
+/api/runs/\{id\} & GET & Détails d'une course spécifique & Oui \\
+\hline
+/api/runs/\{id\} & PUT & Modification d'une course existante & Oui \\
+\hline
+/api/runs/\{id\} & DELETE & Suppression d'une course & Oui \\
+\hline
+/api/runs/stats & GET & Statistiques personnalisées des courses & Oui \\
+\hline
+\end{tabularx}
+\caption{Endpoints de gestion des courses}
+\end{table}
+
+\subsubsection{Endpoints des courses proposées}
+
+Ces endpoints récents fournissent des recommandations de courses personnalisées basées sur le profil et l'historique de l'utilisateur.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{|l|l|X|l|}
+\hline
+\textbf{Endpoint} & \textbf{Méthode} & \textbf{Description} & \textbf{Auth} \\
+\hline
+/api/proposed-runs & GET & Liste des courses recommandées & Non \\
+\hline
+/api/proposed-runs/categories & GET & Catégories de courses disponibles & Non \\
+\hline
+/api/proposed-runs/\{id\} & GET & Détails d'une course proposée & Non \\
+\hline
+\end{tabularx}
+\caption{Endpoints des courses proposées}
+\end{table}
+
+\subsection{Authentification et autorisation JWT}
+
+L'implémentation de l'authentification s'appuie sur les JSON Web Tokens (JWT) qui offrent un mécanisme stateless parfaitement adapté aux architectures REST. Cette approche élimine le besoin de maintenir des sessions côté serveur tout en conservant un niveau de sécurité élevé.
+
+Lors de l'authentification réussie d'un utilisateur, le serveur génère un token JWT qui encapsule les informations d'identification et d'autorisation nécessaires. Ce token est signé cryptographiquement avec une clé secrète connue uniquement du serveur, garantissant son intégrité et son authenticité. Le client stocke ce token de manière sécurisée et l'inclut dans l'en-tête Authorization de toutes les requêtes subséquentes.
+
+La structure du token JWT inclut plusieurs claims standard et personnalisés qui facilitent l'autorisation granulaire. Le claim \texttt{user\_id} identifie uniquement l'utilisateur, tandis que \texttt{is\_admin} permet de différencier les utilisateurs ordinaires des administrateurs. L'expiration du token est configurée pour équilibrer sécurité et confort d'utilisation, avec une durée de vie de 24 heures renouvelable automatiquement.
+
+\begin{lstlisting}[language=json, caption=Structure du payload JWT]
+{
+  "user_id": 42,
+  "username": "john_runner",
+  "email": "john@example.com",
+  "is_admin": false,
+  "iat": 1699123456,
+  "exp": 1699209856
+}
+\end{lstlisting}
+
+Le middleware d'authentification intercepte toutes les requêtes vers les endpoints protégés et vérifie la validité du token JWT. Cette vérification inclut la validation de la signature cryptographique, la vérification de l'expiration et l'extraction des informations d'autorisation. En cas de token invalide ou expiré, le middleware retourne une erreur HTTP 401 avec un message explicite guidant le client vers une nouvelle authentification.
+
+\subsection{Sécurisation des communications}
+
+La sécurisation des communications entre le client mobile et l'API constitue un aspect critique qui protège les données sensibles des utilisateurs contre l'interception et la manipulation malveillante.
+
+Toutes les communications utilisent exclusivement le protocole HTTPS qui chiffre l'intégralité des échanges entre le client et le serveur. Cette protection cryptographique empêche l'écoute passive des communications et garantit l'intégrité des données transmises. Le certificat SSL/TLS est configuré avec des algorithmes de chiffrement modernes et une taille de clé suffisante pour résister aux attaques actuelles.
+
+L'API implémente des en-têtes de sécurité additionnels qui renforcent la protection contre diverses attaques web. L'en-tête \texttt{X-Content-Type-Options: nosniff} empêche les navigateurs de deviner le type MIME des réponses, tandis que \texttt{X-Frame-Options: DENY} protège contre les attaques de clickjacking. Ces mesures constituent une défense en profondeur qui complète le chiffrement de transport.
+
+La validation stricte des entrées côté serveur constitue une barrière supplémentaire contre les tentatives d'injection et de manipulation de données. Chaque endpoint valide rigoureusement les paramètres reçus selon des schémas prédéfinis, rejetant automatiquement les requêtes malformées ou suspectes. Cette validation porte sur le format, la taille, le type et les valeurs autorisées pour chaque paramètre.
+
+\begin{warningbox}[Mesures de sécurité appliquées]
+\begin{itemize}[leftmargin=1cm]
+\item Chiffrement HTTPS obligatoire pour toutes les communications
+\item Tokens JWT avec expiration et renouvellement automatique
+\item Validation stricte de toutes les entrées utilisateur
+\item En-têtes de sécurité HTTP pour protection additionnelle
+\item Hachage sécurisé des mots de passe avec salt
+\item Protection contre les attaques CSRF et XSS
+\end{itemize}
+\end{warningbox}
+
+\subsection{Gestion des erreurs et codes de retour}
+
+La gestion cohérente des erreurs améliore significativement l'expérience développeur et facilite le débogage des applications cliente. Notre API utilise les codes de statut HTTP standard de manière appropriée et retourne des messages d'erreur structurés qui aident à identifier et résoudre les problèmes.
+
+Les erreurs client (4xx) distinguent clairement les différents types de problèmes : 400 pour les requêtes malformées, 401 pour les problèmes d'authentification, 403 pour les violations d'autorisation et 404 pour les ressources inexistantes. Cette granularité permet au client de réagir appropriément selon le type d'erreur rencontré.
+
+Les erreurs serveur (5xx) sont loggées de manière détaillée côté serveur pour faciliter le diagnostic, tout en retournant des messages génériques au client pour éviter la divulgation d'informations sensibles sur l'infrastructure. Cette approche équilibre transparence pour le développement et sécurité pour la production.
+
+\begin{lstlisting}[language=json, caption=Format standardisé des réponses d'erreur]
+{
+  "status": "error",
+  "message": "Validation failed for the provided data",
+  "errors": {
+    "email": "Invalid email format",
+    "password": "Password must be at least 8 characters"
+  },
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+\end{lstlisting}
+
+\subsection{Monitoring et logging}
+
+Le monitoring de l'API fournit une visibilité essentielle sur les performances, la disponibilité et la sécurité du système. Notre approche combine logging applicatif détaillé et métriques de performance pour détecter proactivement les problèmes potentiels.
+
+Chaque requête est loggée avec des informations contextuelles incluant l'utilisateur, l'endpoint appelé, les paramètres principaux, le temps de traitement et le code de retour. Ces logs structurés facilitent l'analyse automatique et permettent de détecter des patterns d'usage anormaux qui pourraient indiquer des tentatives d'attaque.
+
+Les métriques de performance incluent les temps de réponse par endpoint, le taux d'erreur, le nombre de requêtes par utilisateur et la charge système. Ces indicateurs sont agrégés en temps réel et comparés à des seuils prédéfinis pour déclencher des alertes en cas de dégradation des performances.
+
+La corrélation des logs avec les métriques système permet d'identifier rapidement les causes racines des problèmes de performance. Par exemple, une augmentation du temps de réponse des endpoints de course peut être corrélée avec une charge élevée de la base de données, orientant immédiatement les efforts de résolution vers l'optimisation des requêtes SQL.

@@ -1,0 +1,73 @@
+\babel@toc {french}{}\relax 
+\contentsline {section}{\numberline {1}Présentation du Projet Running App}{1}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Vue d'ensemble du projet}{1}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Objectifs et fonctionnalités principales}{1}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Public cible et cas d'usage}{2}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Innovation et valeur ajoutée}{2}{subsection.1.4}%
+\contentsline {subsection}{\numberline {1.5}Vision à long terme}{3}{subsection.1.5}%
+\contentsline {section}{\numberline {2}Architecture Système et Conception}{4}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Vue d'ensemble de l'architecture}{4}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Architecture client-serveur détaillée}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Diagramme d'architecture système}{5}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}Flux de données et communication}{5}{subsection.2.4}%
+\contentsline {subsection}{\numberline {2.5}Considérations de performance et scalabilité}{6}{subsection.2.5}%
+\contentsline {section}{\numberline {3}Modèle de Données et Structure de Base}{8}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Conception du modèle relationnel}{8}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Description détaillée des entités}{8}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Relations et contraintes d'intégrité}{9}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Diagramme Entité-Relation}{10}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Optimisations et indexation}{10}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}Évolution et migration du schéma}{11}{subsection.3.6}%
+\contentsline {subsection}{\numberline {3.7}Sauvegarde et récupération}{12}{subsection.3.7}%
+\contentsline {section}{\numberline {4}API REST et Sécurité}{13}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Conception de l'API REST}{13}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Documentation des endpoints principaux}{13}{subsection.4.2}%
+\contentsline {subsubsection}{\numberline {4.2.1}Endpoints d'authentification}{14}{subsubsection.4.2.1}%
+\contentsline {subsubsection}{\numberline {4.2.2}Endpoints de gestion des courses}{14}{subsubsection.4.2.2}%
+\contentsline {subsubsection}{\numberline {4.2.3}Endpoints des courses proposées}{14}{subsubsection.4.2.3}%
+\contentsline {subsection}{\numberline {4.3}Authentification et autorisation JWT}{15}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Sécurisation des communications}{15}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Gestion des erreurs et codes de retour}{16}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}Monitoring et logging}{17}{subsection.4.6}%
+\contentsline {section}{\numberline {5}Technologies et Justification des Choix Techniques}{18}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Vue d'ensemble de la stack technique}{18}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Frontend mobile : React Native}{18}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Backend API : Flask et Python}{19}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}Base de données : MySQL}{20}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}Outils de développement et infrastructure}{21}{subsection.5.5}%
+\contentsline {subsection}{\numberline {5.6}Justification des choix architecturaux}{22}{subsection.5.6}%
+\contentsline {subsection}{\numberline {5.7}Stratégie de déploiement et DevOps}{22}{subsection.5.7}%
+\contentsline {subsection}{\numberline {5.8}Sécurité et conformité}{23}{subsection.5.8}%
+\contentsline {section}{\numberline {6}Répartition des Rôles et Organisation de l'Équipe}{24}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Structure organisationnelle du projet}{24}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Responsabilités par domaine technique}{24}{subsection.6.2}%
+\contentsline {subsubsection}{\numberline {6.2.1}Développement Backend et Architecture API}{24}{subsubsection.6.2.1}%
+\contentsline {subsubsection}{\numberline {6.2.2}Développement Frontend Mobile}{25}{subsubsection.6.2.2}%
+\contentsline {subsubsection}{\numberline {6.2.3}Architecture et Intégration Système}{25}{subsubsection.6.2.3}%
+\contentsline {subsection}{\numberline {6.3}Coordination et communication}{26}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}Matrice des compétences et formations}{26}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}Gestion des risques et continuité}{27}{subsection.6.5}%
+\contentsline {subsection}{\numberline {6.6}Évolution et montée en compétences}{27}{subsection.6.6}%
+\contentsline {section}{\numberline {7}Annexes Techniques}{29}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Configuration et installation}{29}{subsection.7.1}%
+\contentsline {subsubsection}{\numberline {7.1.1}Prérequis système}{29}{subsubsection.7.1.1}%
+\contentsline {subsubsection}{\numberline {7.1.2}Installation du backend}{30}{subsubsection.7.1.2}%
+\contentsline {subsubsection}{\numberline {7.1.3}Installation du frontend mobile}{30}{subsubsection.7.1.3}%
+\contentsline {subsection}{\numberline {7.2}Extraits de code significatifs}{31}{subsection.7.2}%
+\contentsline {subsubsection}{\numberline {7.2.1}Authentification JWT côté serveur}{31}{subsubsection.7.2.1}%
+\contentsline {subsubsection}{\numberline {7.2.2}Composant React Native pour l'enregistrement de course}{33}{subsubsection.7.2.2}%
+\contentsline {subsection}{\numberline {7.3}Métriques et indicateurs de performance}{40}{subsection.7.3}%
+\contentsline {subsubsection}{\numberline {7.3.1}Métriques backend}{40}{subsubsection.7.3.1}%
+\contentsline {subsubsection}{\numberline {7.3.2}Métriques frontend mobile}{41}{subsubsection.7.3.2}%
+\contentsline {subsection}{\numberline {7.4}Procédures de déploiement}{41}{subsection.7.4}%
+\contentsline {subsubsection}{\numberline {7.4.1}Déploiement backend en production}{42}{subsubsection.7.4.1}%
+\contentsline {subsubsection}{\numberline {7.4.2}Publication sur les app stores}{44}{subsubsection.7.4.2}%
+\contentsline {subsection}{\numberline {7.5}Tests et validation}{45}{subsection.7.5}%
+\contentsline {subsubsection}{\numberline {7.5.1}Tests backend}{45}{subsubsection.7.5.1}%
+\contentsline {subsubsection}{\numberline {7.5.2}Tests frontend mobile}{52}{subsubsection.7.5.2}%
+\contentsline {subsection}{\numberline {7.6}Glossaire technique}{58}{subsection.7.6}%
+\contentsline {subsection}{\numberline {7.7}Ressources et documentation externe}{58}{subsection.7.7}%
+\contentsline {subsubsection}{\numberline {7.7.1}Documentation des frameworks principaux}{58}{subsubsection.7.7.1}%
+\contentsline {subsubsection}{\numberline {7.7.2}Standards et spécifications}{58}{subsubsection.7.7.2}%
+\contentsline {subsubsection}{\numberline {7.7.3}Outils de développement}{59}{subsubsection.7.7.3}%
+\contentsline {section}{\numberline {8}Références et Documentation}{60}{section.8}%

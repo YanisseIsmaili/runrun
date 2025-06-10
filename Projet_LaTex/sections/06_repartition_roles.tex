@@ -1,0 +1,109 @@
+% Fichier : sections/06_repartition_roles.tex
+\section{Répartition des Rôles et Organisation de l'Équipe}
+
+\subsection{Structure organisationnelle du projet}
+
+L'organisation de notre équipe de développement reflète une approche pragmatique qui maximise l'efficacité tout en maintenant une couverture complète des compétences nécessaires au projet. Cette structure équilibre spécialisation technique et polyvalence pour permettre une collaboration fluide et une montée en compétences mutuelle entre les membres de l'équipe.
+
+Notre équipe adopte une organisation matricielle où chaque membre possède une responsabilité principale tout en contribuant aux autres aspects du projet selon les besoins et les phases de développement. Cette flexibilité s'avère particulièrement précieuse dans un projet d'envergure limitée où l'adaptabilité prime sur la rigidité organisationnelle.
+
+La communication entre les membres s'organise autour de rituels agiles adaptés à notre contexte, notamment des points de synchronisation réguliers qui permettent de coordonner les efforts et d'identifier rapidement les blocages potentiels. Cette approche collaborative favorise le partage de connaissances et garantit la cohérence technique de l'ensemble du projet.
+
+\begin{infobox}[Philosophie organisationnelle]
+Notre organisation privilégie la collaboration et le partage de connaissances plutôt que les silos techniques. Chaque membre de l'équipe comprend l'architecture globale et peut contribuer à différents aspects du projet, garantissant une meilleure résilience et une montée en compétences collective.
+\end{infobox}
+
+\subsection{Responsabilités par domaine technique}
+
+La répartition des responsabilités techniques s'articule autour des compétences de chaque membre tout en assurant une couverture complète de tous les aspects du projet. Cette organisation permet à chaque développeur de se concentrer sur son domaine d'expertise tout en maintenant une vision globale du système.
+
+\subsubsection{Développement Backend et Architecture API}
+
+Le responsable backend assume la conception et l'implémentation de l'ensemble de l'architecture serveur, depuis la définition des endpoints REST jusqu'à l'optimisation des performances de la base de données. Cette responsabilité englobe la sécurisation de l'API, la gestion de l'authentification JWT et l'implémentation des algorithmes métier qui constituent le cœur fonctionnel de l'application.
+
+La conception de la base de données relève également de cette responsabilité, incluant la modélisation des entités, l'optimisation des requêtes et la mise en place des stratégies de sauvegarde. Cette expertise technique s'étend à la configuration de l'environnement de production et à l'implémentation des mesures de monitoring qui garantissent la stabilité du système.
+
+L'implémentation des fonctionnalités de recommandation de courses constitue un défi technique particulier qui nécessite une compréhension approfondie des besoins utilisateur et des algorithmes d'analyse de données. Cette responsabilité inclut la conception des critères de recommandation et leur évolution future vers des approches plus sophistiquées basées sur l'apprentissage automatique.
+
+\subsubsection{Développement Frontend Mobile}
+
+Le développement de l'application mobile React Native concentre les efforts sur l'expérience utilisateur et l'intégration avec les fonctionnalités natives des smartphones. Cette responsabilité englobe la conception de l'interface utilisateur, l'implémentation de la navigation et l'optimisation des performances pour garantir une expérience fluide sur tous les appareils supportés.
+
+L'intégration avec les APIs natives constitue un aspect technique critique qui nécessite une expertise spécifique aux plateformes mobiles. Cette responsabilité inclut l'accès aux services de géolocalisation, l'interfaçage avec les capteurs de mouvement et la synchronisation avec les écosystèmes de santé des différentes plateformes.
+
+La gestion de l'état côté client et l'implémentation des mécanismes de cache représentent des défis techniques importants pour maintenir les performances de l'application même en cas de connectivité limitée. Cette expertise s'étend à l'optimisation de la consommation de batterie et à la gestion intelligente des ressources système.
+
+\subsubsection{Architecture et Intégration Système}
+
+La responsabilité architecturale assure la cohérence technique de l'ensemble du projet en définissant les standards de développement, les patterns d'intégration et les stratégies d'évolution du système. Cette vision transversale garantit que les développements dans chaque domaine technique s'intègrent harmonieusement dans l'architecture globale.
+
+La mise en place des environnements de développement, de test et de production relève de cette responsabilité, incluant la configuration des pipelines CI/CD et l'automatisation des déploiements. Cette expertise technique facilite la collaboration en standardisant les outils et les processus de développement.
+
+L'évaluation et l'intégration de nouvelles technologies constituent un aspect prospectif important qui prépare l'évolution future du projet. Cette responsabilité inclut la veille technologique, l'évaluation des alternatives techniques et la planification des migrations nécessaires pour maintenir la modernité du système.
+
+\subsection{Coordination et communication}
+
+La coordination efficace entre les membres de l'équipe constitue un facteur critique de succès qui nécessite des processus bien définis et des outils adaptés. Notre approche privilégie la communication directe et les outils collaboratifs qui facilitent le partage d'informations et la résolution rapide des problèmes.
+
+Les réunions de synchronisation hebdomadaires permettent de faire le point sur l'avancement de chaque composant, d'identifier les dépendances entre tâches et de planifier les prochaines étapes. Ces sessions incluent une revue technique qui assure la cohérence des développements et facilite le partage de connaissances entre domaines techniques.
+
+La documentation technique partagée centralise les décisions architecturales, les standards de développement et les procédures opérationnelles. Cette base de connaissances évolue en continu et facilite l'onboarding de nouveaux contributeurs tout en servant de référence pour les décisions futures.
+
+L'utilisation d'outils collaboratifs comme Slack pour la communication quotidienne et Trello pour le suivi des tâches améliore la transparence et permet à chaque membre de l'équipe de comprendre l'état global du projet. Cette visibilité facilite l'entraide et l'identification proactive des risques.
+
+\subsection{Matrice des compétences et formations}
+
+L'identification claire des compétences présentes dans l'équipe et des besoins de formation permet d'optimiser la répartition des tâches et de planifier le développement des compétences nécessaires au projet.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Compétence} & \textbf{Membre 1} & \textbf{Membre 2} & \textbf{Membre 3} & \textbf{Besoin} \\
+\hline
+Python/Flask & Expert & Intermédiaire & Débutant & Formation \\
+\hline
+React Native & Débutant & Expert & Intermédiaire & - \\
+\hline
+Base de données & Expert & Débutant & Intermédiaire & Formation \\
+\hline
+DevOps/Déploiement & Intermédiaire & Débutant & Expert & - \\
+\hline
+UI/UX Design & Débutant & Expert & Débutant & Amélioration \\
+\hline
+Sécurité & Intermédiaire & Débutant & Expert & Formation \\
+\hline
+Tests automatisés & Expert & Intermédiaire & Débutant & Formation \\
+\hline
+\end{tabular}
+\caption{Matrice des compétences de l'équipe}
+\end{table}
+
+Cette matrice guide les décisions d'affectation des tâches en s'appuyant sur les expertises existantes tout en identifiant les opportunités de montée en compétences. Les formations ciblées permettent de combler les lacunes identifiées et d'améliorer la polyvalence de l'équipe.
+
+Le partage de connaissances s'organise autour de sessions techniques internes où les experts présentent leurs domaines d'expertise aux autres membres. Cette approche favorise la diffusion des bonnes pratiques et prépare l'équipe à gérer collectivement tous les aspects techniques du projet.
+
+\subsection{Gestion des risques et continuité}
+
+La gestion des risques liés aux ressources humaines constitue un aspect important de l'organisation projet qui nécessite une planification proactive. Notre approche identifie les risques potentiels et met en place des mesures préventives pour assurer la continuité du projet.
+
+Le partage de connaissances entre membres de l'équipe constitue la première ligne de défense contre les risques de dépendance excessive envers un individu particulier. Cette approche s'appuie sur la documentation technique détaillée et les sessions de formation croisée qui permettent à chaque membre de comprendre l'ensemble du système.
+
+La redondance des compétences critiques guide nos choix de formation et de répartition des tâches. Chaque aspect technique important du projet est maîtrisé par au moins deux membres de l'équipe, garantissant la capacité de continuer le développement même en cas d'indisponibilité temporaire.
+
+La planification des congés et des absences prend en compte les phases critiques du projet et s'assure qu'aucune période importante ne se retrouve avec une couverture insuffisante des compétences techniques nécessaires.
+
+\subsection{Évolution et montée en compétences}
+
+L'évolution des compétences de l'équipe accompagne naturellement la croissance du projet et l'introduction de nouvelles technologies. Notre approche de formation continue permet à chaque membre de développer son expertise tout en contribuant au succès collectif.
+
+La veille technologique constitue une responsabilité partagée qui permet à l'équipe de rester informée des évolutions de l'écosystème technique. Cette activité inclut l'évaluation de nouvelles bibliothèques, l'analyse des meilleures pratiques émergentes et l'identification des opportunités d'amélioration du système existant.
+
+Les projets personnels et les contributions open source encouragent l'expérimentation et le développement de nouvelles compétences qui bénéficient ensuite au projet principal. Cette approche favorise l'innovation et maintient la motivation technique de l'équipe.
+
+La participation à des conférences techniques et à des formations externes enrichit les compétences de l'équipe et apporte des perspectives nouvelles sur les défis techniques du projet. Ces investissements en formation se traduisent par une amélioration de la qualité technique et une accélération des développements futurs.
+
+\begin{successbox}[Organisation optimisée]
+Notre organisation équilibre spécialisation et polyvalence pour maximiser l'efficacité tout en garantissant la résilience. Le partage de connaissances et la formation continue préparent l'équipe aux évolutions futures du projet et maintiennent un haut niveau de motivation technique.
+\end{successbox}

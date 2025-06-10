@@ -1,133 +1,225 @@
+% Fichier principal : main.tex
 \documentclass[12pt,a4paper]{article}
+
+% =============================================================================
+% PACKAGES ET CONFIGURATION
+% =============================================================================
+
+% Gestion de l'encodage et de la langue française
 \usepackage[utf8]{inputenc}
-\usepackage[french]{babel}
 \usepackage[T1]{fontenc}
-\usepackage{geometry}
-\usepackage{graphicx}
-\usepackage{xcolor}
-\usepackage{hyperref}
-\usepackage{listings}
+\usepackage[french]{babel}
+
+% Mise en page et géométrie
+\usepackage[margin=2.5cm, top=3cm, bottom=3cm]{geometry}
 \usepackage{fancyhdr}
-\usepackage{titlesec}
+\usepackage{lastpage}
+
+% Typographie et polices
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{setspace}
+
+% Couleurs et graphiques
+\usepackage[dvipsnames,table]{xcolor}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% Tableaux et listes
 \usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
 \usepackage{booktabs}
 \usepackage{enumitem}
-\usepackage{tikz}
-\usepackage{pgf-umlcd}
-\usepackage{float}
 
-% Configuration de la page
-\geometry{margin=2.5cm}
+% Code et syntaxe
+\usepackage{listings}
+\usepackage{minted}
 
-% Configuration des liens
-\hypersetup{
-    colorlinks=true,
-    linkcolor=blue,
-    filecolor=magenta,
-    urlcolor=cyan,
-    citecolor=green
-}
+% Mathématiques et diagrammes
+\usepackage{amsmath,amssymb}
+\usepackage{tikz-uml}
 
-% Configuration du code
-\lstset{
-    basicstyle=\ttfamily\small,
-    commentstyle=\color{gray},
-    keywordstyle=\color{blue},
-    stringstyle=\color{red},
-    numberstyle=\tiny\color{gray},
-    numbers=left,
-    frame=single,
-    breaklines=true,
-    showstringspaces=false,
-    tabsize=2,
-    language=Python
-}
+% Liens et références
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\usepackage{cleveref}
 
-% En-têtes et pieds de page
+% Environnements spéciaux
+\usepackage{tcolorbox}
+\tcbuselibrary{most}
+
+% =============================================================================
+% CONFIGURATION DES STYLES
+% =============================================================================
+
+% Configuration des en-têtes et pieds de page
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{Running App - Documentation Technique}
-\fancyhead[R]{\today}
-\fancyfoot[C]{\thepage}
+\fancyhead[L]{\textbf{Running App - Documentation Technique}}
+\fancyhead[R]{\thepage/\pageref{LastPage}}
+\fancyfoot[C]{\textit{Projet d'Application Mobile de Course à Pied}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.2pt}
 
-% Style des titres
-\titleformat{\section}{\Large\bfseries\color{blue!80!black}}{\thesection}{1em}{}
-\titleformat{\subsection}{\large\bfseries\color{blue!60!black}}{\thesubsection}{1em}{}
-\titleformat{\subsubsection}{\normalsize\bfseries\color{blue!40!black}}{\thesubsubsection}{1em}{}
+% Style pour le code
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{gray!10},
+    frame=single,
+    rulecolor=\color{gray!30},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    keywordstyle=\color{blue!80!black},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red!80!black},
+    breaklines=true,
+    breakatwhitespace=true,
+    tabsize=2,
+    showstringspaces=false
+}
 
-% Couleurs personnalisées
-\definecolor{primarycolor}{RGB}{76, 175, 80}
-\definecolor{secondarycolor}{RGB}{33, 150, 243}
-\definecolor{accentcolor}{RGB}{255, 193, 7}
+% Boîtes colorées pour les informations importantes
+\newtcolorbox{infobox}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    title=#1,
+    fonttitle=\bfseries
+}
+
+\newtcolorbox{warningbox}[1][]{
+    colback=orange!5!white,
+    colframe=orange!50!black,
+    title=#1,
+    fonttitle=\bfseries
+}
+
+\newtcolorbox{successbox}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    title=#1,
+    fonttitle=\bfseries
+}
+
+% Configuration de l'interligne
+\onehalfspacing
+
+% =============================================================================
+% INFORMATIONS DU DOCUMENT
+% =============================================================================
+
+\title{
+    \vspace{-2cm}
+    \begin{center}
+    \includegraphics[width=0.3\textwidth]{logo_running.png}\\[1cm]
+    {\Huge\textbf{Running App}}\\[0.5cm]
+    {\Large Documentation Technique et Architecture}\\[0.3cm]
+    {\large API Sécurisée et Choix Technologiques}
+    \end{center}
+    \vspace{1cm}
+}
+
+\author{
+    \textbf{Équipe de Développement}\\
+    \textit{Projet d'Application Mobile}\\[0.5cm]
+    \begin{tabular}{ll}
+    \textbf{Développeur Backend:} & Julien Bonnet / Yanisse Ismaili \\
+    \textbf{Développeur Frontend:} & Julien Bonnet / Yanisse Ismaili \\
+    \textbf{Architecture:} & Julien Bonnet \\
+    \textbf{Date:} & \today
+    \end{tabular}
+}
+
+\date{}
+
+% =============================================================================
+% DÉBUT DU DOCUMENT
+% =============================================================================
 
 \begin{document}
 
 % Page de titre
-\begin{titlepage}
-    \centering
-    \vspace*{2cm}
-    
-    {\Huge\bfseries\color{primarycolor} Running App}\\[0.5cm]
-    {\Large Documentation Technique et Architecture}\\[2cm]
-    
-    \begin{tikzpicture}
-        \node[circle, fill=primarycolor, text=white, minimum size=3cm] at (0,0) {
-            \begin{tabular}{c}
-                \textbf{Mobile} \\
-                \textbf{App}
-            \end{tabular}
-        };
-        \node[rectangle, fill=secondarycolor, text=white, minimum size=2cm] at (-4,0) {
-            \begin{tabular}{c}
-                \textbf{API} \\
-                \textbf{Backend}
-            \end{tabular}
-        };
-        \node[rectangle, fill=accentcolor, text=white, minimum size=2cm] at (4,0) {
-            \begin{tabular}{c}
-                \textbf{Base de} \\
-                \textbf{Données}
-            \end{tabular}
-        };
-        \draw[->, thick] (-2.5,0) -- (-1.5,0);
-        \draw[->, thick] (1.5,0) -- (2.5,0);
-    \end{tikzpicture}
-    
-    \vspace{3cm}
-    
-    {\large Application de suivi des performances de course à pied}\\[1cm]
-    
-    \begin{tabular}{rl}
-        \textbf{Backend :} & Python Flask + MySQL \\
-        \textbf{Mobile :} & React Native + Expo \\
-        \textbf{Architecture :} & API RESTful \\
-        \textbf{Sécurité :} & JWT Authentication \\
-    \end{tabular}
-    
-    \vfill
-    
-    {\large Document préparatoire à la soutenance}\\
-    {\large \today}
-    
-\end{titlepage}
+\maketitle
+\thispagestyle{empty}
+
+% Saut de page
+\newpage
 
 % Table des matières
 \tableofcontents
+\thispagestyle{empty}
 \newpage
 
-% Inclure les sections
-\input{sections/introduction}
-\input{sections/architecture}
-\input{sections/api_documentation}
-\input{sections/data_model}
-\input{sections/technologies}
-\input{sections/security}
-\input{sections/deployment}
-\input{sections/conclusion}
+% Remise à zéro de la numérotation des pages
+\setcounter{page}{1}
 
-% Annexes
-\appendix
-\input{sections/api_endpoints}
-\input{sections/database_schema}
+% =============================================================================
+% INCLUSION DES SECTIONS
+% =============================================================================
+
+% Section 1 : Présentation du projet
+\input{sections/01_presentation}
+\newpage
+
+% Section 2 : Architecture système
+\input{sections/02_architecture}
+\newpage
+
+% Section 3 : Modèle de données
+\input{sections/03_modele_donnees}
+\newpage
+
+% Section 4 : API et sécurité
+\input{sections/04_api_securite}
+\newpage
+
+% Section 5 : Technologies et choix techniques
+\input{sections/05_technologies}
+\newpage
+
+% Section 6 : Répartition des rôles
+\input{sections/06_repartition_roles}
+\newpage
+
+% Section 7 : Annexes
+\input{sections/07_annexes}
+
+% =============================================================================
+% BIBLIOGRAPHIE ET RÉFÉRENCES
+% =============================================================================
+
+\newpage
+\section{Références et Documentation}
+
+\begin{thebibliography}{10}
+
+\bibitem{flask}
+Documentation officielle Flask.
+\textit{Flask Web Development Framework}.
+\url{https://flask.palletsprojects.com/}
+
+\bibitem{reactnative}
+Documentation React Native.
+\textit{React Native - Learn once, write anywhere}.
+\url{https://reactnative.dev/}
+
+\bibitem{mysql}
+Documentation MySQL.
+\textit{MySQL Database Management System}.
+\url{https://dev.mysql.com/doc/}
+
+\bibitem{jwt}
+RFC 7519 - JSON Web Token (JWT).
+\textit{Internet Engineering Task Force}.
+\url{https://tools.ietf.org/html/rfc7519}
+
+\bibitem{rest}
+Fielding, R. T.
+\textit{Architectural Styles and the Design of Network-based Software Architectures}.
+Doctoral dissertation, University of California, Irvine, 2000.
+
+\end{thebibliography}
 
 \end{document}
