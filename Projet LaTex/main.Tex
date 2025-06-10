@@ -1,0 +1,133 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{pgf-umlcd}
+\usepackage{float}
+
+% Configuration de la page
+\geometry{margin=2.5cm}
+
+% Configuration des liens
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+    citecolor=green
+}
+
+% Configuration du code
+\lstset{
+    basicstyle=\ttfamily\small,
+    commentstyle=\color{gray},
+    keywordstyle=\color{blue},
+    stringstyle=\color{red},
+    numberstyle=\tiny\color{gray},
+    numbers=left,
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=2,
+    language=Python
+}
+
+% En-têtes et pieds de page
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Running App - Documentation Technique}
+\fancyhead[R]{\today}
+\fancyfoot[C]{\thepage}
+
+% Style des titres
+\titleformat{\section}{\Large\bfseries\color{blue!80!black}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{blue!60!black}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{blue!40!black}}{\thesubsubsection}{1em}{}
+
+% Couleurs personnalisées
+\definecolor{primarycolor}{RGB}{76, 175, 80}
+\definecolor{secondarycolor}{RGB}{33, 150, 243}
+\definecolor{accentcolor}{RGB}{255, 193, 7}
+
+\begin{document}
+
+% Page de titre
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\Huge\bfseries\color{primarycolor} Running App}\\[0.5cm]
+    {\Large Documentation Technique et Architecture}\\[2cm]
+    
+    \begin{tikzpicture}
+        \node[circle, fill=primarycolor, text=white, minimum size=3cm] at (0,0) {
+            \begin{tabular}{c}
+                \textbf{Mobile} \\
+                \textbf{App}
+            \end{tabular}
+        };
+        \node[rectangle, fill=secondarycolor, text=white, minimum size=2cm] at (-4,0) {
+            \begin{tabular}{c}
+                \textbf{API} \\
+                \textbf{Backend}
+            \end{tabular}
+        };
+        \node[rectangle, fill=accentcolor, text=white, minimum size=2cm] at (4,0) {
+            \begin{tabular}{c}
+                \textbf{Base de} \\
+                \textbf{Données}
+            \end{tabular}
+        };
+        \draw[->, thick] (-2.5,0) -- (-1.5,0);
+        \draw[->, thick] (1.5,0) -- (2.5,0);
+    \end{tikzpicture}
+    
+    \vspace{3cm}
+    
+    {\large Application de suivi des performances de course à pied}\\[1cm]
+    
+    \begin{tabular}{rl}
+        \textbf{Backend :} & Python Flask + MySQL \\
+        \textbf{Mobile :} & React Native + Expo \\
+        \textbf{Architecture :} & API RESTful \\
+        \textbf{Sécurité :} & JWT Authentication \\
+    \end{tabular}
+    
+    \vfill
+    
+    {\large Document préparatoire à la soutenance}\\
+    {\large \today}
+    
+\end{titlepage}
+
+% Table des matières
+\tableofcontents
+\newpage
+
+% Inclure les sections
+\input{sections/introduction}
+\input{sections/architecture}
+\input{sections/api_documentation}
+\input{sections/data_model}
+\input{sections/technologies}
+\input{sections/security}
+\input{sections/deployment}
+\input{sections/conclusion}
+
+% Annexes
+\appendix
+\input{sections/api_endpoints}
+\input{sections/database_schema}
+
+\end{document}

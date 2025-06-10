@@ -1,0 +1,245 @@
+\section{Documentation de l'API}
+
+\subsection{Spécifications Générales}
+
+\subsubsection{URL de Base}
+\begin{lstlisting}[language=bash]
+https://api.runningapp.com/api/v1/
+# Développement local
+http://localhost:5000/api/
+\end{lstlisting}
+
+\subsubsection{Format de Réponse Standardisé}
+
+Toutes les réponses de l'API suivent une structure JSON cohérente :
+
+\begin{lstlisting}[language=json]
+{
+    "status": "success|error",
+    "message": "Description lisible par l'humain",
+    "data": {
+        // Données de la réponse
+    },
+    "errors": {
+        // Détails des erreurs (si applicable)
+    },
+    "timestamp": "2024-01-15T10:30:00Z"
+}
+\end{lstlisting}
+
+\subsubsection{Codes de Statut HTTP}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|}
+\hline
+\textbf{Code} & \textbf{Signification} & \textbf{Usage} \\
+\hline
+200 & OK & Succès général \\
+201 & Created & Ressource créée avec succès \\
+400 & Bad Request & Données invalides \\
+401 & Unauthorized & Authentification requise \\
+403 & Forbidden & Permissions insuffisantes \\
+404 & Not Found & Ressource inexistante \\
+429 & Too Many Requests & Limite de taux dépassée \\
+500 & Internal Server Error & Erreur serveur \\
+\hline
+\end{tabular}
+\caption{Codes de statut HTTP utilisés}
+\end{table}
+
+\subsection{Authentification}
+
+\subsubsection{JWT (JSON Web Token)}
+
+L'API utilise l'authentification par tokens JWT pour sécuriser les endpoints.
+
+\paragraph{Obtention d'un Token}
+
+\begin{lstlisting}[language=bash]
+POST /api/auth/login
+Content-Type: application/json
+
+{
+    "email": "user@example.com",
+    "password": "motdepasse"
+}
+\end{lstlisting}
+
+\paragraph{Réponse}
+
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "message": "Connexion réussie",
+    "data": {
+        "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+        "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+        "expires_in": 3600,
+        "user": {
+            "id": 1,
+            "username": "john_doe",
+            "email": "user@example.com"
+        }
+    }
+}
+\end{lstlisting}
+
+\paragraph{Utilisation du Token}
+
+\begin{lstlisting}[language=bash]
+GET /api/users/profile
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+\end{lstlisting}
+
+\subsection{Endpoints Principaux}
+
+\subsubsection{Authentification (/api/auth)}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Méthode} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+POST & /login & Non & Connexion utilisateur \\
+POST & /register & Non & Inscription utilisateur \\
+POST & /refresh & JWT & Renouvellement du token \\
+GET & /validate & JWT & Validation du token \\
+POST & /logout & JWT & Déconnexion utilisateur \\
+\hline
+\end{tabular}
+\caption{Endpoints d'authentification}
+\end{table}
+
+\subsubsection{Utilisateurs (/api/users)}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Méthode} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+GET & /profile & JWT & Profil utilisateur actuel \\
+PUT & /profile & JWT & Mise à jour du profil \\
+PUT & /change-password & JWT & Changement de mot de passe \\
+GET & / & Admin & Liste des utilisateurs \\
+GET & /\{id\} & Admin & Détails d'un utilisateur \\
+\hline
+\end{tabular}
+\caption{Endpoints utilisateurs}
+\end{table}
+
+\subsubsection{Courses (/api/runs)}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Méthode} & \textbf{Endpoint} & \textbf{Auth} & \textbf{Description} \\
+\hline
+GET & / & JWT & Liste des courses de l'utilisateur \\
+POST & / & JWT & Créer une nouvelle course \\
+GET & /\{id\} & JWT & Détails d'une course \\
+PUT & /\{id\} & JWT & Modifier une course \\
+DELETE & /\{id\} & JWT & Supprimer une course \\
+\hline
+\end{tabular}
+\caption{Endpoints courses}
+\end{table}
+
+\subsection{Exemples d'Utilisation}
+
+\subsubsection{Créer une Course}
+
+\begin{lstlisting}[language=bash]
+POST /api/runs
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+    "start_time": "2024-01-15T08:00:00Z",
+    "end_time": "2024-01-15T08:30:00Z",
+    "duration": 1800,
+    "distance": 5000,
+    "avg_speed": 2.78,
+    "max_speed": 3.5,
+    "calories": 350,
+    "route_data": [
+        {
+            "latitude": 48.856614,
+            "longitude": 2.3522219,
+            "timestamp": "2024-01-15T08:00:00Z"
+        },
+        {
+            "latitude": 48.857614,
+            "longitude": 2.3532219,
+            "timestamp": "2024-01-15T08:01:00Z"
+        }
+    ]
+}
+\end{lstlisting}
+
+\subsubsection{Récupérer les Statistiques}
+
+\begin{lstlisting}[language=bash]
+GET /api/stats?period=month
+Authorization: Bearer {token}
+\end{lstlisting}
+
+\begin{lstlisting}[language=json]
+{
+    "status": "success",
+    "data": {
+        "total_runs": 12,
+        "total_distance": 60000,
+        "total_duration": 21600,
+        "avg_speed": 2.78,
+        "best_pace": "5:45",
+        "calories_burned": 4200,
+        "weekly_progress": [
+            {"week": 1, "distance": 15000, "runs": 3},
+            {"week": 2, "distance": 20000, "runs": 4}
+        ]
+    }
+}
+\end{lstlisting}
+
+\subsection{Gestion des Erreurs}
+
+\subsubsection{Erreurs de Validation}
+
+\begin{lstlisting}[language=json]
+{
+    "status": "error",
+    "message": "Données invalides",
+    "errors": {
+        "distance": "La distance doit être positive",
+        "duration": "La durée est requise"
+    }
+}
+\end{lstlisting}
+
+\subsubsection{Erreurs d'Authentification}
+
+\begin{lstlisting}[language=json]
+{
+    "status": "error",
+    "message": "Token expiré",
+    "errors": {
+        "auth": "Veuillez vous reconnecter"
+    }
+}
+\end{lstlisting}
+
+\subsection{Limitations et Quotas}
+
+\begin{itemize}
+    \item \textbf{Rate Limiting :} 100 requêtes par minute par utilisateur
+    \item \textbf{Taille des données :} Maximum 10MB par course (données GPS)
+    \item \textbf{Durée des tokens :} 1 heure (access), 30 jours (refresh)
+    \item \textbf{Historique :} Conservation des données pendant 5 ans
+\end{itemize}
