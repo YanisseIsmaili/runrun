@@ -1,3 +1,4 @@
+// running-admin/src/services/api.js - AVEC STOCKAGE MÉMOIRE
 import axios from 'axios'
 
 const emergencyService = {
@@ -6,7 +7,15 @@ const emergencyService = {
   }
 }
 
-const API_BASE_URL = 'http://localhost:5000'  // Remplacez cette ligne
+const API_BASE_URL = 'http://localhost:5000'
+
+// Variables globales pour stockage en mémoire (se remettent à null au refresh)
+let memoryToken = null
+
+// Fonction pour accéder au token depuis l'extérieur
+export const getMemoryToken = () => memoryToken
+export const setMemoryToken = (token) => { memoryToken = token }
+export const clearMemoryToken = () => { memoryToken = null }
 
 const instance = axios.create({
   baseURL: API_BASE_URL,
@@ -16,12 +25,14 @@ const instance = axios.create({
   }
 })
 
-// Intercepteur pour ajouter le token d'authentification
+// Intercepteur pour ajouter le token d'authentification - MODIFIÉ
 instance.interceptors.request.use(
   (config) => {
     try {
-      const token = localStorage.getItem('auth_token')
+      // Priorité : mémoire puis localStorage (pas de sessionStorage)
+      const token = memoryToken || localStorage.getItem('auth_token')
       console.log('Interceptor - Token trouvé:', token ? 'Oui' : 'Non')
+      console.log('Interceptor - Source:', memoryToken ? 'mémoire' : localStorage.getItem('auth_token') ? 'localStorage' : 'aucune')
       console.log('Interceptor - URL:', config.url)
       
       if (token) {
@@ -40,7 +51,7 @@ instance.interceptors.request.use(
   }
 )
 
-// Intercepteur pour gérer les réponses et erreurs - AMÉLIORÉ
+// Intercepteur pour gérer les réponses et erreurs
 instance.interceptors.response.use(
   (response) => {
     return response
@@ -57,15 +68,20 @@ instance.interceptors.response.use(
     else if (error.response.status === 401) {
       console.error('Erreur d\'authentification:', error.response.data)
       
-      // IMPORTANT: Ne pas déconnecter sur les routes de validation/login
+      // Ne pas déconnecter sur les routes de validation/login
       if (error.config.url.includes('/validate') || error.config.url.includes('/login')) {
         error.userMessage = 'Identifiants invalides ou session expirée.'
       } else {
         error.userMessage = 'Session expirée. Veuillez vous reconnecter.'
         try {
-          console.log('Nettoyage du token après erreur 401')
+          console.log('Nettoyage des tokens après erreur 401')
+          // Nettoyer TOUS les stockages y compris mémoire
           localStorage.removeItem('auth_token')
           localStorage.removeItem('user_data')
+          sessionStorage.removeItem('auth_token')
+          sessionStorage.removeItem('user_data')
+          memoryToken = null
+          
           if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
             window.location.href = '/login'
           }
@@ -74,7 +90,7 @@ instance.interceptors.response.use(
         }
       }
     }
-    // Gestion des erreurs d'autorisation (403) - AMÉLIORÉ
+    // Gestion des erreurs d'autorisation (403)
     else if (error.response.status === 403) {
       const errorData = error.response.data
       console.error('Erreur d\'autorisation:', errorData)
@@ -109,7 +125,7 @@ instance.interceptors.response.use(
   }
 )
 
-// Service d'authentification - AMÉLIORÉ
+// Service d'authentification
 const auth = {
   login: (emailOrUsername, password) => {
     const isEmail = emailOrUsername.includes('@')
@@ -130,8 +146,13 @@ const auth = {
   
   logout: () => {
     try {
+      // Nettoyer TOUS les stockages y compris mémoire
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user_data')
+      sessionStorage.removeItem('auth_token')
+      sessionStorage.removeItem('user_data')
+      memoryToken = null
+      console.log('Tous les tokens supprimés (localStorage + mémoire)')
       return Promise.resolve()
     } catch (error) {
       emergencyService.logError(error, 'logout_cleanup')
@@ -149,7 +170,6 @@ const auth = {
       new_password: newPassword
     }),
   
-  // NOUVELLES FONCTIONS
   promoteAdmin: (secretKey) => 
     instance.post('/api/auth/promote-admin', {
       secret_key: secretKey
@@ -190,7 +210,7 @@ const users = {
   toggleStatus: (userId) => instance.patch(`/api/users/${userId}/toggle-status`)
 }
 
-// Service des itinéraires - COMPLET
+// Service des itinéraires
 const routes = {
   getAll: (params = {}) => {
     const queryParams = new URLSearchParams()
