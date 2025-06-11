@@ -1,89 +1,72 @@
+// running-admin/src/hooks/useErrorHandler.js - NOUVEAU FICHIER
 import { useState, useCallback } from 'react'
-import emergencyService from '../services/emergencyService'
 
-export const useErrorHandler = () => {
-  const [error, setError] = useState(null)
+export const useApiCall = () => {
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  const handleAsync = useCallback(async (asyncFunction, options = {}) => {
-    const { 
-      showLoading = true, 
-      errorMessage = 'Une erreur est survenue',
+  const callApi = useCallback(async (apiFunction, options = {}) => {
+    const {
       onSuccess,
-      onError
+      onError,
+      errorMessage = 'Une erreur est survenue',
+      showLoading = true
     } = options
 
     try {
-      if (showLoading) setLoading(true)
+      if (showLoading) {
+        setLoading(true)
+      }
       setError(null)
-      
-      const result = await asyncFunction()
-      
-      if (onSuccess) onSuccess(result)
+
+      const result = await apiFunction()
+
+      if (onSuccess) {
+        onSuccess(result)
+      }
+
       return result
     } catch (err) {
-      console.error('Erreur capturée:', err)
+      console.error('API Error:', err)
       
-      // Enregistrer l'erreur dans le service d'urgence
-      emergencyService.logError(err, 'useErrorHandler')
+      let finalError = errorMessage
       
-      let userFriendlyMessage = errorMessage
-      
-      if (err.response?.data?.message) {
-        userFriendlyMessage = err.response.data.message
-      } else if (err.userMessage) {
-        userFriendlyMessage = err.userMessage
+      // Utiliser le message d'erreur personnalisé de l'API si disponible
+      if (err.userMessage) {
+        finalError = err.userMessage
+      } else if (err.response?.data?.message) {
+        finalError = err.response.data.message
       } else if (err.message) {
-        userFriendlyMessage = err.message
+        finalError = err.message
       }
-      
-      const errorInfo = {
-        message: userFriendlyMessage,
-        originalError: err,
-        timestamp: new Date().toISOString(),
-        type: err.response ? 'api' : err.request ? 'network' : 'client'
+
+      setError(finalError)
+
+      if (onError) {
+        onError(err)
       }
-      
-      setError(errorInfo)
-      
-      if (onError) onError(errorInfo)
-      
-      return null
+
+      throw err
     } finally {
-      if (showLoading) setLoading(false)
+      if (showLoading) {
+        setLoading(false)
+      }
     }
+  }, [])
+
+  const retry = useCallback(() => {
+    setError(null)
   }, [])
 
   const clearError = useCallback(() => {
     setError(null)
   }, [])
 
-  const retry = useCallback((asyncFunction, options = {}) => {
-    clearError()
-    return handleAsync(asyncFunction, options)
-  }, [handleAsync, clearError])
-
-  return {
-    error,
-    loading,
-    handleAsync,
-    clearError,
-    retry
-  }
-}
-
-export const useApiCall = () => {
-  const { handleAsync, ...rest } = useErrorHandler()
-
-  const callApi = useCallback((apiFunction, options = {}) => {
-    return handleAsync(apiFunction, {
-      errorMessage: 'Erreur lors de la communication avec le serveur',
-      ...options
-    })
-  }, [handleAsync])
-
   return {
     callApi,
-    ...rest
+    loading,
+    error,
+    retry,
+    clearError
   }
 }

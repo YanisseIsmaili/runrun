@@ -1,10 +1,16 @@
 import { Fragment, useState, useEffect } from 'react'
 import { Menu, Transition } from '@headlessui/react'
-import { BellIcon, Bars3Icon, ShieldCheckIcon, ClockIcon } from '@heroicons/react/24/outline'
+import { 
+  BellIcon, 
+  Bars3Icon, 
+  ShieldCheckIcon, 
+  ClockIcon, 
+  ExclamationTriangleIcon,
+  CheckCircleIcon
+} from '@heroicons/react/24/outline'
 import { ChevronDownIcon } from '@heroicons/react/24/solid'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import cryptoService from '../services/cryptoService'
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(' ')
@@ -12,158 +18,246 @@ function classNames(...classes) {
 
 const Header = ({ setSidebarOpen }) => {
   const navigate = useNavigate()
-  const { currentUser, logout, extendSession, rememberMe } = useAuth()
+  const { user, logout, isAuthenticated } = useAuth()
   const [sessionInfo, setSessionInfo] = useState(null)
   const [timeUntilExpiry, setTimeUntilExpiry] = useState('')
+  const [notifications, setNotifications] = useState([])
   
   useEffect(() => {
     // Charger les informations de session
     const loadSessionInfo = () => {
-      const sessionPrefs = cryptoService.getSecureItem('running_app_session_prefs')
-      const tokenData = cryptoService.getSecureItem('running_app_token')
+      const token = localStorage.getItem('auth_token')
+      const userData = localStorage.getItem('user_data')
       
-      if (sessionPrefs && tokenData) {
-        setSessionInfo({
-          lastLogin: sessionPrefs.lastLogin,
-          rememberMe: sessionPrefs.rememberMe,
-          isSecure: true
-        })
+      if (token && userData) {
+        try {
+          const parsedUser = JSON.parse(userData)
+          setSessionInfo({
+            lastLogin: parsedUser.last_login || new Date().toISOString(),
+            isSecure: true,
+            tokenPresent: true
+          })
+        } catch (error) {
+          console.error('Erreur parsing user data:', error)
+        }
       }
     }
 
     loadSessionInfo()
-  }, [])
+  }, [user])
 
-  // Calculer le temps restant avant expiration
+  // Calculer le temps restant avant expiration (24h par défaut)
   useEffect(() => {
     const updateTimeUntilExpiry = () => {
-      const sessionPrefs = cryptoService.getSecureItem('running_app_session_prefs')
-      if (sessionPrefs && sessionPrefs.lastLogin) {
-        const loginTime = new Date(sessionPrefs.lastLogin)
-        const expirationTime = new Date(loginTime.getTime() + (rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000))
+      const token = localStorage.getItem('auth_token')
+      if (token && sessionInfo?.lastLogin) {
+        const loginTime = new Date(sessionInfo.lastLogin)
+        const expirationTime = new Date(loginTime.getTime() + (24 * 60 * 60 * 1000)) // 24h
         const now = new Date()
         const timeLeft = expirationTime - now
-
+        
         if (timeLeft > 0) {
           const hours = Math.floor(timeLeft / (1000 * 60 * 60))
           const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60))
-          
-          if (hours > 24) {
-            const days = Math.floor(hours / 24)
-            setTimeUntilExpiry(`${days}j ${hours % 24}h`)
-          } else if (hours > 0) {
-            setTimeUntilExpiry(`${hours}h ${minutes}m`)
-          } else {
-            setTimeUntilExpiry(`${minutes}m`)
-          }
+          setTimeUntilExpiry(`${hours}h ${minutes}m`)
         } else {
           setTimeUntilExpiry('Expiré')
         }
       }
     }
 
-    updateTimeUntilExpiry()
-    const interval = setInterval(updateTimeUntilExpiry, 60000) // Mettre à jour chaque minute
+    if (sessionInfo) {
+      updateTimeUntilExpiry()
+      const interval = setInterval(updateTimeUntilExpiry, 60000) // Mise à jour chaque minute
+      return () => clearInterval(interval)
+    }
+  }, [sessionInfo])
 
-    return () => clearInterval(interval)
-  }, [rememberMe])
-  
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
-
-  const handleExtendSession = () => {
-    const extended = extendSession()
-    if (extended) {
-      // Mettre à jour les informations de session
-      const sessionPrefs = cryptoService.getSecureItem('running_app_session_prefs')
-      if (sessionPrefs) {
-        setSessionInfo({
-          ...sessionInfo,
-          lastLogin: new Date().toISOString()
+  // Vérifier les notifications (permissions, erreurs, etc.)
+  useEffect(() => {
+    const checkNotifications = () => {
+      const newNotifications = []
+      
+      // Notification si pas admin
+      if (user && !user.is_admin) {
+        newNotifications.push({
+          id: 'not_admin',
+          type: 'warning',
+          message: 'Compte non-administrateur',
+          action: () => {
+            if (window.confirm('Voulez-vous essayer de vous promouvoir administrateur?')) {
+              window.promoteToAdmin && window.promoteToAdmin()
+            }
+          }
         })
       }
+      
+      // Notification si session bientôt expirée
+      if (timeUntilExpiry && timeUntilExpiry !== 'Expiré') {
+        const [hours] = timeUntilExpiry.split('h')
+        if (parseInt(hours) < 1) {
+          newNotifications.push({
+            id: 'session_expiring',
+            type: 'warning',
+            message: 'Session expire bientôt',
+            action: () => navigate('/login')
+          })
+        }
+      }
+      
+      setNotifications(newNotifications)
+    }
+    
+    if (user) {
+      checkNotifications()
+    }
+  }, [user, timeUntilExpiry, navigate])
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      navigate('/login')
+    } catch (error) {
+      console.error('Erreur lors de la déconnexion:', error)
+      // Forcer la déconnexion même en cas d'erreur
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_data')
+      navigate('/login')
     }
   }
 
-  const formatLastLogin = (lastLogin) => {
-    if (!lastLogin) return 'Inconnue'
+  const getStatusIcon = () => {
+    if (!user) return <ExclamationTriangleIcon className="h-5 w-5 text-red-500" />
     
-    const loginDate = new Date(lastLogin)
-    const now = new Date()
-    const diffHours = Math.floor((now - loginDate) / (1000 * 60 * 60))
-    
-    if (diffHours < 1) {
-      const diffMinutes = Math.floor((now - loginDate) / (1000 * 60))
-      return `Il y a ${diffMinutes} min`
-    } else if (diffHours < 24) {
-      return `Il y a ${diffHours}h`
+    if (user.is_admin) {
+      return <ShieldCheckIcon className="h-5 w-5 text-green-500" />
     } else {
-      const diffDays = Math.floor(diffHours / 24)
-      return `Il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`
+      return <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500" />
     }
   }
-  
+
+  const getStatusText = () => {
+    if (!user) return 'Déconnecté'
+    return user.is_admin ? 'Administrateur' : 'Utilisateur'
+  }
+
   return (
-    <div className="relative z-10 flex-shrink-0 flex h-16 bg-white shadow">
+    <div className="relative z-10 flex-shrink-0 flex h-16 bg-white border-b border-gray-200 lg:border-none">
       <button
         type="button"
-        className="px-4 border-r border-gray-200 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500 md:hidden"
+        className="px-4 border-r border-gray-200 text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500 lg:hidden"
         onClick={() => setSidebarOpen(true)}
       >
-        <span className="sr-only">Ouvrir le menu</span>
+        <span className="sr-only">Ouvrir la sidebar</span>
         <Bars3Icon className="h-6 w-6" aria-hidden="true" />
       </button>
       
-      <div className="flex-1 px-4 flex justify-between">
+      {/* Flex container pour le contenu */}
+      <div className="flex-1 px-4 flex justify-between sm:px-6 lg:max-w-6xl lg:mx-auto lg:px-8">
         <div className="flex-1 flex items-center">
-          <h1 className="text-xl font-semibold text-gray-800">Running App Admin</h1>
-          
-          {/* Indicateur de sécurité de session */}
-          {sessionInfo && (
-            <div className="ml-4 flex items-center">
-              <div className="flex items-center bg-green-50 px-2 py-1 rounded-full">
-                <ShieldCheckIcon className="h-4 w-4 text-green-600 mr-1" />
-                <span className="text-xs text-green-700 font-medium">Session sécurisée</span>
-              </div>
-              
-              {timeUntilExpiry && (
-                <div className="ml-2 flex items-center bg-blue-50 px-2 py-1 rounded-full">
-                  <ClockIcon className="h-4 w-4 text-blue-600 mr-1" />
-                  <span className="text-xs text-blue-700 font-medium">Expire dans {timeUntilExpiry}</span>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Titre de la page */}
+          <h1 className="text-lg font-medium text-gray-900">
+            Administration Running App
+          </h1>
         </div>
         
-        <div className="ml-4 flex items-center md:ml-6">
+        <div className="ml-4 flex items-center space-x-4">
+          {/* Statut de session */}
+          {sessionInfo && (
+            <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-500">
+              <ClockIcon className="h-4 w-4" />
+              <span>Session: {timeUntilExpiry}</span>
+            </div>
+          )}
+          
           {/* Notifications */}
-          <button
-            type="button"
-            className="bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            <span className="sr-only">Voir les notifications</span>
-            <BellIcon className="h-6 w-6" aria-hidden="true" />
-          </button>
+          {notifications.length > 0 && (
+            <Menu as="div" className="relative">
+              <Menu.Button className="bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <span className="sr-only">Voir les notifications</span>
+                <div className="relative">
+                  <BellIcon className="h-6 w-6" aria-hidden="true" />
+                  {notifications.length > 0 && (
+                    <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full"></div>
+                  )}
+                </div>
+              </Menu.Button>
+              
+              <Transition
+                as={Fragment}
+                enter="transition ease-out duration-100"
+                enterFrom="transform opacity-0 scale-95"
+                enterTo="transform opacity-100 scale-100"
+                leave="transition ease-in duration-75"
+                leaveFrom="transform opacity-100 scale-100"
+                leaveTo="transform opacity-0 scale-95"
+              >
+                <Menu.Items className="origin-top-right absolute right-0 mt-2 w-80 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <div className="px-4 py-2 text-xs text-gray-500 border-b">
+                    Notifications ({notifications.length})
+                  </div>
+                  {notifications.map((notification) => (
+                    <Menu.Item key={notification.id}>
+                      {({ active }) => (
+                        <div
+                          className={classNames(
+                            active ? 'bg-gray-50' : '',
+                            'block px-4 py-3 text-sm text-gray-700 cursor-pointer'
+                          )}
+                          onClick={notification.action}
+                        >
+                          <div className="flex items-start space-x-2">
+                            {notification.type === 'warning' ? (
+                              <ExclamationTriangleIcon className="h-4 w-4 text-yellow-500 mt-0.5" />
+                            ) : (
+                              <CheckCircleIcon className="h-4 w-4 text-green-500 mt-0.5" />
+                            )}
+                            <span>{notification.message}</span>
+                          </div>
+                        </div>
+                      )}
+                    </Menu.Item>
+                  ))}
+                </Menu.Items>
+              </Transition>
+            </Menu>
+          )}
 
           {/* Profile dropdown */}
-          <Menu as="div" className="ml-3 relative">
+          <Menu as="div" className="relative">
             <div>
-              <Menu.Button className="max-w-xs bg-white flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                <span className="sr-only">Ouvrir le menu utilisateur</span>
-                <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-semibold">
-                  {currentUser?.first_name?.charAt(0) || 'A'}
+              <Menu.Button className="max-w-xs bg-white rounded-full flex items-center text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 lg:p-2 lg:rounded-md lg:hover:bg-gray-50">
+                <div className="flex items-center space-x-3">
+                  {/* Avatar */}
+                  <div className="flex-shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center">
+                      <span className="text-sm font-medium text-white">
+                        {user?.first_name?.[0] || user?.username?.[0] || '?'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Informations utilisateur */}
+                  <div className="hidden lg:block">
+                    <p className="text-sm font-medium text-gray-700 flex items-center space-x-1">
+                      <span>{user?.first_name || user?.username || 'Utilisateur'}</span>
+                      {getStatusIcon()}
+                    </p>
+                    <p className="text-xs text-gray-500 flex items-center space-x-1">
+                      <span>{getStatusText()}</span>
+                      {user?.is_admin && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Admin
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  
+                  <ChevronDownIcon className="hidden lg:block flex-shrink-0 h-5 w-5 text-gray-400" aria-hidden="true" />
                 </div>
-                <span className="hidden md:flex md:items-center">
-                  <span className="ml-2 text-gray-700 text-sm font-medium truncate">
-                    {currentUser?.first_name ? `${currentUser.first_name} ${currentUser.last_name || ''}` : 'Admin'}
-                  </span>
-                  <ChevronDownIcon className="ml-1 h-5 w-5 text-gray-400" aria-hidden="true" />
-                </span>
               </Menu.Button>
             </div>
+            
             <Transition
               as={Fragment}
               enter="transition ease-out duration-100"
@@ -173,46 +267,17 @@ const Header = ({ setSidebarOpen }) => {
               leaveFrom="transform opacity-100 scale-100"
               leaveTo="transform opacity-0 scale-95"
             >
-              <Menu.Items className="origin-top-right absolute right-0 mt-2 w-64 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+              <Menu.Items className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+                {/* Informations utilisateur */}
+                <div className="px-4 py-2 text-sm text-gray-500 border-b">
+                  <div className="font-medium text-gray-900">{user?.username}</div>
+                  <div className="text-xs">{user?.email}</div>
+                  <div className="text-xs flex items-center space-x-1 mt-1">
+                    {getStatusIcon()}
+                    <span>{getStatusText()}</span>
+                  </div>
+                </div>
                 
-                {/* Informations de session */}
-                {sessionInfo && (
-                  <>
-                    <div className="px-4 py-3 border-b border-gray-200">
-                      <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">
-                        Informations de session
-                      </p>
-                      <div className="mt-2 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600">Dernière connexion:</span>
-                          <span className="text-xs text-gray-900 font-medium">
-                            {formatLastLogin(sessionInfo.lastLogin)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600">Type de session:</span>
-                          <span className="text-xs text-gray-900 font-medium">
-                            {sessionInfo.rememberMe ? 'Étendue (7j)' : 'Standard (24h)'}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600">Sécurité:</span>
-                          <div className="flex items-center">
-                            <ShieldCheckIcon className="h-3 w-3 text-green-500 mr-1" />
-                            <span className="text-xs text-green-600 font-medium">Chiffrée</span>
-                          </div>
-                        </div>
-                        {timeUntilExpiry && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-600">Expiration:</span>
-                            <span className="text-xs text-gray-900 font-medium">{timeUntilExpiry}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-
                 <Menu.Item>
                   {({ active }) => (
                     <button
@@ -226,27 +291,42 @@ const Header = ({ setSidebarOpen }) => {
                     </button>
                   )}
                 </Menu.Item>
-
-                {/* Option pour prolonger la session */}
-                <Menu.Item>
-                  {({ active }) => (
-                    <button
-                      onClick={handleExtendSession}
-                      className={classNames(
-                        active ? 'bg-gray-100' : '',
-                        'block w-full text-left px-4 py-2 text-sm text-gray-700'
+                
+                {/* Actions de debug (dev seulement) */}
+                {process.env.NODE_ENV === 'development' && (
+                  <>
+                    <Menu.Item>
+                      {({ active }) => (
+                        <button
+                          onClick={() => window.testAuth && window.testAuth()}
+                          className={classNames(
+                            active ? 'bg-gray-100' : '',
+                            'block w-full text-left px-4 py-2 text-sm text-gray-700'
+                          )}
+                        >
+                          🔧 Tester Auth
+                        </button>
                       )}
-                    >
-                      <div className="flex items-center">
-                        <ClockIcon className="h-4 w-4 mr-2 text-blue-500" />
-                        Prolonger la session
-                      </div>
-                    </button>
-                  )}
-                </Menu.Item>
-
-                <div className="border-t border-gray-200"></div>
-
+                    </Menu.Item>
+                    
+                    {!user?.is_admin && (
+                      <Menu.Item>
+                        {({ active }) => (
+                          <button
+                            onClick={() => window.promoteToAdmin && window.promoteToAdmin()}
+                            className={classNames(
+                              active ? 'bg-gray-100' : '',
+                              'block w-full text-left px-4 py-2 text-sm text-yellow-700'
+                            )}
+                          >
+                            ⚡ Promouvoir Admin
+                          </button>
+                        )}
+                      </Menu.Item>
+                    )}
+                  </>
+                )}
+                
                 <Menu.Item>
                   {({ active }) => (
                     <button

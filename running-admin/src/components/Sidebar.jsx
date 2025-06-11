@@ -1,3 +1,4 @@
+// running-admin/src/components/Sidebar.jsx - FICHIER COMPLET avec couleur verte
 import { Fragment } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
@@ -8,8 +9,8 @@ import {
   CogIcon,
   ChartBarIcon,
   MapPinIcon
-} from '@heroicons/react/24/solid'
-import { NavLink, useLocation } from 'react-router-dom'
+} from '@heroicons/react/24/outline'
+import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const navigation = [
@@ -17,7 +18,7 @@ const navigation = [
   { name: 'Utilisateurs', href: '/users', icon: UsersIcon },
   { name: 'Historique des courses', href: '/history', icon: ClockIcon },
   { name: 'Statistiques', href: '/stats', icon: ChartBarIcon },
-  { name: 'Itinéraires', href: '/routes', icon: MapPinIcon },
+  { name: 'Parcours', href: '/routes', icon: MapPinIcon }, // RENOMMÉ
   { name: 'Paramètres', href: '/settings', icon: CogIcon },
 ]
 
@@ -26,8 +27,7 @@ function classNames(...classes) {
 }
 
 const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
-  const { currentUser } = useAuth()
-  const location = useLocation()
+  const { user } = useAuth()
   
   return (
     <>
@@ -54,7 +54,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
             leaveFrom="translate-x-0"
             leaveTo="-translate-x-full"
           >
-            <div className="relative flex-1 flex flex-col max-w-xs w-full pt-5 pb-4 bg-primary-700">
+            <div className="relative flex-1 flex flex-col max-w-xs w-full pt-5 pb-4 bg-green-700">
               <Transition.Child
                 as={Fragment}
                 enter="ease-in-out duration-300"
@@ -70,101 +70,103 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                     className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <span className="sr-only">Fermer le menu</span>
+                    <span className="sr-only">Fermer la sidebar</span>
                     <XMarkIcon className="h-6 w-6 text-white" aria-hidden="true" />
                   </button>
                 </div>
               </Transition.Child>
+              
               <div className="flex-shrink-0 flex items-center px-4">
-                <span className="text-white text-xl font-bold">Running Admin</span>
+                <h1 className="text-white text-lg font-semibold">Running Admin</h1>
               </div>
-              <div className="mt-5 flex-1 h-0 overflow-y-auto">
-                <nav className="px-2 space-y-1">
-                  {navigation.map((item) => (
-                    <NavLink
-                      key={item.name}
-                      to={item.href}
-                      onClick={() => setSidebarOpen(false)}
-                      className={({ isActive }) => classNames(
+              
+              <nav className="mt-5 flex-1 px-2 space-y-1 overflow-y-auto">
+                {navigation.map((item) => (
+                  <NavLink
+                    key={item.name}
+                    to={item.href}
+                    className={({ isActive }) =>
+                      classNames(
                         isActive
-                          ? 'bg-primary-800 text-white'
-                          : 'text-white hover:bg-primary-600',
-                        'group flex items-center px-2 py-2 text-base font-medium rounded-md'
-                      )}
-                    >
-                      <item.icon className="mr-4 h-6 w-6 text-primary-200" aria-hidden="true" />
-                      {item.name}
-                    </NavLink>
-                  ))}
-                </nav>
-              </div>
-              <div className="flex-shrink-0 flex border-t border-primary-800 p-4">
-                <div className="flex-shrink-0 group block">
-                  <div className="flex items-center">
-                    <div className="h-9 w-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-semibold">
-                      {currentUser?.first_name?.charAt(0) || 'A'}
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-base font-medium text-white">
-                        {currentUser?.first_name ? `${currentUser.first_name} ${currentUser.last_name || ''}` : 'Admin'}
-                      </p>
-                      <p className="text-sm font-medium text-primary-200 group-hover:text-primary-100">
-                        {currentUser?.email || 'admin@runningapp.com'}
-                      </p>
-                    </div>
+                          ? 'bg-green-800 text-white'
+                          : 'text-green-100 hover:bg-green-600',
+                        'group flex items-center px-2 py-2 text-sm font-medium rounded-md'
+                      )
+                    }
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    <item.icon
+                      className="mr-3 flex-shrink-0 h-6 w-6 text-green-300"
+                      aria-hidden="true"
+                    />
+                    {item.name}
+                  </NavLink>
+                ))}
+              </nav>
+            </div>
+          </Transition.Child>
+        </Dialog>
+      </Transition.Root>
+
+      {/* Sidebar desktop */}
+      <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
+        <div className="flex flex-col flex-grow pt-5 bg-green-700 overflow-y-auto">
+          <div className="flex items-center flex-shrink-0 px-4">
+            <h1 className="text-white text-lg font-semibold">Running Admin</h1>
+          </div>
+          
+          {/* Informations utilisateur */}
+          {user && (
+            <div className="flex-shrink-0 px-4 py-4 border-t border-green-800 mt-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
+                    <span className="text-sm font-medium text-white">
+                      {user.first_name?.[0] || user.username?.[0] || '?'}
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-white">
+                    {user.first_name || user.username}
+                  </p>
+                  <div className="flex items-center space-x-1">
+                    <p className="text-xs text-green-200">
+                      {user.is_admin ? 'Administrateur' : 'Utilisateur'}
+                    </p>
+                    {user.is_admin && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-500 text-white">
+                        Admin
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
-          </Transition.Child>
-          <div className="flex-shrink-0 w-14" aria-hidden="true">
-            {/* Force sidebar to shrink to fit close icon */}
-          </div>
-        </Dialog>
-      </Transition.Root>
-
-      {/* Sidebar pour desktop */}
-      <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
-        <div className="flex-1 flex flex-col min-h-0 bg-primary-700">
-          <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-            <div className="flex items-center flex-shrink-0 px-4 mb-5">
-              <span className="text-white text-xl font-bold">Running Admin</span>
-            </div>
-            <nav className="mt-5 flex-1 px-2 space-y-1">
-              {navigation.map((item) => (
-                <NavLink
-                  key={item.name}
-                  to={item.href}
-                  className={({ isActive }) => classNames(
+          )}
+          
+          <nav className="mt-5 flex-1 px-2 pb-4 space-y-1">
+            {navigation.map((item) => (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                className={({ isActive }) =>
+                  classNames(
                     isActive
-                      ? 'bg-primary-800 text-white'
-                      : 'text-white hover:bg-primary-600',
+                      ? 'bg-green-800 text-white'
+                      : 'text-green-100 hover:bg-green-600',
                     'group flex items-center px-2 py-2 text-sm font-medium rounded-md'
-                  )}
-                >
-                  <item.icon className="mr-3 h-5 w-5 text-primary-200" aria-hidden="true" />
-                  {item.name}
-                </NavLink>
-              ))}
-            </nav>
-          </div>
-          <div className="flex-shrink-0 flex border-t border-primary-800 p-4">
-            <div className="flex-shrink-0 w-full group block">
-              <div className="flex items-center">
-                <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-semibold">
-                  {currentUser?.first_name?.charAt(0) || 'A'}
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-white">
-                    {currentUser?.first_name ? `${currentUser.first_name} ${currentUser.last_name || ''}` : 'Admin'}
-                  </p>
-                  <p className="text-xs font-medium text-primary-200 group-hover:text-primary-100">
-                    {currentUser?.email || 'admin@runningapp.com'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+                  )
+                }
+              >
+                <item.icon
+                  className="mr-3 flex-shrink-0 h-6 w-6 text-green-300"
+                  aria-hidden="true"
+                />
+                {item.name}
+              </NavLink>
+            ))}
+          </nav>
         </div>
       </div>
     </>
