@@ -1,4 +1,4 @@
-// running-admin/src/contexts/AuthContext.jsx
+// running-admin/src/contexts/AuthContext.jsx - FICHIER COMPLET MODIFIÉ
 import { createContext, useContext, useState, useEffect } from 'react'
 import api from '../services/api'
 
@@ -24,7 +24,8 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('auth_token')
+      // Vérifier dans localStorage ET sessionStorage
+      const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')
       console.log('CheckAuth - Token trouvé:', token ? 'Oui' : 'Non')
       
       if (!token) {
@@ -40,34 +41,21 @@ export const AuthProvider = ({ children }) => {
         setUser(userData)
         setIsAuthenticated(true)
         
-        // Logs détaillés pour debug
         console.log('CheckAuth - Utilisateur authentifié:', userData.username)
         console.log('CheckAuth - Permissions admin:', userData.is_admin ? 'Oui' : 'Non')
-        console.log('CheckAuth - Statut actif:', userData.is_active ? 'Oui' : 'Non')
-        
-        // Avertir si pas admin et sur une page admin
-        if (!userData.is_admin && (
-          window.location.pathname.includes('/routes') ||
-          window.location.pathname.includes('/admin')
-        )) {
-          console.warn('Utilisateur non-admin tentant d\'accéder à une page admin')
-        }
       } else {
         // Token invalide
-        console.log('CheckAuth - Token invalide:', response.data.message)
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('user_data')
+        clearStoredAuth()
         setIsAuthenticated(false)
         setUser(null)
       }
     } catch (error) {
       console.error('Erreur validation token:', error)
       
-      // Ne pas déconnecter automatiquement si c'est juste une erreur réseau/serveur
+      // Ne pas déconnecter automatiquement si erreur réseau/serveur
       if (!error.response || error.response.status >= 500) {
         console.log('Erreur réseau/serveur - conservation de la session')
-        // Garder l'utilisateur connecté pour éviter les déconnexions intempestives
-        const storedUser = localStorage.getItem('user_data')
+        const storedUser = localStorage.getItem('user_data') || sessionStorage.getItem('user_data')
         if (storedUser) {
           try {
             setUser(JSON.parse(storedUser))
@@ -77,9 +65,7 @@ export const AuthProvider = ({ children }) => {
           }
         }
       } else {
-        // Erreur d'authentification réelle
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('user_data')
+        clearStoredAuth()
         setIsAuthenticated(false)
         setUser(null)
       }
@@ -88,6 +74,12 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  const clearStoredAuth = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('user_data')
+    sessionStorage.removeItem('auth_token')
+    sessionStorage.removeItem('user_data')
+  }
 
   const login = async (emailOrUsername, password, rememberMe = false) => {
     try {
@@ -101,14 +93,23 @@ export const AuthProvider = ({ children }) => {
         
         console.log('Login - Token reçu:', access_token ? 'Oui' : 'Non')
         console.log('Login - Données utilisateur:', userData.username)
+        console.log('Login - Se souvenir:', rememberMe ? 'Oui' : 'Non')
         
-        // Stocker le token et les données utilisateur
-        localStorage.setItem('auth_token', access_token)
-        localStorage.setItem('user_data', JSON.stringify(userData))
-        
-        // Vérification immédiate du stockage
-        const storedToken = localStorage.getItem('auth_token')
-        console.log('Login - Token stocké vérifié:', storedToken ? 'Oui' : 'Non')
+        if (rememberMe) {
+          // Persistance longue durée avec localStorage
+          localStorage.setItem('auth_token', access_token)
+          localStorage.setItem('user_data', JSON.stringify(userData))
+          // S'assurer que sessionStorage est vide
+          sessionStorage.removeItem('auth_token')
+          sessionStorage.removeItem('user_data')
+        } else {
+          // Session temporaire avec sessionStorage
+          sessionStorage.setItem('auth_token', access_token)
+          sessionStorage.setItem('user_data', JSON.stringify(userData))
+          // S'assurer que localStorage est vide
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('user_data')
+        }
         
         setUser(userData)
         setIsAuthenticated(true)
@@ -142,19 +143,23 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Erreur logout:', error)
     } finally {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user_data')
-      
+      clearStoredAuth()
       setUser(null)
       setIsAuthenticated(false)
-      
       window.location.href = '/login'
     }
   }
 
   const updateUser = (updatedUser) => {
     setUser(updatedUser)
-    localStorage.setItem('user_data', JSON.stringify(updatedUser))
+    
+    // Mettre à jour dans le bon stockage
+    const userDataString = JSON.stringify(updatedUser)
+    if (localStorage.getItem('auth_token')) {
+      localStorage.setItem('user_data', userDataString)
+    } else if (sessionStorage.getItem('auth_token')) {
+      sessionStorage.setItem('user_data', userDataString)
+    }
   }
 
   const value = {
