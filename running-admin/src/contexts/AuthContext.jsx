@@ -1,12 +1,8 @@
-// running-admin/src/contexts/AuthContext.jsx - AVEC STOCKAGE MÉMOIRE
+// running-admin/src/contexts/AuthContext.jsx - AVEC DÉCONNEXION AU REFRESH
 import { createContext, useContext, useState, useEffect } from 'react'
 import api from '../services/api'
 
 const AuthContext = createContext()
-
-// Variables globales pour stockage en mémoire (se remettent à null au refresh)
-let memoryToken = null
-let memoryUser = null
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -24,16 +20,48 @@ export const AuthProvider = ({ children }) => {
   // Vérifier l'authentification au chargement
   useEffect(() => {
     checkAuth()
+    
+    // Gérer la déconnexion au refresh pour les sessions temporaires
+    const handleBeforeUnload = () => {
+      // Si l'utilisateur a une session temporaire (sessionStorage seulement)
+      if (sessionStorage.getItem('auth_token') && !localStorage.getItem('auth_token')) {
+        console.log('Déconnexion automatique - session temporaire')
+        sessionStorage.removeItem('auth_token')
+        sessionStorage.removeItem('user_data')
+      }
+    }
+
+    // Marquer le début de session pour détecter les refreshes
+    const sessionStart = sessionStorage.getItem('session_start')
+    if (!sessionStart) {
+      sessionStorage.setItem('session_start', Date.now().toString())
+    }
+
+    // Ajouter l'écouteur beforeunload
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
   }, [])
 
   const checkAuth = async () => {
     try {
-      // Priorité : mémoire puis localStorage (pas de sessionStorage)
-      const token = memoryToken || localStorage.getItem('auth_token')
-      const userData = memoryUser || (localStorage.getItem('user_data') ? JSON.parse(localStorage.getItem('user_data')) : null)
+      // Si c'est un refresh et que l'utilisateur avait une session temporaire, déconnecter
+      const sessionStart = sessionStorage.getItem('session_start')
+      const wasTemporarySession = sessionStorage.getItem('temp_session')
       
+      if (sessionStart && wasTemporarySession && !localStorage.getItem('auth_token')) {
+        console.log('Refresh détecté - déconnexion session temporaire')
+        clearStoredAuth()
+        setLoading(false)
+        return
+      }
+
+      // Priorité à localStorage puis sessionStorage
+      const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')
       console.log('CheckAuth - Token trouvé:', token ? 'Oui' : 'Non')
-      console.log('CheckAuth - Source:', memoryToken ? 'mémoire' : localStorage.getItem('auth_token') ? 'localStorage' : 'aucune')
+      console.log('CheckAuth - Source:', localStorage.getItem('auth_token') ? 'localStorage' : 'sessionStorage')
       
       if (!token) {
         setLoading(false)
@@ -44,17 +72,12 @@ export const AuthProvider = ({ children }) => {
       const response = await api.auth.validateToken()
       
       if (response.data.status === 'success') {
-        const validatedUser = response.data.data.user
-        setUser(validatedUser)
+        const userData = response.data.data.user
+        setUser(userData)
         setIsAuthenticated(true)
         
-        // Mettre à jour les variables mémoire si elles existent
-        if (memoryToken) {
-          memoryUser = validatedUser
-        }
-        
-        console.log('CheckAuth - Utilisateur authentifié:', validatedUser.username)
-        console.log('CheckAuth - Permissions admin:', validatedUser.is_admin ? 'Oui' : 'Non')
+        console.log('CheckAuth - Utilisateur authentifié:', userData.username)
+        console.log('CheckAuth - Permissions admin:', userData.is_admin ? 'Oui' : 'Non')
       } else {
         // Token invalide
         clearStoredAuth()
@@ -67,10 +90,14 @@ export const AuthProvider = ({ children }) => {
       // Ne pas déconnecter automatiquement si erreur réseau/serveur
       if (!error.response || error.response.status >= 500) {
         console.log('Erreur réseau/serveur - conservation de la session')
-        const storedUser = memoryUser || userData
+        const storedUser = localStorage.getItem('user_data') || sessionStorage.getItem('user_data')
         if (storedUser) {
-          setUser(storedUser)
-          setIsAuthenticated(true)
+          try {
+            setUser(JSON.parse(storedUser))
+            setIsAuthenticated(true)
+          } catch (parseError) {
+            console.error('Erreur parsing user data:', parseError)
+          }
         }
       } else {
         clearStoredAuth()
@@ -83,17 +110,13 @@ export const AuthProvider = ({ children }) => {
   }
 
   const clearStoredAuth = () => {
-    // Nettoyer TOUS les stockages
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user_data')
     sessionStorage.removeItem('auth_token')
     sessionStorage.removeItem('user_data')
-    
-    // Nettoyer la mémoire
-    memoryToken = null
-    memoryUser = null
-    
-    console.log('Tous les tokens supprimés (localStorage + mémoire)')
+    sessionStorage.removeItem('temp_session')
+    sessionStorage.removeItem('session_start')
+    console.log('Tous les tokens supprimés')
   }
 
   const login = async (emailOrUsername, password, rememberMe = false) => {
@@ -108,7 +131,7 @@ export const AuthProvider = ({ children }) => {
         
         console.log('Login - Token reçu:', access_token ? 'Oui' : 'Non')
         console.log('Login - Données utilisateur:', userData.username)
-        console.log('Login - Se souvenir:', rememberMe ? 'Oui (localStorage)' : 'Non (mémoire seulement)')
+        console.log('Login - Se souvenir:', rememberMe ? 'Oui (localStorage)' : 'Non (session temporaire)')
         
         // Nettoyer d'abord tous les anciens tokens
         clearStoredAuth()
@@ -119,10 +142,12 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('user_data', JSON.stringify(userData))
           console.log('Token stocké dans localStorage (persistant)')
         } else {
-          // Stockage en mémoire seulement (supprimé au refresh)
-          memoryToken = access_token
-          memoryUser = userData
-          console.log('Token stocké en mémoire (supprimé au refresh)')
+          // Session temporaire avec sessionStorage + marqueur temporaire
+          sessionStorage.setItem('auth_token', access_token)
+          sessionStorage.setItem('user_data', JSON.stringify(userData))
+          sessionStorage.setItem('temp_session', 'true')
+          sessionStorage.removeItem('session_start') // Reset pour permettre la navigation
+          console.log('Token stocké dans sessionStorage (session temporaire)')
         }
         
         setUser(userData)
@@ -169,12 +194,12 @@ export const AuthProvider = ({ children }) => {
     
     // Mettre à jour dans le bon stockage
     const userDataString = JSON.stringify(updatedUser)
-    if (memoryToken) {
-      memoryUser = updatedUser
-      console.log('User data mis à jour en mémoire')
-    } else if (localStorage.getItem('auth_token')) {
+    if (localStorage.getItem('auth_token')) {
       localStorage.setItem('user_data', userDataString)
       console.log('User data mis à jour dans localStorage')
+    } else if (sessionStorage.getItem('auth_token')) {
+      sessionStorage.setItem('user_data', userDataString)
+      console.log('User data mis à jour dans sessionStorage')
     }
   }
 

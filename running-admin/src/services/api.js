@@ -1,4 +1,4 @@
-// running-admin/src/services/api.js - AVEC STOCKAGE MÉMOIRE
+// running-admin/src/services/api.js - CORRIGÉ avec sessionStorage
 import axios from 'axios'
 
 const emergencyService = {
@@ -9,14 +9,6 @@ const emergencyService = {
 
 const API_BASE_URL = 'http://localhost:5000'
 
-// Variables globales pour stockage en mémoire (se remettent à null au refresh)
-let memoryToken = null
-
-// Fonction pour accéder au token depuis l'extérieur
-export const getMemoryToken = () => memoryToken
-export const setMemoryToken = (token) => { memoryToken = token }
-export const clearMemoryToken = () => { memoryToken = null }
-
 const instance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -25,14 +17,14 @@ const instance = axios.create({
   }
 })
 
-// Intercepteur pour ajouter le token d'authentification - MODIFIÉ
+// Intercepteur pour ajouter le token d'authentification - CORRIGÉ
 instance.interceptors.request.use(
   (config) => {
     try {
-      // Priorité : mémoire puis localStorage (pas de sessionStorage)
-      const token = memoryToken || localStorage.getItem('auth_token')
+      // Priorité à sessionStorage (session courante) puis localStorage (persistant)
+      const token = sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token')
       console.log('Interceptor - Token trouvé:', token ? 'Oui' : 'Non')
-      console.log('Interceptor - Source:', memoryToken ? 'mémoire' : localStorage.getItem('auth_token') ? 'localStorage' : 'aucune')
+      console.log('Interceptor - Source:', sessionStorage.getItem('auth_token') ? 'session' : 'localStorage')
       console.log('Interceptor - URL:', config.url)
       
       if (token) {
@@ -75,12 +67,11 @@ instance.interceptors.response.use(
         error.userMessage = 'Session expirée. Veuillez vous reconnecter.'
         try {
           console.log('Nettoyage des tokens après erreur 401')
-          // Nettoyer TOUS les stockages y compris mémoire
+          // Nettoyer TOUS les stockages
           localStorage.removeItem('auth_token')
           localStorage.removeItem('user_data')
           sessionStorage.removeItem('auth_token')
           sessionStorage.removeItem('user_data')
-          memoryToken = null
           
           if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
             window.location.href = '/login'
@@ -146,13 +137,12 @@ const auth = {
   
   logout: () => {
     try {
-      // Nettoyer TOUS les stockages y compris mémoire
+      // Nettoyer TOUS les stockages
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user_data')
       sessionStorage.removeItem('auth_token')
       sessionStorage.removeItem('user_data')
-      memoryToken = null
-      console.log('Tous les tokens supprimés (localStorage + mémoire)')
+      console.log('Tous les tokens supprimés')
       return Promise.resolve()
     } catch (error) {
       emergencyService.logError(error, 'logout_cleanup')
