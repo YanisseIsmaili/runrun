@@ -40,16 +40,21 @@ export const AuthProvider = ({ children }) => {
         setUser(userData)
         setIsAuthenticated(true)
         
-        // NOUVEAU: Vérifier les permissions admin
+        // Logs détaillés pour debug
         console.log('CheckAuth - Utilisateur authentifié:', userData.username)
         console.log('CheckAuth - Permissions admin:', userData.is_admin ? 'Oui' : 'Non')
+        console.log('CheckAuth - Statut actif:', userData.is_active ? 'Oui' : 'Non')
         
         // Avertir si pas admin et sur une page admin
-        if (!userData.is_admin && window.location.pathname.includes('/routes')) {
+        if (!userData.is_admin && (
+          window.location.pathname.includes('/routes') ||
+          window.location.pathname.includes('/admin')
+        )) {
           console.warn('Utilisateur non-admin tentant d\'accéder à une page admin')
         }
       } else {
         // Token invalide
+        console.log('CheckAuth - Token invalide:', response.data.message)
         localStorage.removeItem('auth_token')
         localStorage.removeItem('user_data')
         setIsAuthenticated(false)
@@ -58,10 +63,21 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Erreur validation token:', error)
       
-      // Ne pas déconnecter automatiquement si c'est juste une erreur réseau
+      // Ne pas déconnecter automatiquement si c'est juste une erreur réseau/serveur
       if (!error.response || error.response.status >= 500) {
         console.log('Erreur réseau/serveur - conservation de la session')
+        // Garder l'utilisateur connecté pour éviter les déconnexions intempestives
+        const storedUser = localStorage.getItem('user_data')
+        if (storedUser) {
+          try {
+            setUser(JSON.parse(storedUser))
+            setIsAuthenticated(true)
+          } catch (parseError) {
+            console.error('Erreur parsing user data:', parseError)
+          }
+        }
       } else {
+        // Erreur d'authentification réelle
         localStorage.removeItem('auth_token')
         localStorage.removeItem('user_data')
         setIsAuthenticated(false)

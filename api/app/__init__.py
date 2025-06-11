@@ -17,7 +17,8 @@ def create_app(config_name=None):
     app = Flask(__name__)
     
     # Configuration
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
     
     # Base de données sur 192.168.0.47, API sur localhost
     DB_USERNAME = os.getenv('DB_USERNAME', 'root')
@@ -29,7 +30,7 @@ def create_app(config_name=None):
     app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
+
     
     db.init_app(app)
     jwt.init_app(app)

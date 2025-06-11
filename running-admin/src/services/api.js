@@ -1,15 +1,12 @@
-// running-admin/src/services/api.js
 import axios from 'axios'
 
-// Simple emergency service pour éviter les erreurs d'import
 const emergencyService = {
   logError: (error, context = '') => {
     console.error(`[${context}]`, error)
   }
 }
 
-// Configuration de base d'Axios
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+const API_BASE_URL = 'http://localhost:5000'  // Remplacez cette ligne
 
 const instance = axios.create({
   baseURL: API_BASE_URL,
@@ -43,12 +40,7 @@ instance.interceptors.request.use(
   }
 )
 
-//-------------- Gestionnaire des erreurs --------------//
-//                                                      |
-//         Gestionnaire d'erreurs global pour Axios     |
-//      Intercepteur pour gérer les réponses et erreurs |
-//------------------------------------------------------//
-
+// Intercepteur pour gérer les réponses et erreurs - AMÉLIORÉ
 instance.interceptors.response.use(
   (response) => {
     return response
@@ -65,7 +57,7 @@ instance.interceptors.response.use(
     else if (error.response.status === 401) {
       console.error('Erreur d\'authentification:', error.response.data)
       
-      // IMPORTANT: Ne pas déconnecter sur les routes de validation
+      // IMPORTANT: Ne pas déconnecter sur les routes de validation/login
       if (error.config.url.includes('/validate') || error.config.url.includes('/login')) {
         error.userMessage = 'Identifiants invalides ou session expirée.'
       } else {
@@ -82,28 +74,26 @@ instance.interceptors.response.use(
         }
       }
     }
-
-    // Gestion des erreurs d'autorisation (403)
+    // Gestion des erreurs d'autorisation (403) - AMÉLIORÉ
     else if (error.response.status === 403) {
       const errorData = error.response.data
+      console.error('Erreur d\'autorisation:', errorData)
+      
       if (errorData.error_code === 'ADMIN_REQUIRED') {
-        error.userMessage = 'Vous devez être administrateur pour accéder à cette page.'
+        error.userMessage = `Accès administrateur requis. Votre compte "${errorData.user_info?.username}" n'a pas les permissions nécessaires.`
       } else {
-        error.userMessage = 'Vous n\'avez pas les permissions nécessaires.'
+        error.userMessage = 'Vous n\'avez pas les permissions nécessaires pour cette action.'
       }
     }
-
     // Gestion des erreurs de validation
     else if (error.response.status === 400) {
       error.userMessage = error.response.data?.message || 'Données invalides.'
     }
-
     // Gestion des erreurs serveur
     else if (error.response.status >= 500) {
       error.userMessage = 'Erreur du serveur. Veuillez réessayer plus tard.'
       emergencyService.logError(error, 'server_error')
     }
-
     // Autres erreurs
     else {
       console.error('Erreur de requête:', error.message)
@@ -119,7 +109,7 @@ instance.interceptors.response.use(
   }
 )
 
-// Service d'authentification
+// Service d'authentification - AMÉLIORÉ
 const auth = {
   login: (emailOrUsername, password) => {
     const isEmail = emailOrUsername.includes('@')
@@ -157,7 +147,17 @@ const auth = {
     instance.post('/api/auth/change-password', {
       current_password: currentPassword,
       new_password: newPassword
-    })
+    }),
+  
+  // NOUVELLES FONCTIONS
+  promoteAdmin: (secretKey) => 
+    instance.post('/api/auth/promote-admin', {
+      secret_key: secretKey
+    }),
+  
+  testConnection: () => instance.get('/api/health'),
+  
+  testAuth: () => instance.get('/api/health/auth')
 }
 
 // Service des utilisateurs
@@ -177,17 +177,51 @@ const users = {
     if (params.sort_by) queryParams.append('sort_by', params.sort_by)
     if (params.sort_order) queryParams.append('sort_order', params.sort_order)
     
-    const url = `/api/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    const url = `/api/users${queryParams.toString() ? '?' + queryParams.toString() : ''}`
     return instance.get(url)
   },
   
-  create: (userData) => instance.post('/api/users', userData),
+  getById: (userId) => instance.get(`/api/users/${userId}`),
   
   update: (userId, userData) => instance.put(`/api/users/${userId}`, userData),
   
   delete: (userId) => instance.delete(`/api/users/${userId}`),
   
-  getById: (userId) => instance.get(`/api/users/${userId}`)
+  toggleStatus: (userId) => instance.patch(`/api/users/${userId}/toggle-status`)
+}
+
+// Service des itinéraires - COMPLET
+const routes = {
+  getAll: (params = {}) => {
+    const queryParams = new URLSearchParams()
+    
+    if (params.page) queryParams.append('page', params.page)
+    if (params.limit) queryParams.append('limit', params.limit)
+    if (params.search) queryParams.append('search', params.search)
+    if (params.difficulty) queryParams.append('difficulty', params.difficulty)
+    if (params.status) queryParams.append('status', params.status)
+    if (params.sort_by) queryParams.append('sort_by', params.sort_by)
+    if (params.sort_order) queryParams.append('sort_order', params.sort_order)
+    
+    const url = `/api/routes${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    return instance.get(url)
+  },
+  
+  getById: (routeId) => instance.get(`/api/routes/${routeId}`),
+  
+  create: (routeData) => instance.post('/api/routes', routeData),
+  
+  update: (routeId, routeData) => instance.put(`/api/routes/${routeId}`, routeData),
+  
+  delete: (routeId) => instance.delete(`/api/routes/${routeId}`),
+  
+  toggleStatus: (routeId) => instance.patch(`/api/routes/${routeId}/toggle-status`),
+  
+  getRouteStats: (routeId) => instance.get(`/api/routes/${routeId}/stats`),
+  
+  getActiveRuns: () => instance.get('/api/routes/active-runs'),
+  
+  export: () => instance.get('/api/routes/export', { responseType: 'blob' })
 }
 
 // Service des courses
@@ -203,9 +237,11 @@ const runs = {
     if (params.date_from) queryParams.append('date_from', params.date_from)
     if (params.date_to) queryParams.append('date_to', params.date_to)
     
-    const url = `/api/runs${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    const url = `/api/runs${queryParams.toString() ? '?' + queryParams.toString() : ''}`
     return instance.get(url)
   },
+  
+  getById: (runId) => instance.get(`/api/runs/${runId}`),
   
   create: (runData) => instance.post('/api/runs', runData),
   
@@ -213,48 +249,19 @@ const runs = {
   
   delete: (runId) => instance.delete(`/api/runs/${runId}`),
   
-  getById: (runId) => instance.get(`/api/runs/${runId}`)
+  start: (routeId) => instance.post('/api/runs/start', { route_id: routeId }),
+  
+  finish: (runId, runData) => instance.post(`/api/runs/${runId}/finish`, runData),
+  
+  getStats: () => instance.get('/api/runs/stats')
 }
 
-// Service des itinéraires
-const routes = {
-  getAll: (params = {}) => {
-    const queryParams = new URLSearchParams()
-    
-    if (params.page) queryParams.append('page', params.page)
-    if (params.limit) queryParams.append('limit', params.limit)
-    if (params.search) queryParams.append('search', params.search)
-    if (params.status) queryParams.append('status', params.status)
-    if (params.difficulty) queryParams.append('difficulty', params.difficulty)
-    
-    const url = `/api/routes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-    return instance.get(url)
-  },
-  
-  getActiveRuns: () => instance.get('/api/routes/active-runs'),
-  
-  create: (routeData) => instance.post('/api/routes', routeData),
-  
-  update: (routeId, routeData) => instance.put(`/api/routes/${routeId}`, routeData),
-  
-  delete: (routeId) => instance.delete(`/api/routes/${routeId}`),
-  
-  getById: (routeId) => instance.get(`/api/routes/${routeId}`)
-}
-
-// Service de santé de l'API
-const health = {
-  check: () => instance.get('/api/health'),
-  
-  ping: () => instance.get('/api/health/ping'),
-  
-  status: () => instance.get('/api/health/status')
-}
-
-export default {
+// API principale
+const api = {
   auth,
   users,
-  runs,
   routes,
-  health
+  runs
 }
+
+export default api

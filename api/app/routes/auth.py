@@ -1,5 +1,5 @@
 # api/app/routes/auth.py
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from datetime import timedelta, datetime
 from app import db
@@ -7,7 +7,6 @@ from app.models.user import User
 import re
 
 auth_bp = Blueprint('auth', __name__)
-
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
@@ -30,9 +29,7 @@ def login():
             return jsonify({
                 "status": "error",
                 "message": "Email/nom d'utilisateur et mot de passe requis",
-                "errors": {
-                    "credentials": "Identifiants manquants"
-                }
+                "errors": {"credentials": "Identifiants manquants"}
             }), 400
         
         # Déterminer si c'est un email ou un username
@@ -44,8 +41,12 @@ def login():
         else:
             user = User.query.filter_by(username=email_or_username).first()
         
+        # Debug user
+        print(f"🔍 User trouvé: {user.username if user else 'None'}")
+        
         # Vérifier l'utilisateur et le mot de passe
         if not user or not user.verify_password(password):
+            print(f"❌ Échec auth pour: {email_or_username}")
             return jsonify({
                 "status": "error",
                 "message": "Identifiants invalides",
@@ -64,11 +65,18 @@ def login():
         user.last_login = datetime.utcnow()
         db.session.commit()
         
+        # Debug JWT config
+        jwt_secret = current_app.config.get('JWT_SECRET_KEY')
+        print(f"🔑 JWT_SECRET_KEY (10 premiers chars): {jwt_secret[:10] if jwt_secret else 'None'}...")
+        print(f"👤 Création token pour user ID: {user.id}")
+        
         # Créer le token JWT
         access_token = create_access_token(
             identity=user.id,
             expires_delta=timedelta(hours=24)
         )
+        
+        print(f"✅ Token créé: {access_token[:50]}...")
         
         return jsonify({
             "status": "success",
@@ -80,6 +88,7 @@ def login():
         }), 200
         
     except Exception as e:
+        print(f"💥 Erreur login: {e}")
         db.session.rollback()
         return jsonify({
             "status": "error",
@@ -92,21 +101,30 @@ def login():
 def validate_token():
     """Valide le token JWT et retourne les infos utilisateur"""
     try:
+        print("🔍 Validation du token...")
         current_user_id = get_jwt_identity()
+        print(f"👤 User ID extrait du token: {current_user_id}")
+        
         user = User.query.get(current_user_id)
+        print(f"📊 Utilisateur trouvé en DB: {user.username if user else 'None'}")
         
         if not user:
+            print("❌ Utilisateur non trouvé en base")
             return jsonify({
                 "status": "error",
-                "message": "Utilisateur non trouvé"
-            }), 404
+                "message": "Utilisateur non trouvé",
+                "error_code": "USER_NOT_FOUND"
+            }), 401
         
         if not user.is_active:
+            print("❌ Utilisateur inactif")
             return jsonify({
                 "status": "error",
-                "message": "Compte désactivé"
-            }), 403
+                "message": "Compte désactivé",
+                "error_code": "USER_INACTIVE"
+            }), 401
         
+        print(f"✅ Validation réussie pour: {user.username}")
         return jsonify({
             "status": "success",
             "message": "Token valide",
@@ -116,11 +134,13 @@ def validate_token():
         }), 200
         
     except Exception as e:
+        print(f"💥 Erreur validation: {e}")
         return jsonify({
             "status": "error",
-            "message": "Erreur lors de la validation",
-            "error": str(e)
-        }), 500
+            "message": "Token invalide",
+            "error_code": "TOKEN_INVALID",
+            "error_detail": str(e)
+        }), 401
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
@@ -308,8 +328,6 @@ def refresh():
             "message": "Erreur lors du rafraîchissement",
             "error": str(e)
         }), 500
-    
-# Ajoutez cette route à la fin du fichier auth.py, avant la dernière ligne
 
 @auth_bp.route('/promote-admin', methods=['POST'])
 @jwt_required()
@@ -353,3 +371,20 @@ def promote_admin():
             "message": "Erreur lors de la promotion",
             "error": str(e)
         }), 500
+
+# Route de debug JWT
+@auth_bp.route('/debug-jwt', methods=['GET'])
+def debug_jwt():
+    """Route de debug pour vérifier la configuration JWT"""
+    jwt_secret = current_app.config.get('JWT_SECRET_KEY')
+    jwt_expires = current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES')
+    
+    return jsonify({
+        "status": "success",
+        "jwt_config": {
+            "secret_key_set": bool(jwt_secret),
+            "secret_key_length": len(jwt_secret) if jwt_secret else 0,
+            "secret_key_preview": jwt_secret[:10] + "..." if jwt_secret else None,
+            "expires_delta": str(jwt_expires)
+        }
+    }), 200

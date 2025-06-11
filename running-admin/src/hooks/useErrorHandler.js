@@ -1,4 +1,4 @@
-// running-admin/src/hooks/useErrorHandler.js
+// running-admin/src/hooks/useErrorHandler.js - NOUVEAU FICHIER
 import { useState, useCallback } from 'react'
 
 export const useApiCall = () => {
@@ -20,32 +20,32 @@ export const useApiCall = () => {
       setError(null)
 
       const result = await apiFunction()
-      
+
       if (onSuccess) {
         onSuccess(result)
       }
-      
+
       return result
     } catch (err) {
-      console.error('Erreur API:', err)
+      console.error('API Error:', err)
       
-      let finalErrorMessage = errorMessage
+      let finalError = errorMessage
       
-      // Extraire le message d'erreur de l'API
-      if (err.response?.data?.message) {
-        finalErrorMessage = err.response.data.message
-      } else if (err.userMessage) {
-        finalErrorMessage = err.userMessage
+      // Utiliser le message d'erreur personnalisé de l'API si disponible
+      if (err.userMessage) {
+        finalError = err.userMessage
+      } else if (err.response?.data?.message) {
+        finalError = err.response.data.message
       } else if (err.message) {
-        finalErrorMessage = err.message
+        finalError = err.message
       }
-      
-      setError(finalErrorMessage)
-      
+
+      setError(finalError)
+
       if (onError) {
         onError(err)
       }
-      
+
       throw err
     } finally {
       if (showLoading) {
@@ -63,12 +63,10 @@ export const useApiCall = () => {
   }, [])
 
   return {
+    callApi,
     loading,
     error,
-    callApi,
     retry,
     clearError
   }
 }
-
-export default useApiCall
