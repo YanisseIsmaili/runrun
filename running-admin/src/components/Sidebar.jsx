@@ -9,7 +9,7 @@ import {
   ChartBarIcon,
   MapPinIcon
 } from '@heroicons/react/24/solid'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const navigation = [
@@ -26,8 +26,7 @@ function classNames(...classes) {
 }
 
 const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
-  const { currentUser } = useAuth()
-  const location = useLocation()
+  const { user: currentUser } = useAuth()
   
   return (
     <>
@@ -92,7 +91,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                         'group flex items-center px-2 py-2 text-base font-medium rounded-md'
                       )}
                     >
-                      <item.icon className="mr-4 h-6 w-6 text-primary-200" aria-hidden="true" />
+                      {item.icon ? <item.icon className="mr-4 h-6 w-6 text-primary-200" aria-hidden="true" /> : null}
                       {item.name}
                     </NavLink>
                   ))}
@@ -142,7 +141,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                     'group flex items-center px-2 py-2 text-sm font-medium rounded-md'
                   )}
                 >
-                  <item.icon className="mr-3 h-5 w-5 text-primary-200" aria-hidden="true" />
+                  {item.icon ? <item.icon className="mr-3 h-5 w-5 text-primary-200" aria-hidden="true" /> : null}
                   {item.name}
                 </NavLink>
               ))}

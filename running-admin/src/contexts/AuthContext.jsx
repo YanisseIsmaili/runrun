@@ -1,7 +1,6 @@
+// running-admin/src/contexts/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react'
-import { jwtDecode } from 'jwt-decode'
 import api from '../services/api'
-import cryptoService from '../services/cryptoService'
 
 const AuthContext = createContext()
 
@@ -13,276 +12,129 @@ export const useAuth = () => {
   return context
 }
 
-const STORAGE_KEYS = {
-  TOKEN: 'running_app_token',
-  USER_DATA: 'running_app_user',
-  SESSION_PREFS: 'running_app_session_prefs'
-}
-
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null)
-  const [token, setToken] = useState(null)
+  const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [rememberMe, setRememberMe] = useState(false)
-  
-  const emergencyCleanup = () => {
-    try {
-      console.log('🧹 Nettoyage d\'urgence du localStorage...')
-      cryptoService.clearAllSecureData()
-      
-      const keys = Object.keys(localStorage)
-      keys.forEach(key => {
-        if (key.includes('running_app') || key.includes('token') || key.includes('user')) {
-          localStorage.removeItem(key)
-        }
-      })
-      
-      console.log('✅ Nettoyage d\'urgence terminé')
-      return true
-    } catch (error) {
-      console.error('❌ Erreur lors du nettoyage d\'urgence:', error)
-      return false
-    }
-  }
-  
-  const isTokenValid = (token) => {
-    if (!token) return false
-    
-    try {
-      if (token.includes('mock')) return true
-      
-      const decoded = jwtDecode(token)
-      const currentTime = Date.now() / 1000
-      
-      return decoded.exp > currentTime
-    } catch (error) {
-      console.error('Erreur de décodage du token:', error)
-      return false
-    }
-  }
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  const saveSessionData = (tokenData, userData, remember = false) => {
+  // Vérifier l'authentification au chargement
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
     try {
-      const expirationHours = remember ? 24 * 7 : 24
+      const token = localStorage.getItem('auth_token')
+      console.log('CheckAuth - Token trouvé:', token ? 'Oui' : 'Non')
       
-      const tokenSaved = cryptoService.setSecureItem(STORAGE_KEYS.TOKEN, tokenData, expirationHours)
-      const userSaved = cryptoService.setSecureItem(STORAGE_KEYS.USER_DATA, userData, expirationHours)
-      const prefsSaved = cryptoService.setSecureItem(STORAGE_KEYS.SESSION_PREFS, {
-        rememberMe: remember,
-        lastLogin: new Date().toISOString()
-      }, expirationHours)
+      if (!token) {
+        setLoading(false)
+        return
+      }
+
+      // Valider le token avec l'API
+      const response = await api.auth.validateToken()
       
-      if (tokenSaved && userSaved && prefsSaved) {
-        console.log('✅ Données de session sauvegardées de manière sécurisée')
-        return true
+      if (response.data.status === 'success') {
+        setUser(response.data.data.user)
+        setIsAuthenticated(true)
+        console.log('CheckAuth - Utilisateur authentifié:', response.data.data.user.username)
       } else {
-        console.warn('⚠️ Problème lors de la sauvegarde des données')
-        return false
+        // Token invalide
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('user_data')
+        setIsAuthenticated(false)
+        setUser(null)
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la sauvegarde des données de session:', error)
-      return false
-    }
-  }
-
-  const loadSessionData = () => {
-    try {
-      const savedToken = cryptoService.getSecureItem(STORAGE_KEYS.TOKEN)
-      const savedUser = cryptoService.getSecureItem(STORAGE_KEYS.USER_DATA)
-      const savedPrefs = cryptoService.getSecureItem(STORAGE_KEYS.SESSION_PREFS)
-      
-      if (savedToken && savedUser && isTokenValid(savedToken)) {
-        setToken(savedToken)
-        setCurrentUser(savedUser)
-        setRememberMe(savedPrefs?.rememberMe || false)
-        
-        console.log('✅ Session restaurée depuis le stockage sécurisé')
-        console.log('📅 Dernière connexion:', savedPrefs?.lastLogin)
-        return true
-      } else {
-        clearSessionData()
-        return false
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement des données de session:', error)
-      emergencyCleanup()
-      return false
-    }
-  }
-
-  const clearSessionData = () => {
-    try {
-      cryptoService.removeSecureItem(STORAGE_KEYS.TOKEN)
-      cryptoService.removeSecureItem(STORAGE_KEYS.USER_DATA)
-      cryptoService.removeSecureItem(STORAGE_KEYS.SESSION_PREFS)
-      console.log('🗑️ Données de session effacées')
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'effacement des données:', error)
-    }
-  }
-  
-  const login = async (email, password, remember = false) => {
-    setLoading(true)
-    try {
-      console.log("🔐 Début de la fonction login dans AuthContext")
-      setError(null)
-      setRememberMe(remember)
-      
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJleHAiOjk5OTk5OTk5OTl9.mock"
-      const mockUser = {
-        id: 1,
-        first_name: "Admin",
-        last_name: "Test", 
-        email: email,
-        username: "admin"
-      }
-      
-      console.log("✅ Connexion simulée réussie")
-      setToken(mockToken)
-      setCurrentUser(mockUser)
-      
-      const saved = saveSessionData(mockToken, mockUser, remember)
-      if (!saved) {
-        console.warn('⚠️ Impossible de sauvegarder la session, la connexion sera temporaire')
-      }
-      
-      console.log("🎉 Login terminé avec succès")
-      return { success: true, user: mockUser }
-    } catch (error) {
-      console.error('❌ Erreur lors de la connexion:', error)
-      setError('Erreur de connexion simulée')
-      return {
-        success: false,
-        error: 'Erreur de connexion simulée'
-      }
+      console.error('Erreur validation token:', error)
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_data')
+      setIsAuthenticated(false)
+      setUser(null)
     } finally {
       setLoading(false)
     }
   }
-  
-  const logout = () => {
-    console.log("👋 Déconnexion de l'utilisateur")
-    setToken(null)
-    setCurrentUser(null)
-    setError(null)
-    setRememberMe(false)
-    
-    clearSessionData()
-    localStorage.removeItem('token')
-  }
-  
-  const loadUserData = async (authToken) => {
-    try {
-      console.log("👤 Chargement des données utilisateur")
-      
-      const userData = cryptoService.getSecureItem(STORAGE_KEYS.USER_DATA)
-      if (userData) {
-        setCurrentUser(userData)
-        return userData
-      }
-      
-      return null
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement des données utilisateur:', error)
-      return null
-    }
-  }
-  
-  const refreshUser = async () => {
-    if (!token || !isTokenValid(token)) {
-      logout()
-      return null
-    }
-    
-    try {
-      return await loadUserData(token)
-    } catch (error) {
-      console.error('❌ Erreur lors du rafraîchissement des données:', error)
-      return null
-    }
-  }
 
-  const extendSession = () => {
-    if (token && currentUser && isTokenValid(token)) {
-      saveSessionData(token, currentUser, rememberMe)
-      console.log('⏰ Session prolongée')
-      return true
-    }
-    return false
-  }
-  
-  useEffect(() => {
-    const initAuth = async () => {
-      console.log("🚀 Initialisation de l'authentification")
+  const login = async (emailOrUsername, password, rememberMe = false) => {
+    try {
       setLoading(true)
-      setError(null)
       
-      try {
-        const integrity = cryptoService.checkStorageIntegrity()
-        console.log('🔍 Vérification de l\'intégrité du stockage:', integrity)
+      const response = await api.auth.login(emailOrUsername, password)
+      console.log('Login - Réponse reçue:', response.data.status)
+      
+      if (response.data.status === 'success') {
+        const { access_token, user: userData } = response.data.data
         
-        if (!integrity.isHealthy) {
-          console.warn('⚠️ Données corrompues détectées, nettoyage nécessaire')
-          emergencyCleanup()
-        } else {
-          cryptoService.cleanExpiredItems()
-          
-          const sessionLoaded = loadSessionData()
-          
-          if (sessionLoaded) {
-            console.log("✅ Session existante chargée avec succès")
-          } else {
-            console.log("ℹ️ Aucune session valide trouvée")
-          }
+        console.log('Login - Token reçu:', access_token ? 'Oui' : 'Non')
+        console.log('Login - Données utilisateur:', userData.username)
+        
+        // Stocker le token et les données utilisateur
+        localStorage.setItem('auth_token', access_token)
+        localStorage.setItem('user_data', JSON.stringify(userData))
+        
+        // Vérification immédiate du stockage
+        const storedToken = localStorage.getItem('auth_token')
+        console.log('Login - Token stocké vérifié:', storedToken ? 'Oui' : 'Non')
+        
+        setUser(userData)
+        setIsAuthenticated(true)
+        
+        return { success: true, user: userData }
+      } else {
+        return { 
+          success: false, 
+          error: response.data.message || 'Erreur de connexion' 
         }
-      } catch (error) {
-        console.error('❌ Erreur lors de l\'initialisation:', error)
-        setError('Erreur lors de la vérification de l\'authentification')
-        emergencyCleanup()
-      } finally {
-        setLoading(false)
       }
-    }
-    
-    initAuth()
-  }, [])
-  
-  useEffect(() => {
-    if (token && isTokenValid(token)) {
-      console.log("🔑 Token mis à jour dans le contexte")
-    }
-  }, [token])
-
-  useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      try {
-        cryptoService.cleanExpiredItems()
-      } catch (error) {
-        console.warn('⚠️ Erreur lors du nettoyage périodique:', error)
+    } catch (error) {
+      console.error('Erreur login:', error)
+      
+      let message = 'Erreur de connexion'
+      if (error.response?.data?.message) {
+        message = error.response.data.message
+      } else if (error.userMessage) {
+        message = error.userMessage
       }
-    }, 10 * 60 * 1000)
+      
+      return { success: false, error: message }
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    return () => clearInterval(cleanupInterval)
-  }, [])
-  
+  const logout = async () => {
+    try {
+      await api.auth.logout()
+    } catch (error) {
+      console.error('Erreur logout:', error)
+    } finally {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_data')
+      
+      setUser(null)
+      setIsAuthenticated(false)
+      
+      window.location.href = '/login'
+    }
+  }
+
+  const updateUser = (updatedUser) => {
+    setUser(updatedUser)
+    localStorage.setItem('user_data', JSON.stringify(updatedUser))
+  }
+
   const value = {
-    currentUser,
-    token,
-    isAuthenticated: !!currentUser && !!token && isTokenValid(token),
+    user,
     loading,
-    error,
-    rememberMe,
+    isAuthenticated,
     login,
     logout,
-    refreshUser,
-    extendSession,
-    clearError: () => setError(null),
-    emergencyCleanup
+    updateUser,
+    checkAuth
   }
-  
+
   return (
     <AuthContext.Provider value={value}>
       {children}

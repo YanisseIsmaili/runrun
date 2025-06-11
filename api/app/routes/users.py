@@ -1,13 +1,16 @@
 # api/app/routes/users.py - Routes complètes pour la gestion des utilisateurs
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from werkzeug.security import generate_password_hash
 from app import db
 from app.models.user import User
 from app.models.run import Run
 from app.utils.decorators import admin_required
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, desc, or_
 from datetime import datetime, timedelta
 import re
+import csv
+import io
 
 users_bp = Blueprint('users', __name__)
 
@@ -15,52 +18,73 @@ users_bp = Blueprint('users', __name__)
 @jwt_required()
 def get_profile():
     """Récupère le profil de l'utilisateur connecté"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
-    
-    if not user:
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if not user:
+            return jsonify({
+                "status": "error",
+                "message": "Utilisateur non trouvé",
+                "errors": {"user": "Utilisateur inexistant"}
+            }), 404
+        
+        return jsonify({
+            "status": "success",
+            "message": "Profil récupéré avec succès",
+            "data": user.to_dict()
+        }), 200
+        
+    except Exception as e:
         return jsonify({
             "status": "error",
-            "message": "Utilisateur non trouvé",
-            "errors": {"user": "Utilisateur inexistant"}
-        }), 404
-    
-    return jsonify({
-        "status": "success",
-        "message": "Profil récupéré avec succès",
-        "data": user.to_dict()
-    }), 200
+            "message": "Erreur lors de la récupération du profil",
+            "error": str(e)
+        }), 500
 
 @users_bp.route('/profile', methods=['PUT'])
 @jwt_required()
 def update_profile():
     """Met à jour le profil de l'utilisateur connecté"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
-    
-    if not user:
-        return jsonify({
-            "status": "error",
-            "message": "Utilisateur non trouvé",
-            "errors": {"user": "Utilisateur inexistant"}
-        }), 404
-    
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({
-            "status": "error",
-            "message": "Aucune donnée fournie",
-            "errors": {"data": "Données requises"}
-        }), 400
-    
     try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if not user:
+            return jsonify({
+                "status": "error",
+                "message": "Utilisateur non trouvé",
+                "errors": {"user": "Utilisateur inexistant"}
+            }), 404
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "Aucune donnée fournie",
+                "errors": {"data": "Données requises"}
+            }), 400
+        
         # Mise à jour des champs modifiables
         updatable_fields = ['first_name', 'last_name', 'date_of_birth', 'height', 'weight']
         for field in updatable_fields:
             if field in data:
-                setattr(user, field, data[field])
+                if field in ['height', 'weight'] and data[field]:
+                    try:
+                        value = float(data[field])
+                        if value <= 0:
+                            raise ValueError()
+                        setattr(user, field, value)
+                    except (ValueError, TypeError):
+                        return jsonify({
+                            "status": "error",
+                            "message": f"{field} invalide"
+                        }), 400
+                else:
+                    setattr(user, field, data[field])
         
+        user.updated_at = datetime.utcnow()
         db.session.commit()
         
         return jsonify({
@@ -68,12 +92,13 @@ def update_profile():
             "message": "Profil mis à jour avec succès",
             "data": user.to_dict()
         }), 200
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({
             "status": "error",
-            "message": f"Erreur lors de la mise à jour du profil: {str(e)}",
-            "errors": {"database": str(e)}
+            "message": "Erreur lors de la mise à jour",
+            "error": str(e)
         }), 500
 
 @users_bp.route('', methods=['GET'])
@@ -83,205 +108,102 @@ def get_all_users():
     """Récupère tous les utilisateurs avec pagination et filtres"""
     try:
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
+        limit = request.args.get('limit', 10, type=int)
         search = request.args.get('search', '', type=str)
-        sort_field = request.args.get('sort_field', 'created_at', type=str)
-        sort_direction = request.args.get('sort_direction', 'desc', type=str)
+        status = request.args.get('status', '', type=str)
+        role = request.args.get('role', '', type=str)
+        sort_by = request.args.get('sort_by', 'created_at', type=str)
+        sort_order = request.args.get('sort_order', 'desc', type=str)
         
-        # Construction de la requête
+        # Valider les paramètres de tri
+        valid_sort_fields = ['username', 'email', 'created_at', 'last_login', 'first_name', 'last_name']
+        if sort_by not in valid_sort_fields:
+            sort_by = 'created_at'
+        
         query = User.query
         
-        # Filtre de recherche
+        # Filtres de recherche
         if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                db.or_(
-                    User.username.like(search_pattern),
-                    User.email.like(search_pattern),
-                    User.first_name.like(search_pattern),
-                    User.last_name.like(search_pattern)
-                )
+            search_filter = or_(
+                User.username.ilike(f'%{search}%'),
+                User.email.ilike(f'%{search}%'),
+                User.first_name.ilike(f'%{search}%'),
+                User.last_name.ilike(f'%{search}%')
             )
+            query = query.filter(search_filter)
+        
+        # Filtre par statut
+        if status:
+            if status == 'active':
+                query = query.filter(User.is_active == True)
+            elif status == 'inactive':
+                query = query.filter(User.is_active == False)
+        
+        # Filtre par rôle
+        if role:
+            if role == 'admin':
+                query = query.filter(User.is_admin == True)
+            elif role == 'user':
+                query = query.filter(User.is_admin == False)
         
         # Tri
-        if hasattr(User, sort_field):
-            order_column = getattr(User, sort_field)
-            if sort_direction.lower() == 'desc':
-                order_column = order_column.desc()
-            query = query.order_by(order_column)
+        if sort_order == 'desc':
+            query = query.order_by(desc(getattr(User, sort_by)))
+        else:
+            query = query.order_by(getattr(User, sort_by))
         
         # Pagination
-        users_pagination = query.paginate(
+        users = query.paginate(
             page=page, 
-            per_page=per_page, 
+            per_page=limit, 
             error_out=False
         )
         
         # Enrichir les données utilisateur avec les statistiques
-        users_data = []
-        for user in users_pagination.items:
+        enriched_users = []
+        for user in users.items:
             user_dict = user.to_dict()
             
-            # Ajouter les statistiques de courses
-            total_runs = Run.query.filter_by(user_id=user.id).count()
-            total_distance = db.session.query(func.sum(Run.distance)).filter(Run.user_id == user.id).scalar() or 0
+            # Ajouter les statistiques de course
+            run_stats = db.session.query(
+                func.count(Run.id).label('total_runs'),
+                func.sum(Run.distance).label('total_distance'),
+                func.avg(Run.duration).label('avg_duration')
+            ).filter(Run.user_id == user.id).first()
             
-            # Dernière activité
-            last_run = Run.query.filter_by(user_id=user.id).order_by(Run.created_at.desc()).first()
-            last_activity = last_run.created_at if last_run else user.created_at
+            user_dict['stats'] = {
+                'total_runs': run_stats.total_runs or 0,
+                'total_distance': float(run_stats.total_distance or 0),
+                'avg_duration': float(run_stats.avg_duration or 0)
+            }
             
-            # Calcul de l'allure moyenne
-            if total_runs > 0:
-                avg_duration = db.session.query(func.avg(Run.duration)).filter(Run.user_id == user.id).scalar() or 0
-                avg_distance = total_distance / total_runs if total_runs > 0 else 0
-                if avg_duration > 0 and avg_distance > 0:
-                    pace_seconds = (avg_duration / (avg_distance / 1000))
-                    pace_minutes = pace_seconds / 60
-                    avg_pace = f"{int(pace_minutes)}:{int((pace_minutes % 1) * 60):02d}"
-                else:
-                    avg_pace = "0:00"
-            else:
-                avg_pace = "0:00"
-            
-            user_dict.update({
-                'total_runs': total_runs,
-                'total_distance': float(total_distance / 1000) if total_distance else 0,  # en km
-                'avg_pace': avg_pace,
-                'last_activity': last_activity.isoformat()
-            })
-            
-            users_data.append(user_dict)
+            enriched_users.append(user_dict)
         
         return jsonify({
             "status": "success",
-            "message": "Liste des utilisateurs récupérée",
             "data": {
-                "users": users_data,
-                "total": users_pagination.total,
-                "pages": users_pagination.pages,
-                "current_page": page,
-                "per_page": per_page
+                "users": enriched_users,
+                "pagination": {
+                    "page": page,
+                    "pages": users.pages,
+                    "per_page": limit,
+                    "total": users.total
+                },
+                "filters": {
+                    "search": search,
+                    "status": status,
+                    "role": role,
+                    "sort_by": sort_by,
+                    "sort_order": sort_order
+                }
             }
         }), 200
         
     except Exception as e:
         return jsonify({
             "status": "error",
-            "message": f"Erreur lors de la récupération des utilisateurs: {str(e)}",
-            "errors": {"server": str(e)}
-        }), 500
-
-@users_bp.route('/<int:user_id>', methods=['GET'])
-@jwt_required()
-@admin_required
-def get_user_details(user_id):
-    """Récupère les détails d'un utilisateur spécifique"""
-    try:
-        user = User.query.get(user_id)
-        
-        if not user:
-            return jsonify({
-                "status": "error",
-                "message": "Utilisateur non trouvé",
-                "errors": {"user": "Utilisateur inexistant"}
-            }), 404
-        
-        # Statistiques détaillées de l'utilisateur
-        total_runs = Run.query.filter_by(user_id=user_id).count()
-        total_distance = db.session.query(func.sum(Run.distance)).filter(Run.user_id == user_id).scalar() or 0
-        total_duration = db.session.query(func.sum(Run.duration)).filter(Run.user_id == user_id).scalar() or 0
-        
-        # Courses récentes (10 dernières)
-        recent_runs = Run.query.filter_by(user_id=user_id).order_by(Run.created_at.desc()).limit(10).all()
-        recent_runs_data = [run.to_dict() for run in recent_runs]
-        
-        # Activité du mois en cours
-        current_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        month_runs = Run.query.filter(
-            and_(
-                Run.user_id == user_id,
-                Run.created_at >= current_month_start
-            )
-        ).count()
-        
-        month_distance = db.session.query(func.sum(Run.distance)).filter(
-            and_(
-                Run.user_id == user_id,
-                Run.created_at >= current_month_start
-            )
-        ).scalar() or 0
-        
-        user_stats = {
-            "total_runs": total_runs,
-            "total_distance": float(total_distance / 1000) if total_distance else 0,  # en km
-            "total_duration": total_duration,
-            "current_month": {
-                "runs": month_runs,
-                "distance": float(month_distance / 1000) if month_distance else 0
-            },
-            "recent_runs": recent_runs_data
-        }
-        
-        return jsonify({
-            "status": "success",
-            "message": f"Détails de l'utilisateur {user.username}",
-            "data": {
-                "user": user.to_dict(),
-                "stats": user_stats
-            }
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Erreur lors de la récupération des détails: {str(e)}",
-            "errors": {"server": str(e)}
-        }), 500
-
-@users_bp.route('/<int:user_id>/runs', methods=['GET'])
-@jwt_required()
-@admin_required
-def get_user_runs(user_id):
-    """Récupère les courses d'un utilisateur spécifique"""
-    try:
-        user = User.query.get(user_id)
-        
-        if not user:
-            return jsonify({
-                "status": "error",
-                "message": "Utilisateur non trouvé",
-                "errors": {"user": "Utilisateur inexistant"}
-            }), 404
-        
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
-        
-        runs_pagination = Run.query.filter_by(user_id=user_id).order_by(
-            Run.start_time.desc()
-        ).paginate(
-            page=page,
-            per_page=per_page,
-            error_out=False
-        )
-        
-        runs_data = [run.to_dict() for run in runs_pagination.items]
-        
-        return jsonify({
-            "status": "success",
-            "message": f"Courses de {user.username} récupérées",
-            "data": {
-                "runs": runs_data,
-                "total": runs_pagination.total,
-                "pages": runs_pagination.pages,
-                "current_page": page
-            }
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Erreur lors de la récupération des courses: {str(e)}",
-            "errors": {"server": str(e)}
+            "message": "Erreur lors de la récupération des utilisateurs",
+            "error": str(e)
         }), 500
 
 @users_bp.route('', methods=['POST'])
@@ -295,70 +217,168 @@ def create_user():
         if not data:
             return jsonify({
                 "status": "error",
-                "message": "Données JSON manquantes",
-                "errors": {"data": "Données requises"}
+                "message": "Aucune donnée fournie"
             }), 400
         
         # Validation des champs requis
         required_fields = ['username', 'email', 'password']
+        errors = {}
+        
         for field in required_fields:
-            if field not in data or not data[field]:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Le champ '{field}' est requis",
-                    "errors": {field: "Champ requis"}
-                }), 400
+            if not data.get(field) or not data[field].strip():
+                errors[field] = f"Le champ '{field}' est requis"
         
-        # Validation du format email
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, data['email']):
+        # Validation de l'email
+        if data.get('email'):
+            email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_regex, data['email']):
+                errors['email'] = "Format d'email invalide"
+        
+        # Validation du mot de passe
+        if data.get('password'):
+            if len(data['password']) < 6:
+                errors['password'] = "Le mot de passe doit contenir au moins 6 caractères"
+        
+        # Validation de la confirmation du mot de passe
+        if data.get('password') != data.get('confirm_password'):
+            errors['confirm_password'] = "Les mots de passe ne correspondent pas"
+        
+        # Validation des champs numériques
+        if data.get('height'):
+            try:
+                height = float(data['height'])
+                if height <= 0 or height > 300:
+                    errors['height'] = "Taille invalide (0-300 cm)"
+            except (ValueError, TypeError):
+                errors['height'] = "Taille invalide"
+        
+        if data.get('weight'):
+            try:
+                weight = float(data['weight'])
+                if weight <= 0 or weight > 500:
+                    errors['weight'] = "Poids invalide (0-500 kg)"
+            except (ValueError, TypeError):
+                errors['weight'] = "Poids invalide"
+        
+        # Vérifier l'unicité
+        if User.query.filter_by(username=data.get('username', '').strip()).first():
+            errors['username'] = "Ce nom d'utilisateur existe déjà"
+        
+        if User.query.filter_by(email=data.get('email', '').strip().lower()).first():
+            errors['email'] = "Cet email existe déjà"
+        
+        if errors:
             return jsonify({
                 "status": "error",
-                "message": "Format d'email invalide",
-                "errors": {"email": "Format invalide"}
+                "message": "Erreurs de validation",
+                "errors": errors
             }), 400
         
-        # Vérifier l'unicité du username et email
-        existing_user = User.query.filter(
-            db.or_(User.username == data['username'], User.email == data['email'])
-        ).first()
-        
-        if existing_user:
-            return jsonify({
-                "status": "error",
-                "message": "Nom d'utilisateur ou email déjà utilisé",
-                "errors": {"unique": "Données déjà existantes"}
-            }), 400
-        
-        # Création du nouvel utilisateur
-        new_user = User(
-            username=data['username'],
-            email=data['email'],
-            password=data['password'],
-            first_name=data.get('first_name', ''),
-            last_name=data.get('last_name', ''),
+        # Créer l'utilisateur
+        user = User(
+            username=data['username'].strip(),
+            email=data['email'].strip().lower(),
+            password_hash=generate_password_hash(data['password']),
+            first_name=data.get('first_name', '').strip(),
+            last_name=data.get('last_name', '').strip(),
             date_of_birth=data.get('date_of_birth'),
-            height=data.get('height'),
-            weight=data.get('weight'),
-            is_admin=data.get('is_admin', False)
+            height=float(data['height']) if data.get('height') else None,
+            weight=float(data['weight']) if data.get('weight') else None,
+            is_admin=bool(data.get('is_admin', False)),
+            is_active=True
         )
         
-        db.session.add(new_user)
+        db.session.add(user)
         db.session.commit()
         
         return jsonify({
             "status": "success",
             "message": "Utilisateur créé avec succès",
-            "data": new_user.to_dict()
+            "data": user.to_dict()
         }), 201
         
     except Exception as e:
         db.session.rollback()
         return jsonify({
             "status": "error",
-            "message": f"Erreur lors de la création de l'utilisateur: {str(e)}",
-            "errors": {"server": str(e)}
+            "message": "Erreur lors de la création de l'utilisateur",
+            "error": str(e)
         }), 500
+
+@users_bp.route('/<int:user_id>', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_user(user_id):
+    """Récupère un utilisateur spécifique avec ses statistiques"""
+    try:
+        user = User.query.get_or_404(user_id)
+        user_dict = user.to_dict()
+        
+        # Statistiques détaillées
+        run_stats = db.session.query(
+            func.count(Run.id).label('total_runs'),
+            func.sum(Run.distance).label('total_distance'),
+            func.avg(Run.duration).label('avg_duration'),
+            func.min(Run.duration).label('best_time'),
+            func.max(Run.duration).label('worst_time'),
+            func.avg(Run.avg_speed).label('avg_speed')
+        ).filter(Run.user_id == user_id).first()
+        
+        # Courses récentes
+        recent_runs = Run.query.filter_by(user_id=user_id).order_by(
+            desc(Run.start_time)
+        ).limit(5).all()
+        
+        # Statistiques par mois (derniers 6 mois)
+        six_months_ago = datetime.now() - timedelta(days=180)
+        monthly_stats = db.session.query(
+            func.year(Run.start_time).label('year'),
+            func.month(Run.start_time).label('month'),
+            func.count(Run.id).label('runs_count'),
+            func.sum(Run.distance).label('distance'),
+            func.avg(Run.duration).label('avg_duration')
+        ).filter(
+            and_(
+                Run.user_id == user_id,
+                Run.start_time >= six_months_ago
+            )
+        ).group_by(
+            func.year(Run.start_time),
+            func.month(Run.start_time)
+        ).all()
+        
+        user_dict['detailed_stats'] = {
+            'general': {
+                'total_runs': run_stats.total_runs or 0,
+                'total_distance': float(run_stats.total_distance or 0),
+                'avg_duration': float(run_stats.avg_duration or 0),
+                'best_time': float(run_stats.best_time or 0),
+                'worst_time': float(run_stats.worst_time or 0),
+                'avg_speed': float(run_stats.avg_speed or 0)
+            },
+            'recent_runs': [run.to_dict() for run in recent_runs],
+            'monthly': [
+                {
+                    'year': stat.year,
+                    'month': stat.month,
+                    'runs_count': stat.runs_count,
+                    'distance': float(stat.distance or 0),
+                    'avg_duration': float(stat.avg_duration or 0)
+                } for stat in monthly_stats
+            ]
+        }
+        
+        return jsonify({
+            "status": "success",
+            "data": user_dict
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": "Utilisateur non trouvé",
+            "error": str(e)
+        }), 404
 
 @users_bp.route('/<int:user_id>', methods=['PUT'])
 @jwt_required()
@@ -366,47 +386,84 @@ def create_user():
 def update_user(user_id):
     """Met à jour un utilisateur"""
     try:
-        user = User.query.get(user_id)
-        
-        if not user:
-            return jsonify({
-                "status": "error",
-                "message": "Utilisateur non trouvé",
-                "errors": {"user": "Utilisateur inexistant"}
-            }), 404
-        
+        user = User.query.get_or_404(user_id)
         data = request.get_json()
         
         if not data:
             return jsonify({
                 "status": "error",
-                "message": "Données JSON manquantes",
-                "errors": {"data": "Données requises"}
+                "message": "Aucune donnée fournie"
             }), 400
         
-        # Champs modifiables
-        updatable_fields = ['first_name', 'last_name', 'email', 'date_of_birth', 
-                           'height', 'weight', 'is_admin']
+        errors = {}
         
-        # Vérifier l'unicité de l'email si modifié
+        # Validation de l'email si modifié
         if 'email' in data and data['email'] != user.email:
-            existing_email = User.query.filter_by(email=data['email']).first()
-            if existing_email:
-                return jsonify({
-                    "status": "error",
-                    "message": "Email déjà utilisé",
-                    "errors": {"email": "Email déjà existant"}
-                }), 400
+            email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_regex, data['email']):
+                errors['email'] = "Format d'email invalide"
+            elif User.query.filter(User.email == data['email'], User.id != user_id).first():
+                errors['email'] = "Cet email existe déjà"
+        
+        # Validation du nom d'utilisateur si modifié
+        if 'username' in data and data['username'] != user.username:
+            if User.query.filter(User.username == data['username'], User.id != user_id).first():
+                errors['username'] = "Ce nom d'utilisateur existe déjà"
+        
+        # Validation du mot de passe si fourni
+        if data.get('password'):
+            if len(data['password']) < 6:
+                errors['password'] = "Le mot de passe doit contenir au moins 6 caractères"
+            elif data['password'] != data.get('confirm_password'):
+                errors['confirm_password'] = "Les mots de passe ne correspondent pas"
+        
+        # Validation des champs numériques
+        if 'height' in data and data['height']:
+            try:
+                height = float(data['height'])
+                if height <= 0 or height > 300:
+                    errors['height'] = "Taille invalide (0-300 cm)"
+            except (ValueError, TypeError):
+                errors['height'] = "Taille invalide"
+        
+        if 'weight' in data and data['weight']:
+            try:
+                weight = float(data['weight'])
+                if weight <= 0 or weight > 500:
+                    errors['weight'] = "Poids invalide (0-500 kg)"
+            except (ValueError, TypeError):
+                errors['weight'] = "Poids invalide"
+        
+        if errors:
+            return jsonify({
+                "status": "error",
+                "message": "Erreurs de validation",
+                "errors": errors
+            }), 400
         
         # Mise à jour des champs
+        updatable_fields = ['username', 'email', 'first_name', 'last_name', 
+                           'date_of_birth', 'height', 'weight', 'is_admin', 'is_active']
+        
         for field in updatable_fields:
             if field in data:
-                setattr(user, field, data[field])
+                if field == 'email':
+                    setattr(user, field, data[field].strip().lower())
+                elif field == 'username':
+                    setattr(user, field, data[field].strip())
+                elif field in ['height', 'weight']:
+                    if data[field]:
+                        setattr(user, field, float(data[field]))
+                    else:
+                        setattr(user, field, None)
+                else:
+                    setattr(user, field, data[field])
         
         # Mise à jour du mot de passe si fourni
-        if 'password' in data and data['password']:
-            user.password = data['password']
+        if data.get('password'):
+            user.password_hash = generate_password_hash(data['password'])
         
+        user.updated_at = datetime.utcnow()
         db.session.commit()
         
         return jsonify({
@@ -419,8 +476,8 @@ def update_user(user_id):
         db.session.rollback()
         return jsonify({
             "status": "error",
-            "message": f"Erreur lors de la mise à jour: {str(e)}",
-            "errors": {"server": str(e)}
+            "message": "Erreur lors de la mise à jour",
+            "error": str(e)
         }), 500
 
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
@@ -432,167 +489,109 @@ def delete_user(user_id):
         current_user_id = get_jwt_identity()
         
         # Empêcher l'auto-suppression
-        if current_user_id == user_id:
+        if user_id == current_user_id:
             return jsonify({
                 "status": "error",
-                "message": "Impossible de supprimer votre propre compte",
-                "errors": {"user": "Auto-suppression interdite"}
+                "message": "Vous ne pouvez pas vous supprimer vous-même"
             }), 400
         
-        user = User.query.get(user_id)
+        user = User.query.get_or_404(user_id)
         
-        if not user:
-            return jsonify({
-                "status": "error",
-                "message": "Utilisateur non trouvé",
-                "errors": {"user": "Utilisateur inexistant"}
-            }), 404
+        # Vérifier qu'on ne supprime pas le dernier admin
+        if user.is_admin:
+            admin_count = User.query.filter_by(is_admin=True).count()
+            if admin_count <= 1:
+                return jsonify({
+                    "status": "error",
+                    "message": "Impossible de supprimer le dernier administrateur"
+                }), 400
         
-        # Vérifier s'il y a des courses actives
-        active_runs = Run.query.filter(
-            and_(
-                Run.user_id == user_id,
-                Run.end_time.is_(None)
-            )
+        # Vérifier s'il y a des courses en cours
+        active_runs = Run.query.filter_by(
+            user_id=user_id, 
+            status='in_progress'
         ).count()
         
         if active_runs > 0:
             return jsonify({
                 "status": "error",
-                "message": "Impossible de supprimer un utilisateur avec des courses actives",
-                "errors": {"user": f"{active_runs} course(s) active(s)"}
+                "message": f"Impossible de supprimer : l'utilisateur a {active_runs} course(s) en cours"
             }), 400
         
-        username = user.username
-        db.session.delete(user)
-        db.session.commit()
+        # Compter les courses terminées
+        total_runs = Run.query.filter_by(user_id=user_id).count()
         
-        return jsonify({
-            "status": "success",
-            "message": f"Utilisateur {username} supprimé avec succès",
-            "data": {}
-        }), 200
+        if total_runs > 0:
+            # Option : désactiver au lieu de supprimer pour préserver l'historique
+            user.is_active = False
+            user.email = f"deleted_{user_id}_{user.email}"
+            user.username = f"deleted_{user_id}_{user.username}"
+            user.updated_at = datetime.utcnow()
+            db.session.commit()
+            
+            return jsonify({
+                "status": "success",
+                "message": f"Utilisateur désactivé (avait {total_runs} courses)"
+            }), 200
+        else:
+            # Suppression définitive si aucune course
+            db.session.delete(user)
+            db.session.commit()
+            
+            return jsonify({
+                "status": "success",
+                "message": "Utilisateur supprimé avec succès"
+            }), 200
         
     except Exception as e:
         db.session.rollback()
         return jsonify({
             "status": "error",
-            "message": f"Erreur lors de la suppression: {str(e)}",
-            "errors": {"server": str(e)}
+            "message": "Erreur lors de la suppression",
+            "error": str(e)
         }), 500
 
-@users_bp.route('/<int:user_id>/stats', methods=['GET'])
+@users_bp.route('/export', methods=['GET'])
 @jwt_required()
-def get_user_stats(user_id):
-    """Récupère les statistiques détaillées d'un utilisateur"""
+@admin_required
+def export_users():
+    """Exporte la liste des utilisateurs en CSV"""
     try:
-        # Vérifier les permissions
-        current_user_id = get_jwt_identity()
-        current_user = User.query.get(current_user_id)
+        users = User.query.all()
         
-        # Seul l'utilisateur lui-même ou un admin peut voir ces stats
-        if current_user_id != user_id and not current_user.is_admin:
-            return jsonify({
-                "status": "error",
-                "message": "Accès refusé",
-                "errors": {"auth": "Permissions insuffisantes"}
-            }), 403
+        output = io.StringIO()
+        writer = csv.writer(output)
         
-        user = User.query.get(user_id)
+        # En-têtes
+        writer.writerow([
+            'ID', 'Nom d\'utilisateur', 'Email', 'Prénom', 'Nom', 
+            'Admin', 'Actif', 'Créé le'
+        ])
         
-        if not user:
-            return jsonify({
-                "status": "error",
-                "message": "Utilisateur non trouvé",
-                "errors": {"user": "Utilisateur inexistant"}
-            }), 404
+        # Données
+        for user in users:
+            writer.writerow([
+                user.id,
+                user.username,
+                user.email,
+                user.first_name or '',
+                user.last_name or '',
+                'Oui' if user.is_admin else 'Non',
+                'Oui' if user.is_active else 'Non',
+                user.created_at.strftime('%Y-%m-%d %H:%M')
+            ])
         
-        # Statistiques générales
-        total_runs = Run.query.filter_by(user_id=user_id).count()
-        total_distance = db.session.query(func.sum(Run.distance)).filter(Run.user_id == user_id).scalar() or 0
-        total_duration = db.session.query(func.sum(Run.duration)).filter(Run.user_id == user_id).scalar() or 0
+        output.seek(0)
         
-        # Statistiques hebdomadaires (7 derniers jours)
-        week_ago = datetime.utcnow() - timedelta(days=7)
-        weekly_stats = []
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename=users_{datetime.now().strftime("%Y%m%d_%H%M")}.csv'
         
-        for i in range(7):
-            day = week_ago + timedelta(days=i)
-            next_day = day + timedelta(days=1)
-            
-            day_runs = Run.query.filter(
-                and_(
-                    Run.user_id == user_id,
-                    Run.start_time >= day,
-                    Run.start_time < next_day
-                )
-            ).all()
-            
-            day_distance = sum(run.distance for run in day_runs if run.distance) or 0
-            day_duration = sum(run.duration for run in day_runs if run.duration) or 0
-            
-            weekly_stats.append({
-                'date': day.strftime('%Y-%m-%d'),
-                'day_name': day.strftime('%A'),
-                'runs': len(day_runs),
-                'distance': float(day_distance / 1000) if day_distance else 0,
-                'duration': day_duration
-            })
-        
-        # Statistiques mensuelles (6 derniers mois)
-        monthly_stats = []
-        for i in range(6):
-            month_start = datetime.utcnow().replace(day=1) - timedelta(days=i*30)
-            month_start = month_start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            
-            if month_start.month == 12:
-                next_month = month_start.replace(year=month_start.year + 1, month=1)
-            else:
-                next_month = month_start.replace(month=month_start.month + 1)
-            
-            month_runs = Run.query.filter(
-                and_(
-                    Run.user_id == user_id,
-                    Run.start_time >= month_start,
-                    Run.start_time < next_month
-                )
-            ).all()
-            
-            month_distance = sum(run.distance for run in month_runs if run.distance) or 0
-            month_duration = sum(run.duration for run in month_runs if run.duration) or 0
-            
-            monthly_stats.append({
-                'month': month_start.strftime('%Y-%m'),
-                'month_name': month_start.strftime('%B %Y'),
-                'runs': len(month_runs),
-                'distance': float(month_distance / 1000) if month_distance else 0,
-                'duration': month_duration
-            })
-        
-        monthly_stats.reverse()  # Plus ancien en premier
-        
-        stats = {
-            "user_info": user.to_dict(),
-            "overall": {
-                "total_runs": total_runs,
-                "total_distance": float(total_distance / 1000) if total_distance else 0,
-                "total_duration": total_duration,
-                "average_distance": float(total_distance / total_runs / 1000) if total_runs > 0 else 0,
-                "average_duration": total_duration // total_runs if total_runs > 0 else 0
-            },
-            "weekly": weekly_stats,
-            "monthly": monthly_stats
-        }
-        
-        return jsonify({
-            "status": "success",
-            "message": "Statistiques utilisateur récupérées",
-            "data": stats
-        }), 200
+        return response
         
     except Exception as e:
         return jsonify({
             "status": "error",
-            "message": f"Erreur lors de la récupération des statistiques: {str(e)}",
-            "errors": {"server": str(e)}
+            "message": "Erreur lors de l'export",
+            "error": str(e)
         }), 500
