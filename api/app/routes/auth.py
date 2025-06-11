@@ -41,12 +41,8 @@ def login():
         else:
             user = User.query.filter_by(username=email_or_username).first()
         
-        # Debug user
-        print(f"🔍 User trouvé: {user.username if user else 'None'}")
-        
         # Vérifier l'utilisateur et le mot de passe
         if not user or not user.verify_password(password):
-            print(f"❌ Échec auth pour: {email_or_username}")
             return jsonify({
                 "status": "error",
                 "message": "Identifiants invalides",
@@ -65,18 +61,11 @@ def login():
         user.last_login = datetime.utcnow()
         db.session.commit()
         
-        # Debug JWT config
-        jwt_secret = current_app.config.get('JWT_SECRET_KEY')
-        print(f"🔑 JWT_SECRET_KEY (10 premiers chars): {jwt_secret[:10] if jwt_secret else 'None'}...")
-        print(f"👤 Création token pour user ID: {user.id}")
-        
-        # Créer le token JWT
+        # Créer le token JWT avec identity en string
         access_token = create_access_token(
-            identity=user.id,
+            identity=str(user.id),  # CONVERSION EN STRING
             expires_delta=timedelta(hours=24)
         )
-        
-        print(f"✅ Token créé: {access_token[:50]}...")
         
         return jsonify({
             "status": "success",
@@ -88,7 +77,6 @@ def login():
         }), 200
         
     except Exception as e:
-        print(f"💥 Erreur login: {e}")
         db.session.rollback()
         return jsonify({
             "status": "error",
@@ -102,7 +90,7 @@ def validate_token():
     """Valide le token JWT et retourne les infos utilisateur"""
     try:
         print("🔍 Validation du token...")
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())  # CONVERSION EN INT
         print(f"👤 User ID extrait du token: {current_user_id}")
         
         user = User.query.get(current_user_id)
@@ -203,9 +191,9 @@ def register():
         db.session.add(user)
         db.session.commit()
         
-        # Créer le token d'accès
+        # Créer le token d'accès avec identity en string
         access_token = create_access_token(
-            identity=user.id,
+            identity=str(user.id),  # CONVERSION EN STRING
             expires_delta=timedelta(hours=24)
         )
         
@@ -231,7 +219,7 @@ def register():
 def change_password():
     """Changement de mot de passe"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())  # CONVERSION EN INT
         user = User.query.get(current_user_id)
         
         if not user:
@@ -299,7 +287,7 @@ def change_password():
 def refresh():
     """Rafraîchit le token JWT"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())  # CONVERSION EN INT
         user = User.query.get(current_user_id)
         
         if not user or not user.is_active:
@@ -308,9 +296,9 @@ def refresh():
                 "message": "Utilisateur non valide"
             }), 401
         
-        # Créer un nouveau token
+        # Créer un nouveau token avec identity en string
         new_token = create_access_token(
-            identity=user.id,
+            identity=str(user.id),  # CONVERSION EN STRING
             expires_delta=timedelta(hours=24)
         )
         
@@ -344,7 +332,7 @@ def promote_admin():
                 "message": "Clé secrète invalide"
             }), 401
         
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())  # CONVERSION EN INT
         user = User.query.get(current_user_id)
         
         if not user:
@@ -371,20 +359,3 @@ def promote_admin():
             "message": "Erreur lors de la promotion",
             "error": str(e)
         }), 500
-
-# Route de debug JWT
-@auth_bp.route('/debug-jwt', methods=['GET'])
-def debug_jwt():
-    """Route de debug pour vérifier la configuration JWT"""
-    jwt_secret = current_app.config.get('JWT_SECRET_KEY')
-    jwt_expires = current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES')
-    
-    return jsonify({
-        "status": "success",
-        "jwt_config": {
-            "secret_key_set": bool(jwt_secret),
-            "secret_key_length": len(jwt_secret) if jwt_secret else 0,
-            "secret_key_preview": jwt_secret[:10] + "..." if jwt_secret else None,
-            "expires_delta": str(jwt_expires)
-        }
-    }), 200

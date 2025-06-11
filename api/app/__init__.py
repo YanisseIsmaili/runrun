@@ -1,10 +1,10 @@
-# api/app/__init__.py - FICHIER COMPLET CORRIGÉ
+# api/app/__init__.py
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity  # AJOUT MANQUANT
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from flask_cors import CORS
 from sqlalchemy import text
-from datetime import timedelta, datetime  # AJOUT datetime
+from datetime import timedelta, datetime
 import os
 from dotenv import load_dotenv
 
@@ -16,29 +16,31 @@ jwt = JWTManager()
 def create_app(config_name=None):
     app = Flask(__name__)
     
-    # Configuration
+    # Configuration Flask
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+    
+    # Configuration JWT - UNE SEULE FOIS
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
     
-    # Base de données sur 192.168.0.47, API sur localhost
+    # Configuration base de données
     DB_USERNAME = os.getenv('DB_USERNAME', 'root')
     DB_PASSWORD = os.getenv('DB_PASSWORD', 'root')
-    DB_HOST = '192.168.0.47'  # IP fixe pour la DB
+    DB_HOST = '192.168.0.47'
     DB_PORT = os.getenv('DB_PORT', '3306')
     DB_NAME = os.getenv('DB_NAME', 'running_app_db')
     
     app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
-
     
+    # Initialiser les extensions APRÈS la configuration
     db.init_app(app)
     jwt.init_app(app)
     
-    # CORS pour localhost (même machine)
+    # CORS
     CORS(app, origins=["*"], supports_credentials=True)
     
-    # Gestionnaires d'erreurs JWT - AMÉLIORÉS
+    # Gestionnaires d'erreurs JWT
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
         return jsonify({
@@ -49,6 +51,7 @@ def create_app(config_name=None):
 
     @jwt.invalid_token_loader
     def invalid_token_callback(error):
+        print(f"💥 JWT Invalid Token: {error}")
         return jsonify({
             'status': 'error', 
             'message': 'Token invalide',
@@ -57,6 +60,7 @@ def create_app(config_name=None):
 
     @jwt.unauthorized_loader
     def missing_token_callback(error):
+        print(f"💥 JWT Missing Token: {error}")
         return jsonify({
             'status': 'error', 
             'message': 'Token requis',
@@ -71,7 +75,7 @@ def create_app(config_name=None):
             'error_code': 'TOKEN_REVOKED'
         }), 401
     
-    # Import blueprints APRÈS la configuration JWT
+    # Import et enregistrement des blueprints
     try:
         from app.routes.auth import auth_bp
         from app.routes.users import users_bp
@@ -87,12 +91,10 @@ def create_app(config_name=None):
     except ImportError as e:
         print(f"⚠️ Erreur import blueprints: {e}")
     
-    # Routes de santé - AVEC IMPORTS CORRECTS
+    # Routes de santé
     @app.route('/api/health', methods=['GET'])
     def health_check():
-        """Route de santé pour vérifier l'API"""
         try:
-            # Test de connexion à la base de données
             db.session.execute(text('SELECT 1'))
             return jsonify({
                 'status': 'success',
@@ -112,11 +114,8 @@ def create_app(config_name=None):
     @app.route('/api/health/auth', methods=['GET'])
     @jwt_required()
     def auth_health_check():
-        """Route de santé pour vérifier l'authentification"""
         try:
             current_user_id = get_jwt_identity()
-            
-            # Import conditionnel pour éviter les imports circulaires
             from app.models.user import User
             user = User.query.get(current_user_id)
             
@@ -145,17 +144,7 @@ def create_app(config_name=None):
                 'error': str(e)
             }), 500
 
-    # Route de test simple
-    @app.route('/api/test', methods=['GET'])
-    def test_route():
-        """Route de test basique"""
-        return jsonify({
-            'status': 'success',
-            'message': 'API fonctionne',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 200
-    
-    # Gestionnaire d'erreur global
+    # Gestionnaires d'erreur globaux
     @app.errorhandler(404)
     def not_found(error):
         return jsonify({
