@@ -1,4 +1,6 @@
-# api/app/utils/decorators.py
+# =============================================================================
+# 1. api/app/utils/decorators.py - FICHIER COMPLET
+# =============================================================================
 from functools import wraps
 from flask import jsonify
 from flask_jwt_extended import get_jwt_identity
@@ -10,24 +12,36 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         try:
             current_user_id = get_jwt_identity()
+            print(f"🔐 Admin check - User ID: {current_user_id}")
+            
             user = User.query.get(current_user_id)
             
             if not user:
+                print(f"❌ Admin check - User not found: {current_user_id}")
                 return jsonify({
                     'status': 'error',
                     'message': 'Utilisateur non trouvé',
                     'error_code': 'USER_NOT_FOUND'
                 }), 404
             
+            print(f"👤 Admin check - User: {user.username}, Admin: {user.is_admin}")
+            
             if not user.is_admin:
+                print(f"🚫 Admin check - Access denied for user: {user.username}")
                 return jsonify({
                     'status': 'error',
                     'message': 'Accès administrateur requis',
-                    'error_code': 'ADMIN_REQUIRED'
+                    'error_code': 'ADMIN_REQUIRED',
+                    'user_info': {
+                        'username': user.username,
+                        'is_admin': user.is_admin
+                    }
                 }), 403
             
+            print(f"✅ Admin check - Access granted for user: {user.username}")
             return f(*args, **kwargs)
         except Exception as e:
+            print(f"💥 Admin check - Error: {e}")
             return jsonify({
                 'status': 'error',
                 'message': 'Erreur de vérification des permissions',

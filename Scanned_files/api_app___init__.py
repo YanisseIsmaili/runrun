@@ -3,6 +3,7 @@ from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
+from sqlalchemy import text  # AJOUT IMPORTANT
 from datetime import timedelta
 import os
 from dotenv import load_dotenv
@@ -63,11 +64,11 @@ def create_app(config_name=None):
     except ImportError as e:
         print(f"⚠️ Erreur import blueprints: {e}")
     
-    # Routes de santé
+    # Routes de santé - CORRIGÉES
     @app.route('/api/health', methods=['GET'])
     def health_check():
         try:
-            db.session.execute('SELECT 1')
+            db.session.execute(text('SELECT 1'))  # CORRECTION ICI
             db_status = 'connected'
         except Exception as e:
             db_status = f'error: {str(e)}'
@@ -84,7 +85,7 @@ def create_app(config_name=None):
     @app.route('/api/health/db', methods=['GET'])
     def health_check_db():
         try:
-            db.session.execute('SELECT 1')
+            db.session.execute(text('SELECT 1'))  # CORRECTION ICI
             return jsonify({
                 'status': 'success',
                 'message': 'Base de données connectée',

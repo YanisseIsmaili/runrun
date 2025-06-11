@@ -8,6 +8,7 @@ import re
 
 auth_bp = Blueprint('auth', __name__)
 
+
 @auth_bp.route('/login', methods=['POST'])
 def login():
     """Authentification de l'utilisateur"""
@@ -305,5 +306,50 @@ def refresh():
         return jsonify({
             "status": "error",
             "message": "Erreur lors du rafraîchissement",
+            "error": str(e)
+        }), 500
+    
+# Ajoutez cette route à la fin du fichier auth.py, avant la dernière ligne
+
+@auth_bp.route('/promote-admin', methods=['POST'])
+@jwt_required()
+def promote_admin():
+    """Route temporaire pour promouvoir un utilisateur admin"""
+    try:
+        data = request.get_json()
+        secret_key = data.get('secret_key')
+        
+        # Clé secrète pour la sécurité
+        if secret_key != "PROMOTE_ADMIN_SECRET_2025":
+            return jsonify({
+                "status": "error",
+                "message": "Clé secrète invalide"
+            }), 401
+        
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if not user:
+            return jsonify({
+                "status": "error",
+                "message": "Utilisateur non trouvé"
+            }), 404
+        
+        # Promotion en admin
+        user.is_admin = True
+        user.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Utilisateur {user.username} promu administrateur",
+            "data": user.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "status": "error",
+            "message": "Erreur lors de la promotion",
             "error": str(e)
         }), 500

@@ -97,15 +97,13 @@ def validate_token():
         if not user:
             return jsonify({
                 "status": "error",
-                "message": "Utilisateur non trouvé",
-                "errors": {"user": "Utilisateur inexistant"}
+                "message": "Utilisateur non trouvé"
             }), 404
         
         if not user.is_active:
             return jsonify({
                 "status": "error",
-                "message": "Compte désactivé",
-                "errors": {"account": "Compte utilisateur désactivé"}
+                "message": "Compte désactivé"
             }), 403
         
         return jsonify({

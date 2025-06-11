@@ -43,12 +43,7 @@ instance.interceptors.request.use(
   }
 )
 
-//-------------- Gestionnaire des erreurs --------------//
-//                                                      |
-//         Gestionnaire d'erreurs global pour Axios     |
-//      Intercepteur pour gérer les réponses et erreurs |
-//------------------------------------------------------//
-
+// Intercepteur pour gérer les réponses et erreurs
 instance.interceptors.response.use(
   (response) => {
     return response
@@ -64,17 +59,15 @@ instance.interceptors.response.use(
     // Gestion des erreurs d'authentification
     else if (error.response.status === 401) {
       console.error('Erreur d\'authentification:', error.response.data)
+      error.userMessage = 'Session expirée. Veuillez vous reconnecter.'
       
-      // IMPORTANT: Ne pas déconnecter sur les routes de validation
-      if (error.config.url.includes('/validate') || error.config.url.includes('/login')) {
-        error.userMessage = 'Identifiants invalides ou session expirée.'
-      } else {
-        error.userMessage = 'Session expirée. Veuillez vous reconnecter.'
+      // Ne nettoyer que si ce n'est pas la route de login ou validate
+      if (!error.config.url.includes('/login') && !error.config.url.includes('/validate')) {
         try {
           console.log('Nettoyage du token après erreur 401')
           localStorage.removeItem('auth_token')
           localStorage.removeItem('user_data')
-          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          if (window.location.pathname !== '/login') {
             window.location.href = '/login'
           }
         } catch (storageError) {
@@ -82,28 +75,19 @@ instance.interceptors.response.use(
         }
       }
     }
-
-    // Gestion des erreurs d'autorisation (403)
+    // Gestion des erreurs d'autorisation
     else if (error.response.status === 403) {
-      const errorData = error.response.data
-      if (errorData.error_code === 'ADMIN_REQUIRED') {
-        error.userMessage = 'Vous devez être administrateur pour accéder à cette page.'
-      } else {
-        error.userMessage = 'Vous n\'avez pas les permissions nécessaires.'
-      }
+      error.userMessage = 'Vous n\'avez pas les permissions nécessaires pour cette action.'
     }
-
     // Gestion des erreurs de validation
     else if (error.response.status === 400) {
       error.userMessage = error.response.data?.message || 'Données invalides.'
     }
-
     // Gestion des erreurs serveur
     else if (error.response.status >= 500) {
       error.userMessage = 'Erreur du serveur. Veuillez réessayer plus tard.'
       emergencyService.logError(error, 'server_error')
     }
-
     // Autres erreurs
     else {
       console.error('Erreur de requête:', error.message)

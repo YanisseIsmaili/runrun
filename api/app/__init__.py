@@ -37,18 +37,38 @@ def create_app(config_name=None):
     # CORS pour localhost (même machine)
     CORS(app, origins=["*"], supports_credentials=True)
     
-    # Gestionnaires d'erreurs JWT
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
-        return jsonify({'status': 'error', 'message': 'Token expiré'}), 401
+        return jsonify({
+            'status': 'error', 
+            'message': 'Token expiré',
+            'error_code': 'TOKEN_EXPIRED'
+        }), 401
     
-    @jwt.invalid_token_loader
+    @jwt.unauthorized_loader
     def invalid_token_callback(error):
-        return jsonify({'status': 'error', 'message': 'Token invalide'}), 401
+        return jsonify({
+            'status': 'error', 
+            'message': 'Token invalide',
+            'error_code': 'TOKEN_INVALID'
+        }), 401
     
     @jwt.unauthorized_loader
     def missing_token_callback(error):
-        return jsonify({'status': 'error', 'message': 'Token requis'}), 401
+        return jsonify({
+            'status': 'error', 
+            'message': 'Token requis',
+            'error_code': 'TOKEN_MISSING'
+        }), 401
+    
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        return jsonify({
+            'status': 'error',
+            'message': 'Token révoqué',
+            'error_code': 'TOKEN_REVOKED'
+        }), 401
+    
     
     # Import blueprints
     try:

@@ -25,6 +25,7 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem('auth_token')
+      console.log('CheckAuth - Token trouvé:', token ? 'Oui' : 'Non')
       
       if (!token) {
         setLoading(false)
@@ -37,41 +38,54 @@ export const AuthProvider = ({ children }) => {
       if (response.data.status === 'success') {
         setUser(response.data.data.user)
         setIsAuthenticated(true)
+        console.log('CheckAuth - Utilisateur authentifié:', response.data.data.user.username)
       } else {
         // Token invalide
         localStorage.removeItem('auth_token')
         localStorage.removeItem('user_data')
+        setIsAuthenticated(false)
+        setUser(null)
       }
     } catch (error) {
       console.error('Erreur validation token:', error)
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user_data')
+      setIsAuthenticated(false)
+      setUser(null)
     } finally {
       setLoading(false)
     }
   }
 
-  const login = async (emailOrUsername, password) => {
+  const login = async (emailOrUsername, password, rememberMe = false) => {
     try {
       setLoading(true)
       
       const response = await api.auth.login(emailOrUsername, password)
+      console.log('Login - Réponse reçue:', response.data.status)
       
       if (response.data.status === 'success') {
         const { access_token, user: userData } = response.data.data
+        
+        console.log('Login - Token reçu:', access_token ? 'Oui' : 'Non')
+        console.log('Login - Données utilisateur:', userData.username)
         
         // Stocker le token et les données utilisateur
         localStorage.setItem('auth_token', access_token)
         localStorage.setItem('user_data', JSON.stringify(userData))
         
+        // Vérification immédiate du stockage
+        const storedToken = localStorage.getItem('auth_token')
+        console.log('Login - Token stocké vérifié:', storedToken ? 'Oui' : 'Non')
+        
         setUser(userData)
         setIsAuthenticated(true)
         
-        return { success: true }
+        return { success: true, user: userData }
       } else {
         return { 
           success: false, 
-          message: response.data.message || 'Erreur de connexion' 
+          error: response.data.message || 'Erreur de connexion' 
         }
       }
     } catch (error) {
@@ -84,7 +98,7 @@ export const AuthProvider = ({ children }) => {
         message = error.userMessage
       }
       
-      return { success: false, message }
+      return { success: false, error: message }
     } finally {
       setLoading(false)
     }
@@ -92,19 +106,16 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      // Appeler l'API de déconnexion si nécessaire
       await api.auth.logout()
     } catch (error) {
       console.error('Erreur logout:', error)
     } finally {
-      // Nettoyer le stockage local
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user_data')
       
       setUser(null)
       setIsAuthenticated(false)
       
-      // Rediriger vers la page de connexion
       window.location.href = '/login'
     }
   }

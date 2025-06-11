@@ -36,9 +36,18 @@ export const AuthProvider = ({ children }) => {
       const response = await api.auth.validateToken()
       
       if (response.data.status === 'success') {
-        setUser(response.data.data.user)
+        const userData = response.data.data.user
+        setUser(userData)
         setIsAuthenticated(true)
-        console.log('CheckAuth - Utilisateur authentifié:', response.data.data.user.username)
+        
+        // NOUVEAU: Vérifier les permissions admin
+        console.log('CheckAuth - Utilisateur authentifié:', userData.username)
+        console.log('CheckAuth - Permissions admin:', userData.is_admin ? 'Oui' : 'Non')
+        
+        // Avertir si pas admin et sur une page admin
+        if (!userData.is_admin && window.location.pathname.includes('/routes')) {
+          console.warn('Utilisateur non-admin tentant d\'accéder à une page admin')
+        }
       } else {
         // Token invalide
         localStorage.removeItem('auth_token')
@@ -48,14 +57,21 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Erreur validation token:', error)
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user_data')
-      setIsAuthenticated(false)
-      setUser(null)
+      
+      // Ne pas déconnecter automatiquement si c'est juste une erreur réseau
+      if (!error.response || error.response.status >= 500) {
+        console.log('Erreur réseau/serveur - conservation de la session')
+      } else {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('user_data')
+        setIsAuthenticated(false)
+        setUser(null)
+      }
     } finally {
       setLoading(false)
     }
   }
+
 
   const login = async (emailOrUsername, password, rememberMe = false) => {
     try {
