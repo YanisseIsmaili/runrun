@@ -1,4 +1,4 @@
-// running-admin/src/App.jsx - FICHIER COMPLET MODIFIÉ
+// running-admin/src/App.jsx - FICHIER COMPLET CORRIGÉ
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
@@ -11,7 +11,7 @@ import Settings from './pages/Settings'
 import NotFound from './pages/NotFound'
 import ErrorBoundary from './components/ErrorBoundary'
 import Stats from './pages/Stats'
-import ParcoursPage from './pages/Parcours'  // RENOMMÉ
+import ParcoursPage from './pages/Parcours'
 import AdminRoute from './components/AdminRoute'
 import DebugPanel from './components/DebugPanel'
 
@@ -41,7 +41,6 @@ function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/stats" element={<Stats />} />
         <Route path="/" element={
           <ProtectedRoute>
             <Layout />
@@ -51,8 +50,7 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="users/:userId" element={<UserDetail />} />
           <Route path="history" element={<RunningHistory />} />
-          
-          {/* ROUTE PROTÉGÉE ADMIN - RENOMMÉE PARCOURS */}
+          <Route path="stats" element={<Stats />} />
           <Route 
             path="routes" 
             element={
@@ -61,13 +59,11 @@ function App() {
               </AdminRoute>
             } 
           />
-          
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
       
-      {/* PANEL DE DEBUG - Seulement en développement */}
       {process.env.NODE_ENV === 'development' && <DebugPanel />}
     </ErrorBoundary>
   )

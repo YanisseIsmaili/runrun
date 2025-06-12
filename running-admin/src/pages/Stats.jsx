@@ -1,6 +1,7 @@
 // running-admin/src/pages/Stats.jsx - Fixed version
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import api from '../services/api'
 import { 
   UsersIcon, 
   ClockIcon, 
@@ -38,69 +39,30 @@ const Stats = () => {
     setError(null)
     
     try {
-      // Try multiple token sources
-      const token = localStorage.getItem('auth_token') || 
-                   sessionStorage.getItem('auth_token') ||
-                   localStorage.getItem('token') ||
-                   sessionStorage.getItem('token')
+      const response = await api.admin.getStats()
       
-      if (!token) {
-        throw new Error('Token d\'authentification manquant')
-      }
-
-      // Use environment variable or fallback to localhost
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
-      
-      const response = await fetch(`${apiUrl}/api/admin/stats`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+      if (response.data.success) {
+        const statsData = response.data.data
+        const sanitizedStats = {
+          total_users: Number(statsData.total_users) || 0,
+          active_users: Number(statsData.active_users) || 0,
+          total_runs: Number(statsData.total_runs) || 0,
+          total_distance: Number(statsData.total_distance) || 0,
+          total_routes: Number(statsData.total_routes) || 0,
+          active_routes: Number(statsData.active_routes) || 0,
+          average_pace: Number(statsData.average_pace) || 0,
+          new_users_this_month: Number(statsData.new_users_this_month) || 0,
+          runs_this_month: Number(statsData.runs_this_month) || 0,
+          distance_this_month: Number(statsData.distance_this_month) || 0
         }
-      })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Non autorisé - Veuillez vous reconnecter')
-        } else if (response.status === 403) {
-          throw new Error('Accès refusé - Privilèges administrateur requis')
-        } else if (response.status === 404) {
-          throw new Error('Endpoint non trouvé')
-        } else {
-          throw new Error(`Erreur serveur (${response.status})`)
-        }
+        setStats(sanitizedStats)
+      } else {
+        throw new Error(response.data.message || 'Erreur API')
       }
-
-      const data = await response.json()
-      
-      // Validate response structure
-      if (!data || typeof data !== 'object') {
-        throw new Error('Réponse invalide du serveur')
-      }
-
-      // Handle different response formats from Flask
-      const statsData = data.data || data
-      
-      // Ensure all values are numbers and not null/undefined
-      const sanitizedStats = {
-        total_users: Number(statsData.total_users) || 0,
-        active_users: Number(statsData.active_users) || 0,
-        total_runs: Number(statsData.total_runs) || 0,
-        total_distance: Number(statsData.total_distance) || 0,
-        total_routes: Number(statsData.total_routes) || 0,
-        active_routes: Number(statsData.active_routes) || 0,
-        average_pace: Number(statsData.average_pace) || 0,
-        new_users_this_month: Number(statsData.new_users_this_month) || 0,
-        runs_this_month: Number(statsData.runs_this_month) || 0,
-        distance_this_month: Number(statsData.distance_this_month) || 0
-      }
-
-      setStats(sanitizedStats)
       
     } catch (err) {
       console.error('Erreur lors du chargement des statistiques:', err)
-      setError(err.message)
+      setError(err.response?.data?.message || err.message || 'Erreur de connexion')
     } finally {
       setLoading(false)
     }
