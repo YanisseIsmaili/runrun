@@ -3,6 +3,7 @@ from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from flask_cors import CORS
+from flask_migrate import Migrate
 from sqlalchemy import text
 from datetime import timedelta, datetime
 import os
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 db = SQLAlchemy()
+
 jwt = JWTManager()
 
 def create_app(config_name=None):
@@ -165,4 +167,7 @@ def create_app(config_name=None):
     print(f"🔗 Base de données: {DB_HOST}:{DB_PORT}/{DB_NAME}")
     print(f"🔐 JWT configuré avec expiration: 24h")
     
+
+
+    migrate = Migrate(app, db)
     return app

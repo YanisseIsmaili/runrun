@@ -1,4 +1,4 @@
-// running-admin/src/services/api.js - CORRIGÉ avec sessionStorage
+// running-admin/src/services/api.js - FICHIER ORIGINAL COMPLET
 import axios from 'axios'
 
 const emergencyService = {
@@ -17,7 +17,7 @@ const instance = axios.create({
   }
 })
 
-// Intercepteur pour ajouter le token d'authentification - CORRIGÉ
+// Intercepteur pour ajouter le token d'authentification
 instance.interceptors.request.use(
   (config) => {
     try {
@@ -187,54 +187,27 @@ const users = {
     if (params.sort_by) queryParams.append('sort_by', params.sort_by)
     if (params.sort_order) queryParams.append('sort_order', params.sort_order)
     
-    const url = `/api/users${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    const url = `/api/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
     return instance.get(url)
   },
   
   getById: (userId) => instance.get(`/api/users/${userId}`),
   
+  create: (userData) => instance.post('/api/users', userData),
+  
   update: (userId, userData) => instance.put(`/api/users/${userId}`, userData),
   
   delete: (userId) => instance.delete(`/api/users/${userId}`),
   
-  toggleStatus: (userId) => instance.patch(`/api/users/${userId}/toggle-status`)
+  exportUsers: (params = {}) => {
+    const queryParams = new URLSearchParams(params)
+    return instance.get(`/api/users/export?${queryParams}`, {
+      responseType: 'blob'
+    })
+  }
 }
 
-// Service des itinéraires
-const routes = {
-  getAll: (params = {}) => {
-    const queryParams = new URLSearchParams()
-    
-    if (params.page) queryParams.append('page', params.page)
-    if (params.limit) queryParams.append('limit', params.limit)
-    if (params.search) queryParams.append('search', params.search)
-    if (params.difficulty) queryParams.append('difficulty', params.difficulty)
-    if (params.status) queryParams.append('status', params.status)
-    if (params.sort_by) queryParams.append('sort_by', params.sort_by)
-    if (params.sort_order) queryParams.append('sort_order', params.sort_order)
-    
-    const url = `/api/routes${queryParams.toString() ? '?' + queryParams.toString() : ''}`
-    return instance.get(url)
-  },
-  
-  getById: (routeId) => instance.get(`/api/routes/${routeId}`),
-  
-  create: (routeData) => instance.post('/api/routes', routeData),
-  
-  update: (routeId, routeData) => instance.put(`/api/routes/${routeId}`, routeData),
-  
-  delete: (routeId) => instance.delete(`/api/routes/${routeId}`),
-  
-  toggleStatus: (routeId) => instance.patch(`/api/routes/${routeId}/toggle-status`),
-  
-  getRouteStats: (routeId) => instance.get(`/api/routes/${routeId}/stats`),
-  
-  getActiveRuns: () => instance.get('/api/routes/active-runs'),
-  
-  export: () => instance.get('/api/routes/export', { responseType: 'blob' })
-}
-
-// Service des courses
+// Service des courses (runs)
 const runs = {
   getAll: (params = {}) => {
     const queryParams = new URLSearchParams()
@@ -242,12 +215,14 @@ const runs = {
     if (params.page) queryParams.append('page', params.page)
     if (params.limit) queryParams.append('limit', params.limit)
     if (params.user_id) queryParams.append('user_id', params.user_id)
-    if (params.route_id) queryParams.append('route_id', params.route_id)
+    if (params.start_date) queryParams.append('start_date', params.start_date)
+    if (params.end_date) queryParams.append('end_date', params.end_date)
     if (params.status) queryParams.append('status', params.status)
-    if (params.date_from) queryParams.append('date_from', params.date_from)
-    if (params.date_to) queryParams.append('date_to', params.date_to)
+    if (params.search) queryParams.append('search', params.search)
+    if (params.sort_by) queryParams.append('sort_by', params.sort_by)
+    if (params.sort_order) queryParams.append('sort_order', params.sort_order)
     
-    const url = `/api/runs${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    const url = `/api/runs${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
     return instance.get(url)
   },
   
@@ -259,19 +234,113 @@ const runs = {
   
   delete: (runId) => instance.delete(`/api/runs/${runId}`),
   
-  start: (routeId) => instance.post('/api/runs/start', { route_id: routeId }),
+  getStats: (params = {}) => {
+    const queryParams = new URLSearchParams(params)
+    return instance.get(`/api/runs/stats?${queryParams}`)
+  },
   
-  finish: (runId, runData) => instance.post(`/api/runs/${runId}/finish`, runData),
-  
-  getStats: () => instance.get('/api/runs/stats')
+  exportRuns: (params = {}) => {
+    const queryParams = new URLSearchParams(params)
+    return instance.get(`/api/runs/export?${queryParams}`, {
+      responseType: 'blob'
+    })
+  }
 }
 
-// API principale
+// Service des routes/parcours
+const routes = {
+  getAll: (params = {}) => {
+    const queryParams = new URLSearchParams()
+    
+    if (params.page) queryParams.append('page', params.page)
+    if (params.limit) queryParams.append('limit', params.limit)
+    if (params.search) queryParams.append('search', params.search)
+    if (params.status) queryParams.append('status', params.status)
+    if (params.difficulty) queryParams.append('difficulty', params.difficulty)
+    if (params.sort_by) queryParams.append('sort_by', params.sort_by)
+    if (params.sort_order) queryParams.append('sort_order', params.sort_order)
+    
+    const url = `/api/routes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    return instance.get(url)
+  },
+  
+  getById: (routeId) => instance.get(`/api/routes/${routeId}`),
+  
+  create: (routeData) => instance.post('/api/routes', routeData),
+  
+  update: (routeId, routeData) => instance.put(`/api/routes/${routeId}`, routeData),
+  
+  delete: (routeId) => instance.delete(`/api/routes/${routeId}`),
+  
+  getActiveRuns: () => instance.get('/api/routes/active-runs'),
+  
+  getStats: () => instance.get('/api/routes/stats')
+}
+
+// Service administrateur
+const admin = {
+  getStats: () => instance.get('/api/admin/stats'),
+  
+  getActivity: (params = {}) => {
+    const queryParams = new URLSearchParams(params)
+    return instance.get(`/api/admin/activity?${queryParams}`)
+  },
+  
+  getUsers: (params = {}) => {
+    const queryParams = new URLSearchParams(params)
+    return instance.get(`/api/admin/users?${queryParams}`)
+  },
+  
+  exportData: (type, params = {}) => {
+    const queryParams = new URLSearchParams(params)
+    return instance.get(`/api/admin/export/${type}?${queryParams}`, {
+      responseType: 'blob'
+    })
+  }
+}
+
+// Fonctions utilitaires
+const utils = {
+  logError: (error, context = '') => {
+    emergencyService.logError(error, context)
+  },
+  
+  getErrorMessage: (error) => {
+    return error.userMessage || error.response?.data?.message || error.message || 'Une erreur est survenue'
+  },
+  
+  isNetworkError: (error) => {
+    return !error.response
+  },
+  
+  isAuthError: (error) => {
+    return error.response?.status === 401
+  },
+  
+  isPermissionError: (error) => {
+    return error.response?.status === 403
+  },
+  
+  isServerError: (error) => {
+    return error.response?.status >= 500
+  }
+}
+
+// Fonctions wrapper simplifiées pour compatibilité
+const getActiveRuns = () => routes.getActiveRuns()
+const getAll = (params = {}) => routes.getAll(params)
+
+// Export default avec toutes les fonctions
 const api = {
   auth,
   users,
+  runs,
   routes,
-  runs
+  admin,
+  utils,
+  // Fonctions de compatibilité
+  getActiveRuns,
+  getAll
 }
 
 export default api

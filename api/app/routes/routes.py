@@ -1,3 +1,5 @@
+# app/routes/routes.py - Fichier complet avec debug
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
@@ -8,6 +10,13 @@ from app.utils.decorators import admin_required
 from sqlalchemy import func, desc, and_
 from datetime import datetime, timedelta
 import json
+import traceback
+import logging
+
+
+# Configuration du logging pour voir les erreurs
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 routes_bp = Blueprint('routes', __name__)
 
@@ -49,27 +58,33 @@ def get_all_routes():
         # Enrichir avec les statistiques
         enriched_routes = []
         for route in routes.items:
-            route_dict = route.to_dict()
-            
-            # Ajouter les statistiques temps réel
-            active_runs = Run.query.filter_by(
-                route_id=route.id, 
-                status='in_progress'
-            ).count()
-            
-            runs_today = Run.query.filter(
-                and_(
-                    Route.id == route.id,
-                    func.date(Run.start_time) == datetime.now().date()
-                )
-            ).count()
-            
-            route_dict.update({
-                'active_runners': active_runs,
-                'total_runs_today': runs_today
-            })
-            
-            enriched_routes.append(route_dict)
+            try:
+                route_dict = route.to_dict()
+                
+                # Ajouter les statistiques temps réel
+                active_runs = Run.query.filter_by(
+                    route_id=route.id, 
+                    status='in_progress'
+                ).count()
+                
+                runs_today = Run.query.filter(
+                    and_(
+                        Run.route_id == route.id,
+                        func.date(Run.start_time) == datetime.now().date()
+                    )
+                ).count()
+                
+                route_dict.update({
+                    'active_runners': active_runs,
+                    'total_runs_today': runs_today
+                })
+                
+                enriched_routes.append(route_dict)
+                
+            except Exception as route_error:
+                logger.error(f"Erreur route {route.id}: {route_error}")
+                logger.error(f"Traceback route: {traceback.format_exc()}")
+                continue
         
         return jsonify({
             "status": "success",
@@ -85,10 +100,12 @@ def get_all_routes():
         }), 200
         
     except Exception as e:
+        logger.error(f"Erreur détaillée get_all_routes: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "status": "error",
-            "message": "Erreur lors de la récupération des itinéraires",
-            "error": str(e)
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }), 500
 
 @routes_bp.route('/<int:route_id>', methods=['GET'])
@@ -120,11 +137,13 @@ def get_route(route_id):
         }), 200
         
     except Exception as e:
+        logger.error(f"Erreur détaillée get_route: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "status": "error",
-            "message": "Itinéraire non trouvé",
-            "error": str(e)
-        }), 404
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 @routes_bp.route('', methods=['POST'])
 @jwt_required()
@@ -206,10 +225,12 @@ def create_route():
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Erreur détaillée create_route: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "status": "error",
-            "message": "Erreur lors de la création de l'itinéraire",
-            "error": str(e)
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }), 500
 
 @routes_bp.route('/<int:route_id>', methods=['PUT'])
@@ -228,45 +249,43 @@ def update_route(route_id):
             }), 400
         
         # Mise à jour des champs
-        updatable_fields = ['name', 'description', 'distance', 'estimated_duration', 
-                           'difficulty', 'elevation_gain', 'waypoints']
+        if 'name' in data:
+            route.name = data['name'].strip()
+        if 'description' in data:
+            route.description = data['description'].strip()
+        if 'distance' in data:
+            try:
+                distance = float(data['distance'])
+                if distance <= 0:
+                    raise ValueError()
+                route.distance = distance
+            except (ValueError, TypeError):
+                return jsonify({
+                    "status": "error",
+                    "message": "Distance invalide"
+                }), 400
         
-        for field in updatable_fields:
-            if field in data:
-                if field == 'distance':
-                    try:
-                        value = float(data[field])
-                        if value <= 0:
-                            raise ValueError()
-                        setattr(route, field, value)
-                    except (ValueError, TypeError):
-                        return jsonify({
-                            "status": "error",
-                            "message": "Distance invalide"
-                        }), 400
-                elif field == 'estimated_duration':
-                    if data[field]:
-                        try:
-                            value = int(data[field])
-                            if value <= 0:
-                                raise ValueError()
-                            setattr(route, field, value)
-                        except (ValueError, TypeError):
-                            return jsonify({
-                                "status": "error",
-                                "message": "Durée estimée invalide"
-                            }), 400
-                    else:
-                        setattr(route, field, None)
-                elif field == 'waypoints':
-                    if data[field]:
-                        setattr(route, field, json.dumps(data[field]))
-                    else:
-                        setattr(route, field, None)
-                else:
-                    setattr(route, field, data[field])
+        if 'estimated_duration' in data:
+            if data['estimated_duration']:
+                try:
+                    route.estimated_duration = int(data['estimated_duration'])
+                except (ValueError, TypeError):
+                    return jsonify({
+                        "status": "error",
+                        "message": "Durée estimée invalide"
+                    }), 400
+            else:
+                route.estimated_duration = None
         
-        route.updated_at = datetime.utcnow()
+        if 'difficulty' in data:
+            route.difficulty = data['difficulty']
+        if 'elevation_gain' in data:
+            route.elevation_gain = data['elevation_gain']
+        if 'status' in data:
+            route.status = data['status']
+        if 'waypoints' in data:
+            route.waypoints = json.dumps(data['waypoints']) if data['waypoints'] else None
+        
         db.session.commit()
         
         return jsonify({
@@ -277,54 +296,12 @@ def update_route(route_id):
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Erreur détaillée update_route: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "status": "error",
-            "message": "Erreur lors de la mise à jour",
-            "error": str(e)
-        }), 500
-
-@routes_bp.route('/<int:route_id>/toggle-status', methods=['PATCH'])
-@jwt_required()
-@admin_required
-def toggle_route_status(route_id):
-    """Change le statut d'un itinéraire (actif/inactif)"""
-    try:
-        route = Route.query.get_or_404(route_id)
-        
-        # Vérifier qu'il n'y a pas de courses en cours
-        if route.status == 'active':
-            active_runs = Run.query.filter_by(
-                route_id=route_id, 
-                status='in_progress'
-            ).count()
-            
-            if active_runs > 0:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Impossible de désactiver : {active_runs} course(s) en cours"
-                }), 400
-        
-        # Changer le statut
-        route.status = 'inactive' if route.status == 'active' else 'active'
-        route.updated_at = datetime.utcnow()
-        
-        db.session.commit()
-        
-        return jsonify({
-            "status": "success",
-            "message": f"Itinéraire {'activé' if route.status == 'active' else 'désactivé'} avec succès",
-            "data": {
-                "status": route.status,
-                "route_id": route_id
-            }
-        }), 200
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({
-            "status": "error",
-            "message": "Erreur lors du changement de statut",
-            "error": str(e)
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }), 500
 
 @routes_bp.route('/<int:route_id>', methods=['DELETE'])
@@ -335,33 +312,19 @@ def delete_route(route_id):
     try:
         route = Route.query.get_or_404(route_id)
         
-        # Vérifier qu'il n'y a pas de courses en cours
-        active_runs = Run.query.filter_by(
-            route_id=route_id, 
-            status='in_progress'
-        ).count()
-        
-        if active_runs > 0:
-            return jsonify({
-                "status": "error",
-                "message": f"Impossible de supprimer : {active_runs} course(s) en cours"
-            }), 400
-        
-        # Vérifier s'il y a des courses terminées
-        total_runs = Run.query.filter_by(route_id=route_id).count()
-        
-        if total_runs > 0:
-            # Option : marquer comme supprimé au lieu de supprimer
-            route.status = 'deleted'
-            route.updated_at = datetime.utcnow()
+        # Vérifier s'il y a des runs associés
+        runs_count = Run.query.filter_by(route_id=route_id).count()
+        if runs_count > 0:
+            # Marquer comme inactif au lieu de supprimer
+            route.status = 'inactive'
             db.session.commit()
             
             return jsonify({
                 "status": "success",
-                "message": f"Itinéraire archivé (avait {total_runs} courses)"
+                "message": f"Itinéraire désactivé (contient {runs_count} courses)"
             }), 200
         else:
-            # Suppression définitive si aucune course
+            # Suppression réelle
             db.session.delete(route)
             db.session.commit()
             
@@ -372,41 +335,57 @@ def delete_route(route_id):
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Erreur détaillée delete_route: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "status": "error",
-            "message": "Erreur lors de la suppression",
-            "error": str(e)
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }), 500
 
 @routes_bp.route('/active-runs', methods=['GET'])
 @jwt_required()
 def get_active_runs():
-    """Récupère les courses en cours sur tous les itinéraires"""
+    """Récupère les courses actives"""
     try:
-        active_runs = db.session.query(
-            Run, Route, User
-        ).join(
-            Route, Run.route_id == Route.id
-        ).join(
-            User, Run.user_id == User.id
-        ).filter(
-            Run.status == 'in_progress'
-        ).all()
+        # Récupérer les runs avec status 'active' ou 'in_progress'
+        active_runs = Run.query.filter(
+            Run.status.in_(['active', 'in_progress'])
+        ).order_by(desc(Run.start_time)).all()
         
         runs_data = []
-        for run, route, user in active_runs:
-            run_dict = run.to_dict()
-            run_dict['route'] = {
-                'id': route.id,
-                'name': route.name,
-                'distance': route.distance
-            }
-            run_dict['user'] = {
-                'id': user.id,
-                'username': user.username,
-                'full_name': f"{user.first_name} {user.last_name}".strip()
-            }
-            runs_data.append(run_dict)
+        for run in active_runs:
+            try:
+                run_dict = run.to_dict()
+                
+                # Ajouter infos utilisateur de façon sécurisée
+                if run.user_id:
+                    user = User.query.get(run.user_id)
+                    if user:
+                        run_dict['user'] = {
+                            'id': user.id,
+                            'username': user.username,
+                            'first_name': user.first_name or '',
+                            'last_name': user.last_name or ''
+                        }
+                
+                # Ajouter infos route de façon sécurisée
+                if run.route_id:
+                    route = Route.query.get(run.route_id)
+                    if route:
+                        run_dict['route'] = {
+                            'id': route.id,
+                            'name': route.name or 'Route sans nom',
+                            'distance': route.distance or 0,
+                            'difficulty': route.difficulty or 'Facile'
+                        }
+                
+                runs_data.append(run_dict)
+                
+            except Exception as run_error:
+                logger.error(f"Erreur traitement run {run.id}: {run_error}")
+                logger.error(f"Traceback run: {traceback.format_exc()}")
+                continue
         
         return jsonify({
             "status": "success",
@@ -414,145 +393,64 @@ def get_active_runs():
         }), 200
         
     except Exception as e:
+        logger.error(f"Erreur détaillée get_active_runs: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "status": "error",
-            "message": "Erreur lors de la récupération des courses actives",
-            "error": str(e)
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }), 500
 
-@routes_bp.route('/<int:route_id>/stats', methods=['GET'])
+@routes_bp.route('/stats', methods=['GET'])
 @jwt_required()
-def get_route_stats(route_id):
-    """Récupère les statistiques détaillées d'un itinéraire"""
+def get_routes_stats():
+    """Récupère les statistiques des itinéraires"""
     try:
-        route = Route.query.get_or_404(route_id)
-        
         # Statistiques générales
-        general_stats = db.session.query(
-            func.count(Run.id).label('total_runs'),
-            func.avg(Run.duration).label('avg_duration'),
-            func.min(Run.duration).label('best_time'),
-            func.max(Run.duration).label('worst_time'),
-            func.avg(Run.avg_speed).label('avg_speed')
-        ).filter(Run.route_id == route_id).first()
+        total_routes = Route.query.count()
+        active_routes = Route.query.filter_by(status='active').count()
         
-        # Statistiques par mois (derniers 6 mois)
-        six_months_ago = datetime.now() - timedelta(days=180)
-        monthly_stats = db.session.query(
-            func.year(Run.start_time).label('year'),
-            func.month(Run.start_time).label('month'),
-            func.count(Run.id).label('runs_count'),
-            func.avg(Run.duration).label('avg_duration')
-        ).filter(
-            and_(
-                Run.route_id == route_id,
-                Run.start_time >= six_months_ago
-            )
-        ).group_by(
-            func.year(Run.start_time),
-            func.month(Run.start_time)
-        ).all()
-        
-        # Top 5 des coureurs
-        top_runners = db.session.query(
-            User.username,
-            User.first_name,
-            User.last_name,
-            func.count(Run.id).label('runs_count'),
-            func.min(Run.duration).label('best_time')
-        ).join(Run, User.id == Run.user_id).filter(
-            Run.route_id == route_id
-        ).group_by(User.id).order_by(
-            desc(func.count(Run.id))
+        # Routes les plus populaires
+        popular_routes = db.session.query(
+            Route,
+            func.count(Run.id).label('run_count')
+        ).outerjoin(Run).group_by(Route.id).order_by(
+            desc('run_count')
         ).limit(5).all()
+        
+        popular_data = []
+        for route, run_count in popular_routes:
+            try:
+                route_dict = route.to_dict()
+                route_dict['run_count'] = run_count
+                popular_data.append(route_dict)
+            except Exception as route_error:
+                logger.error(f"Erreur route populaire {route.id}: {route_error}")
+                continue
+        
+        # Statistiques par difficulté
+        difficulty_stats = db.session.query(
+            Route.difficulty,
+            func.count(Route.id).label('count')
+        ).group_by(Route.difficulty).all()
+        
+        difficulty_data = {diff: count for diff, count in difficulty_stats}
         
         return jsonify({
             "status": "success",
             "data": {
-                "route": route.to_dict(),
-                "general": {
-                    "total_runs": general_stats.total_runs or 0,
-                    "avg_duration": float(general_stats.avg_duration or 0),
-                    "best_time": float(general_stats.best_time or 0),
-                    "worst_time": float(general_stats.worst_time or 0),
-                    "avg_speed": float(general_stats.avg_speed or 0)
-                },
-                "monthly": [
-                    {
-                        "year": stat.year,
-                        "month": stat.month,
-                        "runs_count": stat.runs_count,
-                        "avg_duration": float(stat.avg_duration or 0)
-                    } for stat in monthly_stats
-                ],
-                "top_runners": [
-                    {
-                        "username": runner.username,
-                        "full_name": f"{runner.first_name} {runner.last_name}".strip(),
-                        "runs_count": runner.runs_count,
-                        "best_time": float(runner.best_time or 0)
-                    } for runner in top_runners
-                ]
+                "total_routes": total_routes,
+                "active_routes": active_routes,
+                "popular_routes": popular_data,
+                "difficulty_distribution": difficulty_data
             }
         }), 200
         
     except Exception as e:
+        logger.error(f"Erreur détaillée get_routes_stats: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "status": "error",
-            "message": "Erreur lors de la récupération des statistiques",
-            "error": str(e)
-        }), 500
-
-@routes_bp.route('/export', methods=['GET'])
-@jwt_required()
-@admin_required
-def export_routes():
-    """Exporte la liste des itinéraires en CSV"""
-    try:
-        routes = Route.query.all()
-        
-        # Générer le CSV
-        import csv
-        import io
-        
-        output = io.StringIO()
-        writer = csv.writer(output)
-        
-        # En-têtes
-        writer.writerow([
-            'ID', 'Nom', 'Description', 'Distance (km)', 
-            'Durée estimée (min)', 'Difficulté', 'Statut',
-            'Dénivelé (m)', 'Créé le', 'Créé par'
-        ])
-        
-        # Données
-        for route in routes:
-            creator = User.query.get(route.created_by)
-            writer.writerow([
-                route.id,
-                route.name,
-                route.description or '',
-                route.distance,
-                route.estimated_duration // 60 if route.estimated_duration else '',
-                route.difficulty,
-                route.status,
-                route.elevation_gain or '',
-                route.created_at.strftime('%Y-%m-%d %H:%M'),
-                creator.username if creator else 'Inconnu'
-            ])
-        
-        output.seek(0)
-        
-        from flask import make_response
-        response = make_response(output.getvalue())
-        response.headers['Content-Type'] = 'text/csv'
-        response.headers['Content-Disposition'] = f'attachment; filename=routes_{datetime.now().strftime("%Y%m%d")}.csv'
-        
-        return response
-        
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": "Erreur lors de l'export",
-            "error": str(e)
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }), 500
