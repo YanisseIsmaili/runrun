@@ -1,4 +1,5 @@
-# app/models/stats.py
+# Ce fichier pourrait contenir des modèles supplémentaires pour les statistiques
+# ou simplement des fonctions d'agrégation qui interrogent les modèles existants
 
 from app import db
 from app.models.run import Run

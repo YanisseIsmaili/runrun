@@ -1,4 +1,4 @@
-// running-admin/src/services/api.js - Version corrigée avec .env
+// running-admin/src/services/api.js - FICHIER ORIGINAL COMPLET
 import axios from 'axios'
 
 const emergencyService = {
@@ -7,10 +7,7 @@ const emergencyService = {
   }
 }
 
-// Récupération de l'URL API depuis .env
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
-
-console.log('🔧 [API] URL configurée:', API_BASE_URL)
+const API_BASE_URL = 'http://localhost:5000'
 
 const instance = axios.create({
   baseURL: API_BASE_URL,
@@ -27,7 +24,7 @@ instance.interceptors.request.use(
       // Priorité à sessionStorage (session courante) puis localStorage (persistant)
       const token = sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token')
       console.log('Interceptor - Token trouvé:', token ? 'Oui' : 'Non')
-      console.log('Interceptor - Source:', sessionStorage.getItem('auth_token') ? 'sessionStorage' : 'localStorage')
+      console.log('Interceptor - Source:', sessionStorage.getItem('auth_token') ? 'session' : 'localStorage')
       console.log('Interceptor - URL:', config.url)
       
       if (token) {
@@ -283,8 +280,6 @@ const routes = {
 // Service administrateur
 const admin = {
   getStats: () => instance.get('/api/admin/stats'),
-  
-  refreshStats: () => instance.post('/api/admin/stats/refresh'),
   
   getActivity: (params = {}) => {
     const queryParams = new URLSearchParams(params)

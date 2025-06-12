@@ -83,9 +83,6 @@ def create_app(config_name=None):
         from app.routes.routes import routes_bp
         from app.routes.admin import admin_bp
         
-        # Import du modèle stats_cache
-        from app.models.stats_cache import StatsCache
-        
         app.register_blueprint(auth_bp, url_prefix='/api/auth')
         app.register_blueprint(users_bp, url_prefix='/api/users')
         app.register_blueprint(runs_bp, url_prefix='/api/runs')

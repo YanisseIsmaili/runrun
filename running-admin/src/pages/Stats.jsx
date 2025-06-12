@@ -1,195 +1,169 @@
+// running-admin/src/pages/Stats.jsx - Fixed version
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  Legend
-} from 'recharts'
-import StatCard from '../components/StatCard'
-import ErrorMessage from '../components/ErrorMessage'
-import { useApiCall } from '../hooks/useErrorHandler'
-import api from '../services/api'
-
-// Icônes SVG
-const UsersIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-  </svg>
-)
-
-const ClockIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-)
-
-const ArrowTrendingUpIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-  </svg>
-)
-
-const MapPinIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-  </svg>
-)
-
-const CalendarIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-  </svg>
-)
-
-const ChartBarIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-  </svg>
-)
-
-const FireIcon = ({ className }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14l4 4-6.121-1.879z" />
-  </svg>
-)
+  UsersIcon, 
+  ClockIcon, 
+  MapPinIcon,
+  ArrowTrendingUpIcon,
+  BuildingOfficeIcon,
+  ChartBarIcon,
+  ArrowPathIcon,
+  ExclamationTriangleIcon
+} from '@heroicons/react/24/outline'
 
 const Stats = () => {
-  const [globalStats, setGlobalStats] = useState({
+  const [stats, setStats] = useState({
     total_users: 0,
     active_users: 0,
     total_runs: 0,
     total_distance: 0,
+    total_routes: 0,
+    active_routes: 0,
     average_pace: 0,
     new_users_this_month: 0,
     runs_this_month: 0,
     distance_this_month: 0
   })
   
-  const [weeklyStats, setWeeklyStats] = useState([])
-  const [monthlyStats, setMonthlyStats] = useState([])
-  const [userActivity, setUserActivity] = useState([])
-  const [selectedPeriod, setSelectedPeriod] = useState('week')
-  
-  const { callApi, loading, error, retry, clearError } = useApiCall()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    fetchAllStats()
+    fetchStats()
   }, [])
 
-  const fetchAllStats = async () => {
-    await callApi(
-      async () => {
-        // Récupération des statistiques globales
-        const globalResponse = await api.stats.getGlobal()
-        console.log('Global stats response:', globalResponse)
-        
-        // Récupération de l'activité utilisateur récente
-        const activityResponse = await api.admin.getUserActivity()
-        console.log('Activity response:', activityResponse)
-        
-        // Récupération des stats hebdomadaires
-        const weeklyResponse = await api.stats.getWeeklyStats()
-        console.log('Weekly response:', weeklyResponse)
-        
-        return {
-          global: globalResponse,
-          activity: activityResponse,
-          weekly: weeklyResponse
-        }
-      },
-      {
-        onSuccess: (data) => {
-          // Traitement des stats globales avec valeurs par défaut
-          const globalData = data.global?.data || {}
-          setGlobalStats({
-            total_users: globalData.total_users || 0,
-            active_users: globalData.active_users || 0,
-            total_runs: globalData.total_runs || 0,
-            total_distance: globalData.total_distance || 0,
-            average_pace: globalData.average_pace || "0:00",
-            new_users_this_month: globalData.new_users_this_month || 0,
-            runs_this_month: globalData.runs_this_month || 0,
-            distance_this_month: globalData.distance_this_month || 0
-          })
-          
-          // Traitement de l'activité utilisateur
-          const activityData = data.activity?.data || []
-          setUserActivity(activityData)
-          
-          // Traitement des stats hebdomadaires
-          const weeklyData = data.weekly?.weekly_stats || []
-          setWeeklyStats(weeklyData.map(day => ({
-            date: new Date(day.date).toLocaleDateString('fr-FR', { weekday: 'short' }),
-            runs: day.runs_count || 0,
-            distance: (day.distance / 1000) || 0, // Convertir en km
-            duration: Math.round((day.duration / 60)) || 0 // Convertir en minutes
-          })))
-          
-          // Générer des données mensuelles simulées pour l'exemple
-          generateMonthlyStats()
-        },
-        errorMessage: 'Impossible de charger les statistiques'
+  const fetchStats = async () => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // Try multiple token sources
+      const token = localStorage.getItem('auth_token') || 
+                   sessionStorage.getItem('auth_token') ||
+                   localStorage.getItem('token') ||
+                   sessionStorage.getItem('token')
+      
+      if (!token) {
+        throw new Error('Token d\'authentification manquant')
       }
-    )
-  }
 
-  const generateMonthlyStats = () => {
-    // Générer des données pour les 12 derniers mois
-    const months = []
-    const now = new Date()
-    
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      months.push({
-        month: date.toLocaleDateString('fr-FR', { month: 'short' }),
-        runs: Math.floor(Math.random() * 100) + 50,
-        users: Math.floor(Math.random() * 50) + 30,
-        distance: Math.floor(Math.random() * 1000) + 500
+      // Use environment variable or fallback to localhost
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+      
+      const response = await fetch(`${apiUrl}/api/admin/stats`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Non autorisé - Veuillez vous reconnecter')
+        } else if (response.status === 403) {
+          throw new Error('Accès refusé - Privilèges administrateur requis')
+        } else if (response.status === 404) {
+          throw new Error('Endpoint non trouvé')
+        } else {
+          throw new Error(`Erreur serveur (${response.status})`)
+        }
+      }
+
+      const data = await response.json()
+      
+      // Validate response structure
+      if (!data || typeof data !== 'object') {
+        throw new Error('Réponse invalide du serveur')
+      }
+
+      // Handle different response formats from Flask
+      const statsData = data.data || data
+      
+      // Ensure all values are numbers and not null/undefined
+      const sanitizedStats = {
+        total_users: Number(statsData.total_users) || 0,
+        active_users: Number(statsData.active_users) || 0,
+        total_runs: Number(statsData.total_runs) || 0,
+        total_distance: Number(statsData.total_distance) || 0,
+        total_routes: Number(statsData.total_routes) || 0,
+        active_routes: Number(statsData.active_routes) || 0,
+        average_pace: Number(statsData.average_pace) || 0,
+        new_users_this_month: Number(statsData.new_users_this_month) || 0,
+        runs_this_month: Number(statsData.runs_this_month) || 0,
+        distance_this_month: Number(statsData.distance_this_month) || 0
+      }
+
+      setStats(sanitizedStats)
+      
+    } catch (err) {
+      console.error('Erreur lors du chargement des statistiques:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-    
-    setMonthlyStats(months)
   }
 
   const formatDistance = (distance) => {
-    if (distance >= 1000) {
-      return `${(distance / 1000).toFixed(1)} km`
+    const numDistance = Number(distance) || 0
+    if (numDistance >= 1000) {
+      return `${(numDistance / 1000).toFixed(1)}k km`
     }
-    return `${Math.round(distance)} m`
+    return `${Math.round(numDistance)} km`
   }
 
   const formatPace = (pace) => {
-    if (typeof pace === 'string') return pace
-    if (!pace || pace === 0) return "0:00"
+    const numPace = Number(pace) || 0
+    if (numPace === 0) return "0:00"
     
-    const minutes = Math.floor(pace)
-    const seconds = Math.round((pace - minutes) * 60)
+    const minutes = Math.floor(numPace)
+    const seconds = Math.round((numPace - minutes) * 60)
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
-  // Données pour le graphique en secteurs de répartition des utilisateurs
-  const userDistributionData = [
-    { name: 'Actifs', value: globalStats.active_users, color: '#10b981' },
-    { name: 'Inactifs', value: Math.max(0, globalStats.total_users - globalStats.active_users), color: '#6b7280' }
-  ]
+  const calculatePercentage = (value, total) => {
+    const numValue = Number(value) || 0
+    const numTotal = Number(total) || 0
+    if (numTotal === 0) return 0
+    return Math.min(100, Math.max(0, (numValue / numTotal) * 100))
+  }
+
+  const StatCard = ({ title, value, subValue, icon: Icon, iconColor, trend }) => (
+    <div className="bg-white rounded-lg shadow border border-gray-200">
+      <div className="p-6">
+        <div className="flex items-center">
+          <div className={`flex-shrink-0 p-3 rounded-lg ${iconColor}`}>
+            <Icon className="h-6 w-6" />
+          </div>
+          <div className="ml-4 flex-1 min-w-0">
+            <h3 className="text-sm font-medium text-gray-500 truncate">{title}</h3>
+            <div className="flex items-baseline">
+              <p className="text-2xl font-semibold text-gray-900">{value}</p>
+              {trend && (
+                <span className="ml-2 text-sm font-medium text-green-600 flex-shrink-0">
+                  {trend}
+                </span>
+              )}
+            </div>
+            {subValue && (
+              <p className="text-sm text-gray-600 truncate">{subValue}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement des statistiques...</p>
+      <div className="p-6">
+        <div className="flex justify-center items-center h-96">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Chargement des statistiques...</p>
+          </div>
         </div>
       </div>
     )
@@ -197,256 +171,218 @@ const Stats = () => {
 
   if (error) {
     return (
-      <ErrorMessage 
-        error={error}
-        onRetry={() => retry(fetchAllStats)}
-        onDismiss={clearError}
-      />
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <ExclamationTriangleIcon className="h-5 w-5 text-red-400 mt-0.5 mr-3 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-red-800 mb-2">
+                Erreur de chargement des statistiques
+              </h3>
+              <p className="text-sm text-red-700 mb-3">{error}</p>
+              <button 
+                onClick={fetchStats}
+                disabled={loading}
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+              >
+                <ArrowPathIcon className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                Réessayer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-8">
+    <div className="p-6 space-y-8">
       {/* En-tête */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Statistiques</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Analyse détaillée des performances de l'application
-        </p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Statistiques</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Données en temps réel de l'application
+          </p>
+        </div>
+        <button 
+          onClick={fetchStats}
+          disabled={loading}
+          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          <ArrowPathIcon className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Actualiser
+        </button>
       </div>
 
-      {/* Statistiques clés */}
+      {/* Statistiques principales */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard 
           title="Utilisateurs totaux" 
-          value={globalStats.total_users} 
-          subValue={`${globalStats.new_users_this_month} nouveaux ce mois`}
+          value={stats.total_users.toLocaleString()} 
+          subValue={`${stats.active_users} actifs`}
           icon={UsersIcon} 
-          iconColor="bg-blue-50 text-blue-600" 
-        />
-        <StatCard 
-          title="Utilisateurs actifs" 
-          value={globalStats.active_users} 
-          subValue={`${Math.round((globalStats.active_users / Math.max(globalStats.total_users, 1)) * 100)}% du total`}
-          icon={ChartBarIcon} 
-          iconColor="bg-green-50 text-green-600" 
+          iconColor="bg-blue-50 text-blue-600"
+          trend={stats.new_users_this_month > 0 ? `+${stats.new_users_this_month}` : null}
         />
         <StatCard 
           title="Courses totales" 
-          value={globalStats.total_runs} 
-          subValue={`${globalStats.runs_this_month} ce mois-ci`}
+          value={stats.total_runs.toLocaleString()} 
+          subValue={`${stats.runs_this_month} ce mois-ci`}
           icon={ClockIcon} 
-          iconColor="bg-purple-50 text-purple-600" 
+          iconColor="bg-green-50 text-green-600"
         />
         <StatCard 
           title="Distance totale" 
-          value={formatDistance(globalStats.total_distance)} 
-          subValue={`${formatDistance(globalStats.distance_this_month)} ce mois`}
+          value={formatDistance(stats.total_distance)} 
+          subValue={`${formatDistance(stats.distance_this_month)} ce mois-ci`}
           icon={MapPinIcon} 
-          iconColor="bg-yellow-50 text-yellow-600" 
+          iconColor="bg-purple-50 text-purple-600"
+        />
+        <StatCard 
+          title="Routes actives" 
+          value={stats.active_routes.toLocaleString()} 
+          subValue={`${stats.total_routes} au total`}
+          icon={BuildingOfficeIcon} 
+          iconColor="bg-orange-50 text-orange-600"
         />
       </div>
 
-      {/* Métriques secondaires */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="bg-red-50 p-3 rounded-lg">
-              <ArrowTrendingUpIcon className="h-6 w-6 text-red-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Allure moyenne</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {formatPace(globalStats.average_pace)} min/km
-              </p>
+      {/* Métriques calculées */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-lg shadow border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900">Performance</h3>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Allure moyenne</span>
+                <span className="font-semibold">{formatPace(stats.average_pace)} min/km</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Distance par course</span>
+                <span className="font-semibold">
+                  {stats.total_runs > 0 ? (stats.total_distance / stats.total_runs).toFixed(1) : '0.0'} km
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Courses par utilisateur</span>
+                <span className="font-semibold">
+                  {stats.total_users > 0 ? (stats.total_runs / stats.total_users).toFixed(1) : '0.0'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="bg-orange-50 p-3 rounded-lg">
-              <FireIcon className="h-6 w-6 text-orange-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Calories brûlées</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {Math.round(globalStats.total_distance * 0.06) || 0} kcal
-              </p>
+        <div className="bg-white rounded-lg shadow border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900">Activité mensuelle</h3>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Nouvelles courses</span>
+                <span className="font-semibold text-green-600">+{stats.runs_this_month}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Distance parcourue</span>
+                <span className="font-semibold text-green-600">+{formatDistance(stats.distance_this_month)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Nouveaux utilisateurs</span>
+                <span className="font-semibold text-green-600">+{stats.new_users_this_month}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="bg-indigo-50 p-3 rounded-lg">
-              <CalendarIcon className="h-6 w-6 text-indigo-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Moyenne / utilisateur</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {Math.round(globalStats.total_runs / Math.max(globalStats.total_users, 1)) || 0} courses
-              </p>
+        <div className="bg-white rounded-lg shadow border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900">Taux d'activité</h3>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span className="text-sm text-gray-600">Utilisateurs actifs</span>
+                  <span className="text-sm font-medium">
+                    {calculatePercentage(stats.active_users, stats.total_users).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                    style={{ 
+                      width: `${calculatePercentage(stats.active_users, stats.total_users)}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+              
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span className="text-sm text-gray-600">Routes utilisées</span>
+                  <span className="text-sm font-medium">
+                    {calculatePercentage(stats.active_routes, stats.total_routes).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                    style={{ 
+                      width: `${calculatePercentage(stats.active_routes, stats.total_routes)}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Graphiques */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Évolution dans le temps */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Évolution des activités</h2>
-              <p className="text-sm text-gray-500">Données sur la période sélectionnée</p>
-            </div>
-            <select 
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
+      {/* Actions rapides */}
+      <div className="bg-white rounded-lg shadow border border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Actions rapides</h3>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link 
+              to="/users" 
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              <option value="week">7 derniers jours</option>
-              <option value="month">12 derniers mois</option>
-            </select>
-          </div>
-          
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={selectedPeriod === 'week' ? weeklyStats : monthlyStats}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey={selectedPeriod === 'week' ? 'date' : 'month'}
-                  tick={{ fill: '#6b7280', fontSize: 12 }}
-                  axisLine={{ stroke: '#d1d5db' }}
-                />
-                <YAxis 
-                  tick={{ fill: '#6b7280', fontSize: 12 }}
-                  axisLine={{ stroke: '#d1d5db' }}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
-                    borderColor: '#e5e7eb',
-                    borderRadius: '0.375rem'
-                  }}
-                />
-                <Legend />
-                <Area 
-                  type="monotone" 
-                  dataKey="runs" 
-                  name="Courses" 
-                  stroke="#3b82f6" 
-                  fill="#93c5fd" 
-                  fillOpacity={0.6}
-                />
-                {selectedPeriod === 'month' && (
-                  <Area 
-                    type="monotone" 
-                    dataKey="users" 
-                    name="Utilisateurs actifs" 
-                    stroke="#10b981" 
-                    fill="#6ee7b7" 
-                    fillOpacity={0.6}
-                  />
-                )}
-              </AreaChart>
-            </ResponsiveContainer>
+              <UsersIcon className="h-8 w-8 text-blue-600 mr-3 flex-shrink-0" />
+              <div className="min-w-0">
+                <h4 className="font-medium text-gray-900">Gérer les utilisateurs</h4>
+                <p className="text-sm text-gray-500 truncate">{stats.total_users} utilisateurs</p>
+              </div>
+            </Link>
+            
+            <Link 
+              to="/routes" 
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <MapPinIcon className="h-8 w-8 text-purple-600 mr-3 flex-shrink-0" />
+              <div className="min-w-0">
+                <h4 className="font-medium text-gray-900">Gérer les parcours</h4>
+                <p className="text-sm text-gray-500 truncate">{stats.total_routes} parcours</p>
+              </div>
+            </Link>
+            
+            <Link 
+              to="/history" 
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <ChartBarIcon className="h-8 w-8 text-green-600 mr-3 flex-shrink-0" />
+              <div className="min-w-0">
+                <h4 className="font-medium text-gray-900">Historique des courses</h4>
+                <p className="text-sm text-gray-500 truncate">{stats.total_runs} courses</p>
+              </div>
+            </Link>
           </div>
         </div>
-
-        {/* Répartition des utilisateurs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Répartition des utilisateurs</h2>
-            <p className="text-sm text-gray-500">Utilisateurs actifs vs inactifs</p>
-          </div>
-          
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={userDistributionData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {userDistributionData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Activité récente */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Activité récente</h2>
-          <p className="text-sm text-gray-500">Dernières courses enregistrées</p>
-        </div>
-        
-        {userActivity.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Utilisateur
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Distance
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Durée
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {userActivity.slice(0, 5).map((activity, index) => (
-                  <tr key={activity.id || index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-semibold">
-                          {activity.user?.name?.charAt(0) || 'U'}
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {activity.user?.name || 'Utilisateur inconnu'}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {activity.date ? new Date(activity.date).toLocaleDateString('fr-FR') : 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDistance(activity.distance || 0)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {Math.round((activity.duration || 0) / 60)} min
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="px-6 py-12 text-center">
-            <p className="text-gray-500">Aucune activité récente à afficher</p>
-          </div>
-        )}
       </div>
     </div>
   )
