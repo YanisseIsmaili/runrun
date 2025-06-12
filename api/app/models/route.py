@@ -28,7 +28,6 @@ class Route(db.Model):
     creator = db.relationship('User', backref='created_routes', lazy=True)
     
     def to_dict(self):
-        """Méthode to_dict() sécurisée"""
         try:
             waypoints_data = []
             if self.waypoints:
@@ -46,13 +45,13 @@ class Route(db.Model):
             
             return {
                 'id': self.id,
-                'name': self.name or '',
-                'description': self.description or '',
-                'distance': float(self.distance) if self.distance is not None else 0.0,
+                'name': self.name,
+                'description': self.description,
+                'distance': self.distance,
                 'estimated_duration': self.estimated_duration,
-                'difficulty': self.difficulty or 'Facile',
-                'status': self.status or 'active',
-                'elevation_gain': float(self.elevation_gain) if self.elevation_gain is not None else None,
+                'difficulty': self.difficulty,
+                'status': self.status,
+                'elevation_gain': self.elevation_gain,
                 'waypoints': waypoints_data,
                 'surface_type': self.surface_type,
                 'tags': tags_data,
@@ -62,10 +61,9 @@ class Route(db.Model):
             }
         except Exception as e:
             print(f"Erreur to_dict() route {self.id}: {e}")
-            # Retourner un dict minimal en cas d'erreur
             return {
-                'id': getattr(self, 'id', None),
-                'name': getattr(self, 'name', 'Route inconnue') or 'Route inconnue',
+                'id': self.id,
+                'name': self.name or 'Route inconnue',
                 'description': '',
                 'distance': 0.0,
                 'estimated_duration': None,
@@ -75,10 +73,12 @@ class Route(db.Model):
                 'waypoints': [],
                 'surface_type': None,
                 'tags': [],
-                'created_by': getattr(self, 'created_by', None),
+                'created_by': self.created_by,
                 'created_at': None,
                 'updated_at': None
             }
+        
+        
     
     def set_waypoints(self, waypoints_list):
         """Définit les waypoints avec validation"""
