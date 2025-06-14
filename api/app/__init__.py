@@ -1,4 +1,4 @@
-# api/app/__init__.py
+# api/app/__init__.py - SOLUTION CORS DÉFINITIVE (REMPLACEMENT COMPLET)
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
@@ -39,8 +39,8 @@ def create_app(config_name=None):
     jwt.init_app(app)
     migrate = Migrate(app, db)
     
-    # CORS
-    CORS(app, origins=["*"], supports_credentials=True)
+    # 🔧 CORS SIMPLE ET FONCTIONNEL - SANS CONFLIT
+    CORS(app)  # Configuration par défaut accepte tout
     
     # Gestionnaires d'erreurs JWT
     @jwt.expired_token_loader
@@ -97,6 +97,105 @@ def create_app(config_name=None):
         print("✅ Blueprints enregistrés avec succès")
     except ImportError as e:
         print(f"⚠️ Erreur import blueprints: {e}")
+    
+    # 🔧 Routes manquantes pour l'ApiScanner
+    @app.route('/api/stats/global', methods=['GET'])
+    @jwt_required(optional=True)
+    def get_global_stats():
+        try:
+            from app.models.user import User
+            from app.models.run import Run
+            from sqlalchemy import func
+            
+            # Calculer les statistiques de base
+            total_users = db.session.query(func.count(User.id)).scalar() or 0
+            active_users = db.session.query(func.count(User.id)).filter(User.is_active == True).scalar() or 0
+            total_runs = db.session.query(func.count(Run.id)).scalar() or 0
+            
+            # Statistiques de distance
+            total_distance = db.session.query(func.sum(Run.distance)).scalar() or 0
+            
+            # Statistiques temporelles
+            this_month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            runs_this_month = db.session.query(func.count(Run.id)).filter(Run.created_at >= this_month_start).scalar() or 0
+            distance_this_month = db.session.query(func.sum(Run.distance)).filter(Run.created_at >= this_month_start).scalar() or 0
+            new_users_this_month = db.session.query(func.count(User.id)).filter(User.created_at >= this_month_start).scalar() or 0
+            
+            return jsonify({
+                'status': 'success',
+                'stats': {
+                    'total_users': total_users,
+                    'active_users': active_users,
+                    'total_runs': total_runs,
+                    'total_routes': 0,
+                    'total_distance': float(total_distance),
+                    'average_pace': 0.0,
+                    'runs_this_month': runs_this_month,
+                    'distance_this_month': float(distance_this_month or 0),
+                    'new_users_this_month': new_users_this_month,
+                    'active_routes': 0
+                }
+            }), 200
+            
+        except Exception as e:
+            print(f"❌ Erreur stats globales: {e}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Erreur lors du calcul des statistiques',
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/stats/users', methods=['GET'])
+    @jwt_required(optional=True)
+    def get_users_stats():
+        try:
+            from app.models.user import User
+            from sqlalchemy import func
+            
+            total_users = db.session.query(func.count(User.id)).scalar() or 0
+            active_users = db.session.query(func.count(User.id)).filter(User.is_active == True).scalar() or 0
+            
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'total': total_users,
+                    'active': active_users,
+                    'inactive': total_users - active_users
+                }
+            }), 200
+            
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': 'Erreur lors du calcul des statistiques utilisateurs',
+                'error': str(e)
+            }), 500
+
+    @app.route('/api/runs/stats', methods=['GET'])
+    @jwt_required(optional=True)
+    def get_runs_stats():
+        try:
+            from app.models.run import Run
+            from sqlalchemy import func
+            
+            total_runs = db.session.query(func.count(Run.id)).scalar() or 0
+            total_distance = db.session.query(func.sum(Run.distance)).scalar() or 0
+            
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'total_runs': total_runs,
+                    'total_distance': float(total_distance or 0),
+                    'average_distance': float((total_distance or 0) / max(total_runs, 1))
+                }
+            }), 200
+            
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': 'Erreur lors du calcul des statistiques de courses',
+                'error': str(e)
+            }), 500
     
     # Routes de santé
     @app.route('/api/health', methods=['GET'])
@@ -171,5 +270,7 @@ def create_app(config_name=None):
     print(f"✅ Application Flask créée avec succès")
     print(f"🔗 Base de données: {DB_HOST}:{DB_PORT}/{DB_NAME}")
     print(f"🔐 JWT configuré avec expiration: 24h")
+    print(f"🌐 CORS configuré par défaut (accepte tout)")
+    print(f"📊 Routes stats ajoutées")
     
     return app

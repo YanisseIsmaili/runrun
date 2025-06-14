@@ -23,9 +23,9 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
 
   // APIs par défaut à scanner (toutes sur port 5000)
   const defaultApis = [
-    { ip: 'localhost', name: 'Local Dev' },
+    { ip: '192.168.0.47', name: 'Dev' },
     { ip: '127.0.0.1', name: 'Loopback' },
-    { ip: '192.168.0.47', name: 'Serveur Principal' },
+    { ip: 'localhost', name: 'Serveur Principal' },
     { ip: '192.168.1.47', name: 'Serveur Alt' },
     { ip: '192.168.0.1', name: 'Gateway' },
     { ip: '10.0.0.1', name: 'VPN Gateway' }
@@ -40,6 +40,40 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
       return []
     }
   })
+
+  // Charger l'API sélectionnée depuis la config globale
+  useEffect(() => {
+    const loadSelectedApi = () => {
+      if (window.GLOBAL_API_CONFIG && window.GLOBAL_API_CONFIG.selectedApi) {
+        setSelectedApi(window.GLOBAL_API_CONFIG.selectedApi)
+      } else {
+        // Tenter de charger depuis localStorage
+        try {
+          const saved = localStorage.getItem('selected_api_config')
+          if (saved) {
+            const api = JSON.parse(saved)
+            setSelectedApi(api)
+            // Mettre à jour la config globale
+            if (window.GLOBAL_API_CONFIG) {
+              window.GLOBAL_API_CONFIG.updateConfig(api)
+            }
+          }
+        } catch (error) {
+          console.error('Erreur chargement API sauvegardée:', error)
+        }
+      }
+    }
+
+    loadSelectedApi()
+
+    // Écouter les changements de configuration
+    const handleConfigChange = (event) => {
+      setSelectedApi(event.detail.api)
+    }
+
+    window.addEventListener('apiConfigChanged', handleConfigChange)
+    return () => window.removeEventListener('apiConfigChanged', handleConfigChange)
+  }, [])
 
   // Fermer le dropdown si on clique ailleurs
   useEffect(() => {
@@ -59,6 +93,33 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
     scanAvailableApis()
   }, [customApis])
 
+  const testApiReachability = async (apiUrl) => {
+    const startTime = Date.now()
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3000)
+
+      const response = await fetch(`${apiUrl}/api/health`, {
+        method: 'GET',
+        mode: 'cors',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      clearTimeout(timeoutId)
+      const responseTime = Date.now() - startTime
+
+      if (response.ok) {
+        return responseTime
+      }
+      return false
+    } catch (error) {
+      return false
+    }
+  }
+
   const scanAvailableApis = async () => {
     setIsScanning(true)
     const discoveredApis = []
@@ -69,12 +130,12 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
       ...customApis.map(custom => ({ ip: custom.ip, name: custom.name }))
     ]
 
-    console.log('🔍 Scan des APIs sur port 5000...')
+    console.log('Scan des APIs sur port 5000...')
 
     for (const apiConfig of allApis) {
       try {
         const apiUrl = `http://${apiConfig.ip}:5000`
-        const isReachable = await testApiReachability(apiUrl)
+        const responseTime = await testApiReachability(apiUrl)
         
         discoveredApis.push({
           id: `${apiConfig.ip}:5000`,
@@ -83,133 +144,129 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           port: 5000,
           name: apiConfig.name,
           description: `API Running App sur ${apiConfig.ip}`,
-          status: isReachable ? 'available' : 'unreachable',
-          responseTime: isReachable ? isReachable.responseTime : 0,
-          lastChecked: new Date(),
+          status: responseTime ? 'available' : 'unreachable',
+          responseTime: responseTime || 0,
           isCustom: customApis.some(custom => custom.ip === apiConfig.ip)
         })
-        
-        if (isReachable) {
-          console.log(`✅ Trouvé: ${apiUrl} (${isReachable.responseTime}ms)`)
-        } else {
-          console.log(`❌ Inaccessible: ${apiUrl}`)
+
+        if (responseTime) {
+          console.log(`✅ ${apiConfig.name} (${apiConfig.ip}) - ${responseTime}ms`)
         }
       } catch (error) {
-        console.log(`⚠️ Erreur: ${apiConfig.ip}:5000`)
+        console.error(`❌ Erreur scan ${apiConfig.name}:`, error)
+        discoveredApis.push({
+          id: `${apiConfig.ip}:5000`,
+          url: `http://${apiConfig.ip}:5000`,
+          ip: apiConfig.ip,
+          port: 5000,
+          name: apiConfig.name,
+          description: `API Running App sur ${apiConfig.ip}`,
+          status: 'error',
+          responseTime: 0,
+          isCustom: customApis.some(custom => custom.ip === apiConfig.ip)
+        })
       }
     }
 
-    // Trier : disponibles en premier, puis par temps de réponse
+    // Trier par disponibilité puis par temps de réponse
     discoveredApis.sort((a, b) => {
       if (a.status === 'available' && b.status !== 'available') return -1
-      if (a.status !== 'available' && b.status === 'available') return 1
+      if (b.status === 'available' && a.status !== 'available') return 1
       if (a.status === 'available' && b.status === 'available') {
         return a.responseTime - b.responseTime
       }
-      return 0
+      return a.name.localeCompare(b.name)
     })
 
     setAvailableApis(discoveredApis)
-    
-    // Auto-sélectionner la première API disponible si aucune n'est sélectionnée
-    if (!selectedApi && discoveredApis.length > 0) {
-      const defaultApi = discoveredApis.find(api => api.status === 'available') || discoveredApis[0]
-      setSelectedApi(defaultApi)
-      onApiChange?.(defaultApi)
-    }
-
     setIsScanning(false)
-    const availableCount = discoveredApis.filter(api => api.status === 'available').length
-    console.log(`📡 Scan terminé: ${availableCount}/${discoveredApis.length} API(s) disponible(s)`)
-  }
 
-  const testApiReachability = async (apiUrl) => {
-    const startTime = Date.now()
-    
-    try {
-      // Test avec un endpoint de santé commun
-      const response = await fetch(`${apiUrl}/api/health`, {
-        method: 'GET',
-        mode: 'cors',
-        signal: AbortSignal.timeout(3000) // 3 secondes de timeout
-      })
-      
-      const responseTime = Date.now() - startTime
-      
-      if (response.ok) {
-        return { available: true, responseTime }
-      }
-      
-      return false
-      
-    } catch (error) {
-      return false
-    }
+    console.log(`Scan terminé: ${discoveredApis.filter(api => api.status === 'available').length}/${discoveredApis.length} APIs disponibles`)
   }
 
   const handleApiSelect = (api) => {
+    console.log('Sélection API:', api.name, api.url)
+    
     setSelectedApi(api)
-    onApiChange?.(api)
     setIsOpen(false)
-    setShowAddForm(false)
-    console.log('🎯 API sélectionnée:', api.url)
+
+    // Mettre à jour la configuration globale
+    if (window.GLOBAL_API_CONFIG) {
+      window.GLOBAL_API_CONFIG.updateConfig(api)
+    }
+
+    // Notifier le parent
+    if (onApiChange) {
+      onApiChange(api)
+    }
+
+    // Mettre à jour axios si disponible
+    if (window.api) {
+      window.api.defaults.baseURL = api.url
+      console.log('Instance axios mise à jour:', api.url)
+    }
   }
 
   const addCustomApi = () => {
     if (!newApiInput.trim()) return
 
-    // Vérifier si c'est une IP/hostname valide
     const ip = newApiInput.trim()
-    if (customApis.some(custom => custom.ip === ip)) {
-      alert('Cette API existe déjà')
+    const customName = `Custom ${ip}`
+
+    // Vérifier si l'IP existe déjà
+    if (customApis.some(api => api.ip === ip)) {
+      alert('Cette IP existe déjà dans la liste')
       return
     }
 
-    const newCustomApi = {
-      ip: ip,
-      name: `Custom ${ip}`,
-      addedAt: new Date().toISOString()
-    }
+    const newCustomApis = [...customApis, { ip, name: customName }]
+    setCustomApis(newCustomApis)
+    localStorage.setItem('custom_apis', JSON.stringify(newCustomApis))
 
-    const updatedCustomApis = [...customApis, newCustomApi]
-    setCustomApis(updatedCustomApis)
-    localStorage.setItem('custom_apis', JSON.stringify(updatedCustomApis))
-    
     setNewApiInput('')
     setShowAddForm(false)
-    
-    console.log('➕ API ajoutée:', newCustomApi)
+
+    // Relancer le scan
+    setTimeout(() => scanAvailableApis(), 100)
   }
 
   const removeCustomApi = (ip) => {
-    const updatedCustomApis = customApis.filter(custom => custom.ip !== ip)
+    const updatedCustomApis = customApis.filter(api => api.ip !== ip)
     setCustomApis(updatedCustomApis)
     localStorage.setItem('custom_apis', JSON.stringify(updatedCustomApis))
-    
-    // Si l'API supprimée était sélectionnée, désélectionner
-    if (selectedApi?.ip === ip) {
+
+    // Si l'API supprimée était sélectionnée, la désélectionner
+    if (selectedApi && selectedApi.ip === ip) {
       setSelectedApi(null)
-      onApiChange?.(null)
+      if (window.GLOBAL_API_CONFIG) {
+        window.GLOBAL_API_CONFIG.updateConfig(null)
+      }
+      if (onApiChange) {
+        onApiChange(null)
+      }
     }
-    
-    console.log('➖ API supprimée:', ip)
+
+    // Mettre à jour la liste
+    setAvailableApis(prev => prev.filter(api => api.ip !== ip))
   }
 
   const getStatusIcon = (api) => {
-    if (api.status === 'available') {
-      return <CheckCircleIcon className="h-4 w-4 text-green-400" />
-    } else if (api.status === 'unreachable') {
-      return <ExclamationTriangleIcon className="h-4 w-4 text-red-400" />
-    } else {
-      return <ServerIcon className="h-4 w-4 text-gray-400" />
+    switch (api.status) {
+      case 'available':
+        return <CheckCircleIcon className="h-4 w-4 text-green-500" />
+      case 'unreachable':
+        return <ExclamationTriangleIcon className="h-4 w-4 text-orange-500" />
+      case 'error':
+        return <XMarkIcon className="h-4 w-4 text-red-500" />
+      default:
+        return <ServerIcon className="h-4 w-4 text-gray-400" />
     }
   }
 
   const getResponseTimeColor = (responseTime) => {
-    if (responseTime === 0) return 'text-gray-400'
-    if (responseTime < 100) return 'text-green-400'
-    if (responseTime < 500) return 'text-yellow-400'
-    return 'text-red-400'
+    if (responseTime <= 100) return 'text-green-600'
+    if (responseTime <= 300) return 'text-yellow-600'
+    return 'text-red-600'
   }
 
   const availableCount = availableApis.filter(api => api.status === 'available').length
@@ -218,31 +275,32 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
     <div className={`relative ${className}`} ref={dropdownRef}>
       {/* Bouton principal */}
       <button
-        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center justify-center w-full px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+        className="btn btn-secondary w-full justify-between"
       >
-        <GlobeAltIcon className="h-4 w-4 mr-2 text-gray-400" />
-        <span className="truncate">
+        <span className="flex items-center text-sm font-medium">
+          <GlobeAltIcon className="h-4 w-4 mr-2" />
           {selectedApi ? selectedApi.name : 'Choisir serveur API'}
         </span>
-        {selectedApi && (
-          <WifiIcon className={`h-4 w-4 ml-2 ${selectedApi.status === 'available' ? 'text-green-500' : 'text-red-500'}`} />
-        )}
-        <ChevronDownIcon className="h-4 w-4 ml-2" />
+        <div className="flex items-center space-x-2">
+          {selectedApi && (
+            <WifiIcon className={`h-4 w-4 ${selectedApi.status === 'available' ? 'text-green-500' : 'text-red-500'}`} />
+          )}
+          <ChevronDownIcon className="h-4 w-4" />
+        </div>
       </button>
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute z-50 mt-2 w-80 bg-white border border-gray-300 rounded-md shadow-lg">
+        <div className="absolute z-50 mt-2 w-80 card animate-scale-in">
           
           {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+          <div className="card-header">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium text-gray-900">Serveur API</span>
-                <span className="text-xs text-gray-500">
-                  ({availableCount}/{availableApis.length})
+                <span className="text-sm font-medium">Serveur API</span>
+                <span className="badge badge-secondary">
+                  {availableCount}/{availableApis.length}
                 </span>
               </div>
               {isScanning && (
@@ -252,22 +310,22 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           </div>
 
           {/* Actions */}
-          <div className="px-4 py-2 border-b border-gray-200">
+          <div className="px-4 py-3 border-b border-gray-200">
             <div className="flex space-x-2">
               <button
                 onClick={scanAvailableApis}
                 disabled={isScanning}
-                className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded disabled:opacity-50"
+                className="btn btn-success btn-sm"
               >
-                <ArrowPathIcon className={`h-3 w-3 ${isScanning ? 'animate-spin' : ''}`} />
-                <span>Scanner</span>
+                <ArrowPathIcon className={`h-3 w-3 mr-1 ${isScanning ? 'animate-spin' : ''}`} />
+                <span>{isScanning ? 'Scan...' : 'Scanner'}</span>
               </button>
               
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
-                className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
+                className="btn btn-primary btn-sm"
               >
-                <PlusIcon className="h-3 w-3" />
+                <PlusIcon className="h-3 w-3 mr-1" />
                 <span>Ajouter</span>
               </button>
             </div>
@@ -275,44 +333,38 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
 
           {/* Formulaire d'ajout */}
           {showAddForm && (
-            <div className="px-4 py-3 bg-blue-50 border-b border-gray-200">
+            <div className="px-4 py-3 border-b border-gray-200 bg-blue-50">
               <div className="flex space-x-2">
                 <input
                   type="text"
                   value={newApiInput}
                   onChange={(e) => setNewApiInput(e.target.value)}
-                  placeholder="IP ou hostname"
-                  className="flex-1 px-2 py-1 text-xs bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                  placeholder="IP ou nom d'hôte"
+                  className="form-input flex-1 text-xs"
                   onKeyPress={(e) => e.key === 'Enter' && addCustomApi()}
                 />
                 <button
                   onClick={addCustomApi}
-                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded"
+                  className="btn btn-primary btn-sm"
                 >
-                  ✓
-                </button>
-                <button
-                  onClick={() => setShowAddForm(false)}
-                  className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded"
-                >
-                  ✕
+                  Ajouter
                 </button>
               </div>
             </div>
           )}
 
           {/* Liste des APIs */}
-          <div className="max-h-64 overflow-y-auto">
+          <div className="max-h-64 overflow-y-auto scrollbar-thin">
             {availableApis.length === 0 ? (
-              <div className="px-4 py-3 text-center text-gray-500 text-sm">
+              <div className="px-4 py-6 text-center text-gray-500 text-sm">
                 {isScanning ? 'Scan en cours...' : 'Aucune API trouvée'}
               </div>
             ) : (
               availableApis.map(api => (
                 <div
                   key={api.id}
-                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 ${
-                    selectedApi?.id === api.id ? 'bg-green-50' : ''
+                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors duration-150 ${
+                    selectedApi && selectedApi.id === api.id ? 'bg-green-50' : ''
                   }`}
                   onClick={() => handleApiSelect(api)}
                 >
@@ -325,8 +377,13 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                             {api.name}
                           </span>
                           {api.isCustom && (
-                            <span className="text-xs bg-blue-100 text-blue-800 px-1 rounded">
+                            <span className="badge badge-primary text-xs">
                               Custom
+                            </span>
+                          )}
+                          {selectedApi && selectedApi.id === api.id && (
+                            <span className="badge badge-success text-xs">
+                              Actif
                             </span>
                           )}
                         </div>
@@ -354,7 +411,7 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                             e.stopPropagation()
                             removeCustomApi(api.ip)
                           }}
-                          className="p-1 hover:bg-red-100 rounded text-red-400 hover:text-red-600"
+                          className="btn-icon text-red-400 hover:text-red-600 hover:bg-red-100 rounded"
                           title="Supprimer cette API"
                         >
                           <XMarkIcon className="h-3 w-3" />
@@ -368,8 +425,8 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           </div>
 
           {/* Info footer */}
-          <div className="px-4 py-2 bg-gray-50 text-xs text-gray-600">
-            💡 Port 5000 par défaut
+          <div className="card-footer text-xs">
+            💡 Port 5000 par défaut • L'API sélectionnée sera utilisée partout dans l'app
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
-// running-admin/src/App.jsx - FICHIER COMPLET CORRIGÉ
+// running-admin/src/App.jsx - AVEC INTÉGRATION API SELECTORS
+import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
@@ -14,6 +15,9 @@ import Stats from './pages/Stats'
 import ParcoursPage from './pages/Parcours'
 import AdminRoute from './components/AdminRoute'
 import DebugPanel from './components/DebugPanel'
+
+// Import de la configuration API globale
+import globalApiConfig from './utils/globalApiConfig'
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth()
@@ -37,6 +41,25 @@ const ProtectedRoute = ({ children }) => {
 }
 
 function App() {
+  // Initialiser la configuration API au démarrage
+  useEffect(() => {
+    console.log('🚀 Initialisation Running Admin avec sélecteurs API')
+    
+    // Debug de la configuration API
+    if (process.env.NODE_ENV === 'development') {
+      globalApiConfig.debug()
+    }
+    
+    // Test de connexion initial si API configurée
+    if (globalApiConfig.isConfigured()) {
+      globalApiConfig.testConnection().then(connected => {
+        console.log('🌐 Test connexion initial:', connected ? 'Succès' : 'Échec')
+      })
+    } else {
+      console.log('⚠️ Aucune API configurée - l\'utilisateur devra en sélectionner une')
+    }
+  }, [])
+
   return (
     <ErrorBoundary>
       <Routes>

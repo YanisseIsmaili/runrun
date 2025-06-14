@@ -1,5 +1,6 @@
-// running-admin/src/services/api.js - Version corrigée avec .env
+// running-admin/src/services/api.js - Version avec configuration globale
 import axios from 'axios'
+import globalApiConfig from '../utils/globalApiConfig'
 
 const emergencyService = {
   logError: (error, context = '') => {
@@ -7,33 +8,67 @@ const emergencyService = {
   }
 }
 
-// Récupération de l'URL API depuis .env
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+// Fonction pour obtenir l'URL de base
+const getBaseURL = () => {
+  // Priorité à la configuration globale
+  const globalConfig = globalApiConfig.getBaseURL()
+  if (globalConfig) {
+    return globalConfig
+  }
+  
+  // Fallback sur .env
+  const envUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+  console.warn('⚠️ Utilisation URL .env (pas de config globale):', envUrl)
+  return envUrl
+}
 
-console.log('🔧 [API] URL configurée:', API_BASE_URL)
-
+// Créer l'instance axios avec URL dynamique
 const instance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: getBaseURL(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   }
 })
 
+// Mettre à jour l'URL de base quand la config globale change
+globalApiConfig.addListener((data) => {
+  if (data.baseURL) {
+    instance.defaults.baseURL = data.baseURL
+    console.log('🔄 Instance axios mise à jour automatiquement:', data.baseURL)
+  }
+})
+
+// Exposer l'instance globalement pour les composants
+if (typeof window !== 'undefined') {
+  window.api = instance
+}
+
+console.log('🔧 [API] Service initialisé avec URL:', instance.defaults.baseURL)
+
 // Intercepteur pour ajouter le token d'authentification
 instance.interceptors.request.use(
   (config) => {
     try {
+      // Vérifier si l'URL de base est configurée
+      if (!globalApiConfig.isConfigured() && !import.meta.env.VITE_API_BASE_URL) {
+        console.warn('⚠️ Aucune API configurée - la requête pourrait échouer')
+      }
+
       // Priorité à sessionStorage (session courante) puis localStorage (persistant)
       const token = sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token')
-      console.log('Interceptor - Token trouvé:', token ? 'Oui' : 'Non')
-      console.log('Interceptor - Source:', sessionStorage.getItem('auth_token') ? 'sessionStorage' : 'localStorage')
-      console.log('Interceptor - URL:', config.url)
       
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
-        console.log('Interceptor - Header Authorization ajouté')
       }
+
+      // Log pour debug
+      console.log(`📡 [${config.method?.toUpperCase()}] ${config.url}`, {
+        baseURL: config.baseURL,
+        hasToken: !!token,
+        apiConfigured: globalApiConfig.isConfigured()
+      })
+      
     } catch (error) {
       console.warn('Erreur lors de la récupération du token:', error)
       emergencyService.logError(error, 'token_retrieval')
@@ -55,8 +90,15 @@ instance.interceptors.response.use(
     // Gestion des erreurs de réseau
     if (!error.response) {
       console.error('Erreur de réseau:', error.message)
-      error.userMessage = 'Impossible de contacter le serveur. ' +
-        'Veuillez vérifier votre connexion réseau et l\'état du serveur API.'
+      
+      // Message d'erreur contextuel selon la configuration
+      if (!globalApiConfig.isConfigured()) {
+        error.userMessage = 'Aucun serveur API configuré. Veuillez sélectionner un serveur dans les paramètres.'
+      } else {
+        error.userMessage = `Impossible de contacter le serveur API (${globalApiConfig.getBaseURL()}). ` +
+          'Veuillez vérifier votre connexion réseau et l\'état du serveur.'
+      }
+      
       emergencyService.logError(error, 'network_error')
     }
     // Gestion des erreurs d'authentification
@@ -68,53 +110,36 @@ instance.interceptors.response.use(
         error.userMessage = 'Identifiants invalides ou session expirée.'
       } else {
         error.userMessage = 'Session expirée. Veuillez vous reconnecter.'
-        try {
-          console.log('Nettoyage des tokens après erreur 401')
-          // Nettoyer TOUS les stockages
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('user_data')
-          sessionStorage.removeItem('auth_token')
-          sessionStorage.removeItem('user_data')
-          
-          if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+        
+        // Rediriger vers login si pas sur page de login
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          setTimeout(() => {
             window.location.href = '/login'
-          }
-        } catch (storageError) {
-          emergencyService.logError(storageError, 'storage_cleanup')
+          }, 2000)
         }
       }
-    }
-    // Gestion des erreurs d'autorisation (403)
-    else if (error.response.status === 403) {
-      const errorData = error.response.data
-      console.error('Erreur d\'autorisation:', errorData)
       
-      if (errorData.error_code === 'ADMIN_REQUIRED') {
-        error.userMessage = `Accès administrateur requis. Votre compte "${errorData.user_info?.username}" n'a pas les permissions nécessaires.`
-      } else {
-        error.userMessage = 'Vous n\'avez pas les permissions nécessaires pour cette action.'
-      }
+      emergencyService.logError(error, 'auth_error')
     }
-    // Gestion des erreurs de validation
-    else if (error.response.status === 400) {
-      error.userMessage = error.response.data?.message || 'Données invalides.'
+    // Gestion des erreurs de permissions
+    else if (error.response.status === 403) {
+      console.error('Erreur de permissions:', error.response.data)
+      error.userMessage = 'Vous n\'avez pas les permissions nécessaires pour cette action.'
+      emergencyService.logError(error, 'permission_error')
     }
     // Gestion des erreurs serveur
     else if (error.response.status >= 500) {
-      error.userMessage = 'Erreur du serveur. Veuillez réessayer plus tard.'
+      console.error('Erreur serveur:', error.response.data)
+      error.userMessage = 'Erreur interne du serveur. Veuillez réessayer plus tard.'
       emergencyService.logError(error, 'server_error')
     }
     // Autres erreurs
     else {
-      console.error('Erreur de requête:', error.message)
+      console.error('Erreur API:', error.response.status, error.response.data)
+      error.userMessage = error.response.data?.message || 'Une erreur est survenue lors de la communication avec le serveur.'
       emergencyService.logError(error, 'api_error')
     }
-    
-    if (!error.userMessage) {
-      error.userMessage = error.response?.data?.message || 
-                         'Une erreur est survenue lors de la communication avec le serveur'
-    }
-    
+
     return Promise.reject(error)
   }
 )
@@ -122,76 +147,41 @@ instance.interceptors.response.use(
 // Service d'authentification
 const auth = {
   login: (emailOrUsername, password) => {
-    const isEmail = emailOrUsername.includes('@')
-    
-    const payload = {
-      password: password
-    }
-    
-    if (isEmail) {
+    const payload = { password }
+    if (emailOrUsername.includes('@')) {
       payload.email = emailOrUsername
     } else {
       payload.username = emailOrUsername
     }
-    
-    console.log('Tentative de connexion avec:', { ...payload, password: '[HIDDEN]' })
     return instance.post('/api/auth/login', payload)
   },
   
-  logout: () => {
-    try {
-      // Nettoyer TOUS les stockages
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user_data')
-      sessionStorage.removeItem('auth_token')
-      sessionStorage.removeItem('user_data')
-      console.log('Tous les tokens supprimés')
-      return Promise.resolve()
-    } catch (error) {
-      emergencyService.logError(error, 'logout_cleanup')
-      return Promise.reject(error)
-    }
-  },
+  register: (userData) => instance.post('/api/auth/register', userData),
+  
+  logout: () => instance.post('/api/auth/logout'),
   
   validateToken: () => instance.get('/api/auth/validate'),
   
   refreshToken: () => instance.post('/api/auth/refresh'),
   
   changePassword: (currentPassword, newPassword) => 
-    instance.post('/api/auth/change-password', {
-      current_password: currentPassword,
-      new_password: newPassword
-    }),
+    instance.post('/api/auth/change-password', { currentPassword, newPassword }),
   
-  promoteAdmin: (secretKey) => 
-    instance.post('/api/auth/promote-admin', {
-      secret_key: secretKey
-    }),
+  forgotPassword: (email) => instance.post('/api/auth/forgot-password', { email }),
   
-  testConnection: () => instance.get('/api/health'),
-  
-  testAuth: () => instance.get('/api/health/auth')
+  resetPassword: (token, newPassword) => 
+    instance.post('/api/auth/reset-password', { token, newPassword })
 }
 
-// Service des utilisateurs
+// Service utilisateurs
 const users = {
-  getCurrentUser: () => instance.get('/api/users/profile'),
+  getProfile: () => instance.get('/api/users/profile'),
   
-  updateProfile: (userData) => instance.put('/api/users/profile', userData),
+  updateProfile: (profileData) => instance.put('/api/users/profile', profileData),
   
   getAll: (params = {}) => {
-    const queryParams = new URLSearchParams()
-    
-    if (params.page) queryParams.append('page', params.page)
-    if (params.limit) queryParams.append('limit', params.limit)
-    if (params.search) queryParams.append('search', params.search)
-    if (params.status) queryParams.append('status', params.status)
-    if (params.role) queryParams.append('role', params.role)
-    if (params.sort_by) queryParams.append('sort_by', params.sort_by)
-    if (params.sort_order) queryParams.append('sort_order', params.sort_order)
-    
-    const url = `/api/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-    return instance.get(url)
+    const queryParams = new URLSearchParams(params)
+    return instance.get(`/api/users?${queryParams}`)
   },
   
   getById: (userId) => instance.get(`/api/users/${userId}`),
@@ -202,31 +192,17 @@ const users = {
   
   delete: (userId) => instance.delete(`/api/users/${userId}`),
   
-  exportUsers: (params = {}) => {
-    const queryParams = new URLSearchParams(params)
-    return instance.get(`/api/users/export?${queryParams}`, {
-      responseType: 'blob'
+  uploadAvatar: (userId, formData) => 
+    instance.post(`/api/users/${userId}/avatar`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
-  }
 }
 
-// Service des courses (runs)
+// Service courses/runs
 const runs = {
   getAll: (params = {}) => {
-    const queryParams = new URLSearchParams()
-    
-    if (params.page) queryParams.append('page', params.page)
-    if (params.limit) queryParams.append('limit', params.limit)
-    if (params.user_id) queryParams.append('user_id', params.user_id)
-    if (params.start_date) queryParams.append('start_date', params.start_date)
-    if (params.end_date) queryParams.append('end_date', params.end_date)
-    if (params.status) queryParams.append('status', params.status)
-    if (params.search) queryParams.append('search', params.search)
-    if (params.sort_by) queryParams.append('sort_by', params.sort_by)
-    if (params.sort_order) queryParams.append('sort_order', params.sort_order)
-    
-    const url = `/api/runs${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-    return instance.get(url)
+    const queryParams = new URLSearchParams(params)
+    return instance.get(`/api/runs?${queryParams}`)
   },
   
   getById: (runId) => instance.get(`/api/runs/${runId}`),
@@ -237,33 +213,26 @@ const runs = {
   
   delete: (runId) => instance.delete(`/api/runs/${runId}`),
   
-  getStats: (params = {}) => {
-    const queryParams = new URLSearchParams(params)
-    return instance.get(`/api/runs/stats?${queryParams}`)
-  },
+  start: (runData) => instance.post('/api/runs/start', runData),
   
-  exportRuns: (params = {}) => {
-    const queryParams = new URLSearchParams(params)
-    return instance.get(`/api/runs/export?${queryParams}`, {
-      responseType: 'blob'
-    })
+  stop: (runId) => instance.post(`/api/runs/${runId}/stop`),
+  
+  addLocation: (runId, locationData) => 
+    instance.post(`/api/runs/${runId}/locations`, locationData),
+  
+  getLocations: (runId) => instance.get(`/api/runs/${runId}/locations`),
+  
+  getStats: (userId = null) => {
+    const url = userId ? `/api/runs/stats/${userId}` : '/api/runs/stats'
+    return instance.get(url)
   }
 }
 
-// Service des routes/parcours
+// Service routes
 const routes = {
   getAll: (params = {}) => {
-    const queryParams = new URLSearchParams()
-    
-    if (params.page) queryParams.append('page', params.page)
-    if (params.limit) queryParams.append('limit', params.limit)
-    if (params.search) queryParams.append('search', params.search)
-    if (params.status) queryParams.append('status', params.status)
-    if (params.difficulty) queryParams.append('difficulty', params.difficulty)
-    if (params.sort_by) queryParams.append('sort_by', params.sort_by)
-    if (params.sort_order) queryParams.append('sort_order', params.sort_order)
-    
-    const url = `/api/routes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    const queryParams = new URLSearchParams(params)
+    const url = params ? `/api/routes?${queryParams.toString()}` : '/api/routes'
     return instance.get(url)
   },
   
@@ -304,6 +273,25 @@ const admin = {
   }
 }
 
+// Service de santé/test de l'API
+const health = {
+  check: () => instance.get('/api/health'),
+  
+  ping: () => instance.get('/api/ping'),
+  
+  status: () => instance.get('/api/status'),
+  
+  // Test rapide de connectivité
+  quickTest: async () => {
+    try {
+      const response = await instance.get('/api/health', { timeout: 3000 })
+      return { success: true, data: response.data }
+    } catch (error) {
+      return { success: false, error: error.message }
+    }
+  }
+}
+
 // Fonctions utilitaires
 const utils = {
   logError: (error, context = '') => {
@@ -328,6 +316,21 @@ const utils = {
   
   isServerError: (error) => {
     return error.response?.status >= 500
+  },
+  
+  // Nouvelle fonction pour vérifier la configuration
+  isConfigured: () => {
+    return globalApiConfig.isConfigured()
+  },
+  
+  // Obtenir l'URL configurée
+  getCurrentBaseURL: () => {
+    return globalApiConfig.getBaseURL()
+  },
+  
+  // Tester la connexion à l'API configurée
+  testConnection: async () => {
+    return await globalApiConfig.testConnection()
   }
 }
 
@@ -342,7 +345,10 @@ const api = {
   runs,
   routes,
   admin,
+  health,
   utils,
+  // Instance axios pour accès direct si nécessaire
+  instance,
   // Fonctions de compatibilité
   getActiveRuns,
   getAll
