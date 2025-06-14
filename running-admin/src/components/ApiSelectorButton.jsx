@@ -276,56 +276,61 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
       {/* Bouton principal */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="btn btn-secondary w-full justify-between"
+        className="btn bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700 w-full justify-between transition-all duration-300 hover:shadow-lg"
       >
         <span className="flex items-center text-sm font-medium">
-          <GlobeAltIcon className="h-4 w-4 mr-2" />
+          <GlobeAltIcon className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
           {selectedApi ? selectedApi.name : 'Choisir serveur API'}
         </span>
         <div className="flex items-center space-x-2">
           {selectedApi && (
-            <WifiIcon className={`h-4 w-4 ${selectedApi.status === 'available' ? 'text-green-500' : 'text-red-500'}`} />
+            <div className="flex items-center space-x-1 animate-fade-in">
+              <WifiIcon className={`h-4 w-4 transition-colors duration-300 ${
+                selectedApi.status === 'available' ? 'text-green-200' : 'text-red-300'
+              }`} />
+              <span className="text-xs text-green-200">{selectedApi.responseTime}ms</span>
+            </div>
           )}
-          <ChevronDownIcon className="h-4 w-4" />
+          <ChevronDownIcon className={`h-4 w-4 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
         </div>
       </button>
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute z-50 mt-2 w-80 card animate-scale-in">
+        <div className="absolute z-50 mt-2 w-80 card border-green-200 shadow-xl animate-slide-in-left">
           
           {/* Header */}
-          <div className="card-header">
+          <div className="card-header bg-gradient-to-r from-green-50 to-green-100 border-green-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium">Serveur API</span>
-                <span className="badge badge-secondary">
+                <span className="text-sm font-medium text-green-800">Serveur API</span>
+                <span className="badge bg-green-600 text-white animate-pulse">
                   {availableCount}/{availableApis.length}
                 </span>
               </div>
               {isScanning && (
-                <ArrowPathIcon className="h-4 w-4 text-green-500 animate-spin" />
+                <ArrowPathIcon className="h-4 w-4 text-green-600 animate-spin" />
               )}
             </div>
           </div>
 
           {/* Actions */}
-          <div className="px-4 py-3 border-b border-gray-200">
+          <div className="px-4 py-3 border-b border-green-100 bg-green-25">
             <div className="flex space-x-2">
               <button
                 onClick={scanAvailableApis}
                 disabled={isScanning}
-                className="btn btn-success btn-sm"
+                className="btn bg-green-600 hover:bg-green-700 text-white btn-sm transition-all duration-300 hover:scale-105 disabled:opacity-50"
               >
-                <ArrowPathIcon className={`h-3 w-3 mr-1 ${isScanning ? 'animate-spin' : ''}`} />
+                <ArrowPathIcon className={`h-3 w-3 mr-1 transition-transform duration-300 ${isScanning ? 'animate-spin' : 'group-hover:rotate-180'}`} />
                 <span>{isScanning ? 'Scan...' : 'Scanner'}</span>
               </button>
               
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
-                className="btn btn-primary btn-sm"
+                className="btn bg-blue-600 hover:bg-blue-700 text-white btn-sm transition-all duration-300 hover:scale-105"
               >
-                <PlusIcon className="h-3 w-3 mr-1" />
+                <PlusIcon className="h-3 w-3 mr-1 transition-transform duration-300 hover:rotate-90" />
                 <span>Ajouter</span>
               </button>
             </div>
@@ -333,19 +338,19 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
 
           {/* Formulaire d'ajout */}
           {showAddForm && (
-            <div className="px-4 py-3 border-b border-gray-200 bg-blue-50">
+            <div className="px-4 py-3 border-b border-green-100 bg-gradient-to-r from-green-50 to-blue-50 animate-fade-in">
               <div className="flex space-x-2">
                 <input
                   type="text"
                   value={newApiInput}
                   onChange={(e) => setNewApiInput(e.target.value)}
                   placeholder="IP ou nom d'hôte"
-                  className="form-input flex-1 text-xs"
+                  className="form-input flex-1 text-xs border-green-200 focus:border-green-500 focus:ring-green-200 transition-all duration-300"
                   onKeyPress={(e) => e.key === 'Enter' && addCustomApi()}
                 />
                 <button
                   onClick={addCustomApi}
-                  className="btn btn-primary btn-sm"
+                  className="btn bg-green-600 hover:bg-green-700 text-white btn-sm transition-all duration-300 hover:scale-105"
                 >
                   Ajouter
                 </button>
@@ -354,40 +359,50 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           )}
 
           {/* Liste des APIs */}
-          <div className="max-h-64 overflow-y-auto scrollbar-thin">
+          <div className="max-h-64 overflow-y-auto scrollbar-ultra-thin">
             {availableApis.length === 0 ? (
-              <div className="px-4 py-6 text-center text-gray-500 text-sm">
-                {isScanning ? 'Scan en cours...' : 'Aucune API trouvée'}
+              <div className="px-4 py-6 text-center text-gray-500 text-sm animate-pulse">
+                {isScanning ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    <span className="ml-2">Scan en cours...</span>
+                  </div>
+                ) : 'Aucune API trouvée'}
               </div>
             ) : (
-              availableApis.map(api => (
+              availableApis.map((api, index) => (
                 <div
                   key={api.id}
-                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors duration-150 ${
-                    selectedApi && selectedApi.id === api.id ? 'bg-green-50' : ''
+                  className={`px-4 py-3 hover:bg-gradient-to-r hover:from-green-50 hover:to-green-100 cursor-pointer border-b border-green-50 transition-all duration-300 hover:scale-[1.02] hover:shadow-sm animate-slide-in-right ${
+                    selectedApi && selectedApi.id === api.id ? 'bg-gradient-to-r from-green-100 to-green-200 border-l-4 border-l-green-500' : ''
                   }`}
+                  style={{animationDelay: `${index * 50}ms`}}
                   onClick={() => handleApiSelect(api)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
-                      {getStatusIcon(api)}
+                      <div className="transition-transform duration-300 hover:scale-110">
+                        {getStatusIcon(api)}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-900 truncate">
+                          <span className="text-sm font-medium text-gray-900 truncate transition-colors duration-300">
                             {api.name}
                           </span>
                           {api.isCustom && (
-                            <span className="badge badge-primary text-xs">
+                            <span className="badge bg-blue-500 text-white text-xs animate-pulse">
                               Custom
                             </span>
                           )}
                           {selectedApi && selectedApi.id === api.id && (
-                            <span className="badge badge-success text-xs">
-                              Actif
+                            <span className="badge bg-green-500 text-white text-xs animate-fade-in">
+                              ✓ Actif
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-gray-500 truncate transition-colors duration-300 hover:text-green-600">
                           {api.url}
                         </div>
                       </div>
@@ -396,11 +411,11 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                     <div className="flex items-center space-x-2">
                       <div className="text-right text-xs">
                         {api.responseTime > 0 && (
-                          <span className={getResponseTimeColor(api.responseTime)}>
+                          <span className={`transition-all duration-300 font-mono ${getResponseTimeColor(api.responseTime)}`}>
                             {api.responseTime}ms
                           </span>
                         )}
-                        <div className="text-gray-500 capitalize">
+                        <div className="text-gray-500 capitalize text-xs">
                           {api.status}
                         </div>
                       </div>
@@ -411,7 +426,7 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                             e.stopPropagation()
                             removeCustomApi(api.ip)
                           }}
-                          className="btn-icon text-red-400 hover:text-red-600 hover:bg-red-100 rounded"
+                          className="btn-icon text-red-400 hover:text-red-600 hover:bg-red-100 rounded transition-all duration-300 hover:scale-110"
                           title="Supprimer cette API"
                         >
                           <XMarkIcon className="h-3 w-3" />
@@ -425,8 +440,11 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           </div>
 
           {/* Info footer */}
-          <div className="card-footer text-xs">
-            💡 Port 5000 par défaut • L'API sélectionnée sera utilisée partout dans l'app
+          <div className="card-footer text-xs bg-gradient-to-r from-green-50 to-green-100 text-green-700 border-t border-green-200">
+            <div className="flex items-center space-x-2">
+              <span className="animate-pulse">💡</span>
+              <span>Port 5000 par défaut • Configuration globale de l'application</span>
+            </div>
           </div>
         </div>
       )}

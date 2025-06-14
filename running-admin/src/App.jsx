@@ -15,7 +15,7 @@ import Stats from './pages/Stats'
 import ParcoursPage from './pages/Parcours'
 import AdminRoute from './components/AdminRoute'
 import DebugPanel from './components/DebugPanel'
-
+  
 // Import de la configuration API globale
 import globalApiConfig from './utils/globalApiConfig'
 
