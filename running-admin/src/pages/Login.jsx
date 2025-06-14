@@ -1,77 +1,54 @@
-// running-admin/src/pages/Login.jsx - MODIFICATION pour ajouter le checkbox
+// running-admin/src/pages/Login.jsx
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import api from '../services/api'
+import ApiSelectorButton from '../components/ApiSelectorButton'
 
 const Login = () => {
   const [formData, setFormData] = useState({
     emailOrUsername: '',
     password: '',
-    rememberMe: false  // NOUVEAU
+    rememberMe: false
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [selectedApi, setSelectedApi] = useState(null)
   const [connectionStatus, setConnectionStatus] = useState({
-    api: 'checking',
-    database: 'checking'
+    api: 'checking'
   })
 
-  const { login, isAuthenticated } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
 
-  // Redirection si déjà connecté
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/')
-    }
-  }, [isAuthenticated, navigate])
+    // Test de connexion à l'API sélectionnée
+    const testApiConnection = async () => {
+      if (!selectedApi) {
+        setConnectionStatus({ api: 'error' })
+        return
+      }
 
-  // Vérification des connexions au chargement
-  useEffect(() => {
-    const checkConnections = async () => {
       try {
-        // Test API
-        await api.auth.testConnection()
-        setConnectionStatus(prev => ({ ...prev, api: 'connected' }))
-        
-        // Test base de données
-        await api.auth.testConnection() // Vous pouvez créer une route spécifique si nécessaire
-        setConnectionStatus(prev => ({ ...prev, database: 'connected' }))
-      } catch (error) {
-        setConnectionStatus({
-          api: 'error',
-          database: 'error'
+        const response = await fetch(`${selectedApi.url}/api/health`, {
+          method: 'GET',
+          mode: 'cors',
+          signal: AbortSignal.timeout(5000)
         })
+
+        if (response.ok) {
+          setConnectionStatus({ api: 'connected' })
+        } else {
+          setConnectionStatus({ api: 'error' })
+        }
+      } catch (error) {
+        setConnectionStatus({ api: 'error' })
       }
     }
 
-    checkConnections()
-  }, [])
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    try {
-      const result = await login(
-        formData.emailOrUsername, 
-        formData.password, 
-        formData.rememberMe  // NOUVEAU PARAMÈTRE
-      )
-
-      if (result.success) {
-        navigate('/')
-      } else {
-        setError(result.error)
-      }
-    } catch (error) {
-      setError('Erreur de connexion')
-    } finally {
-      setLoading(false)
+    if (selectedApi) {
+      testApiConnection()
     }
-  }
+  }, [selectedApi])
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -79,6 +56,47 @@ const Login = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    if (!selectedApi) {
+      setError('Veuillez sélectionner un serveur API')
+      setLoading(false)
+      return
+    }
+
+    if (connectionStatus.api !== 'connected') {
+      setError('Le serveur API sélectionné n\'est pas accessible')
+      setLoading(false)
+      return
+    }
+
+    try {
+      // Configurer l'API base URL avant la connexion
+      if (window.api) {
+        window.api.defaults.baseURL = selectedApi.url
+      }
+
+      await login(formData.emailOrUsername, formData.password, formData.rememberMe)
+      navigate('/')
+    } catch (error) {
+      console.error('Erreur de connexion:', error)
+      setError(error.message || 'Erreur de connexion')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApiChange = (api) => {
+    setSelectedApi(api)
+    // Configurer l'API base URL immédiatement
+    if (window.api && api) {
+      window.api.defaults.baseURL = api.url
+    }
   }
 
   return (
@@ -96,6 +114,14 @@ const Login = () => {
           <p className="mt-2 text-center text-sm text-gray-600">
             Connectez-vous à votre compte administrateur
           </p>
+        </div>
+
+        {/* API Selector Button */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Serveur API
+          </label>
+          <ApiSelectorButton onApiChange={handleApiChange} />
         </div>
 
         {/* Statut des connexions */}
@@ -155,7 +181,7 @@ const Login = () => {
               />
             </div>
 
-            {/* NOUVEAU: Checkbox "Se souvenir de moi" */}
+            {/* Checkbox "Se souvenir de moi" */}
             <div className="flex items-center">
               <input
                 id="rememberMe"
@@ -174,7 +200,7 @@ const Login = () => {
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || connectionStatus.api !== 'connected'}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -191,7 +217,7 @@ const Login = () => {
 
         <div className="text-center">
           <p className="text-xs text-gray-500">
-            Problème de connexion ? Vérifiez que l'API fonctionne sur localhost:5000
+            Problème de connexion ? Vérifiez que l'API fonctionne sur le serveur sélectionné
           </p>
         </div>
       </div>

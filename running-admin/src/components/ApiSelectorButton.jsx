@@ -1,5 +1,5 @@
-// running-admin/src/components/ApiTargetSelector.jsx
-import { useState, useEffect } from 'react'
+// running-admin/src/components/ApiSelectorButton.jsx
+import { useState, useEffect, useRef } from 'react'
 import { 
   GlobeAltIcon,
   CheckCircleIcon,
@@ -9,16 +9,17 @@ import {
   WifiIcon,
   PlusIcon,
   XMarkIcon,
-  PencilIcon
+  ChevronDownIcon
 } from '@heroicons/react/24/outline'
 
-const ApiTargetSelector = ({ onApiChange, currentApi }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
+const ApiSelectorButton = ({ onApiChange, className = "" }) => {
+  const [isOpen, setIsOpen] = useState(false)
   const [availableApis, setAvailableApis] = useState([])
   const [isScanning, setIsScanning] = useState(false)
-  const [selectedApi, setSelectedApi] = useState(currentApi || null)
+  const [selectedApi, setSelectedApi] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [newApiInput, setNewApiInput] = useState('')
+  const dropdownRef = useRef(null)
 
   // APIs par défaut à scanner (toutes sur port 5000)
   const defaultApis = [
@@ -39,6 +40,19 @@ const ApiTargetSelector = ({ onApiChange, currentApi }) => {
       return []
     }
   })
+
+  // Fermer le dropdown si on clique ailleurs
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false)
+        setShowAddForm(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     // Scan initial au chargement
@@ -136,7 +150,8 @@ const ApiTargetSelector = ({ onApiChange, currentApi }) => {
   const handleApiSelect = (api) => {
     setSelectedApi(api)
     onApiChange?.(api)
-    setIsExpanded(false)
+    setIsOpen(false)
+    setShowAddForm(false)
     console.log('🎯 API sélectionnée:', api.url)
   }
 
@@ -200,98 +215,85 @@ const ApiTargetSelector = ({ onApiChange, currentApi }) => {
   const availableCount = availableApis.filter(api => api.status === 'available').length
 
   return (
-    <div className="border-b border-green-800">
-      {/* Header du sélecteur */}
-      <div 
-        className="px-4 py-3 cursor-pointer hover:bg-green-600 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      {/* Bouton principal */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="inline-flex items-center justify-center w-full px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <GlobeAltIcon className="h-4 w-4 text-green-300" />
-            <span className="text-sm font-medium text-white">
-              API Selector
-            </span>
-            <span className="text-xs text-green-200">
-              ({availableCount}/{availableApis.length})
-            </span>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            {isScanning && (
-              <ArrowPathIcon className="h-4 w-4 text-green-300 animate-spin" />
-            )}
-            <WifiIcon className={`h-4 w-4 ${selectedApi?.status === 'available' ? 'text-green-400' : 'text-gray-400'}`} />
-          </div>
-        </div>
-        
-        {/* API sélectionnée */}
+        <GlobeAltIcon className="h-4 w-4 mr-2 text-gray-400" />
+        <span className="truncate">
+          {selectedApi ? selectedApi.name : 'Choisir serveur API'}
+        </span>
         {selectedApi && (
-          <div className="mt-1 text-xs text-green-200">
-            <div className="truncate">
-              {selectedApi.name} - {selectedApi.url}
-            </div>
-            {selectedApi.responseTime > 0 && (
-              <div className={`${getResponseTimeColor(selectedApi.responseTime)}`}>
-                Réponse: {selectedApi.responseTime}ms
-              </div>
-            )}
-          </div>
+          <WifiIcon className={`h-4 w-4 ml-2 ${selectedApi.status === 'available' ? 'text-green-500' : 'text-red-500'}`} />
         )}
-      </div>
+        <ChevronDownIcon className="h-4 w-4 ml-2" />
+      </button>
 
-      {/* Panel étendu */}
-      {isExpanded && (
-        <div className="bg-green-800 border-t border-green-700">
-          {/* Contrôles */}
-          <div className="px-4 py-2 border-b border-green-700">
+      {/* Dropdown menu */}
+      {isOpen && (
+        <div className="absolute z-50 mt-2 w-80 bg-white border border-gray-300 rounded-md shadow-lg">
+          
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <button
-                  onClick={scanAvailableApis}
-                  disabled={isScanning}
-                  className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded disabled:opacity-50"
-                >
-                  <ArrowPathIcon className={`h-3 w-3 ${isScanning ? 'animate-spin' : ''}`} />
-                  <span>Scanner</span>
-                </button>
-                
-                <button
-                  onClick={() => setShowAddForm(!showAddForm)}
-                  className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded"
-                >
-                  <PlusIcon className="h-3 w-3" />
-                  <span>Ajouter</span>
-                </button>
+                <span className="text-sm font-medium text-gray-900">Serveur API</span>
+                <span className="text-xs text-gray-500">
+                  ({availableCount}/{availableApis.length})
+                </span>
               </div>
+              {isScanning && (
+                <ArrowPathIcon className="h-4 w-4 text-green-500 animate-spin" />
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="px-4 py-2 border-b border-gray-200">
+            <div className="flex space-x-2">
+              <button
+                onClick={scanAvailableApis}
+                disabled={isScanning}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded disabled:opacity-50"
+              >
+                <ArrowPathIcon className={`h-3 w-3 ${isScanning ? 'animate-spin' : ''}`} />
+                <span>Scanner</span>
+              </button>
               
-              <span className="text-xs text-green-200">
-                : IP's
-              </span>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
+              >
+                <PlusIcon className="h-3 w-3" />
+                <span>Ajouter</span>
+              </button>
             </div>
           </div>
 
           {/* Formulaire d'ajout */}
           {showAddForm && (
-            <div className="px-4 py-3 bg-green-900 border-b border-green-700">
+            <div className="px-4 py-3 bg-blue-50 border-b border-gray-200">
               <div className="flex space-x-2">
                 <input
                   type="text"
                   value={newApiInput}
                   onChange={(e) => setNewApiInput(e.target.value)}
-                  placeholder="IP ou hostname (ex: 192.168.1.100)"
-                  className="flex-1 px-2 py-1 text-xs bg-white text-gray-900 border border-gray-300 rounded"
+                  placeholder="IP ou hostname"
+                  className="flex-1 px-2 py-1 text-xs bg-white border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
                   onKeyPress={(e) => e.key === 'Enter' && addCustomApi()}
                 />
                 <button
                   onClick={addCustomApi}
-                  className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded"
+                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded"
                 >
                   ✓
                 </button>
                 <button
                   onClick={() => setShowAddForm(false)}
-                  className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded"
+                  className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded"
                 >
                   ✕
                 </button>
@@ -300,17 +302,17 @@ const ApiTargetSelector = ({ onApiChange, currentApi }) => {
           )}
 
           {/* Liste des APIs */}
-          <div className="max-h-60 overflow-y-auto scrollbar-ultra-thin">
+          <div className="max-h-64 overflow-y-auto">
             {availableApis.length === 0 ? (
-              <div className="px-4 py-3 text-center text-green-200 text-sm">
+              <div className="px-4 py-3 text-center text-gray-500 text-sm">
                 {isScanning ? 'Scan en cours...' : 'Aucune API trouvée'}
               </div>
             ) : (
               availableApis.map(api => (
                 <div
                   key={api.id}
-                  className={`px-4 py-3 hover:bg-green-700 cursor-pointer transition-colors border-b border-green-700 ${
-                    selectedApi?.id === api.id ? 'bg-green-600' : ''
+                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 ${
+                    selectedApi?.id === api.id ? 'bg-green-50' : ''
                   }`}
                   onClick={() => handleApiSelect(api)}
                 >
@@ -319,34 +321,31 @@ const ApiTargetSelector = ({ onApiChange, currentApi }) => {
                       {getStatusIcon(api)}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-white truncate">
+                          <span className="text-sm font-medium text-gray-900 truncate">
                             {api.name}
                           </span>
                           {api.isCustom && (
-                            <span className="text-xs bg-blue-600 text-white px-1 rounded">
+                            <span className="text-xs bg-blue-100 text-blue-800 px-1 rounded">
                               Custom
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-green-200 truncate">
+                        <div className="text-xs text-gray-500 truncate">
                           {api.url}
-                        </div>
-                        <div className="text-xs text-green-300 truncate">
-                          {api.description}
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center space-x-2">
-                      <div className="flex flex-col items-end text-xs">
+                      <div className="text-right text-xs">
                         {api.responseTime > 0 && (
                           <span className={getResponseTimeColor(api.responseTime)}>
                             {api.responseTime}ms
                           </span>
                         )}
-                        <span className="text-green-300">
+                        <div className="text-gray-500 capitalize">
                           {api.status}
-                        </span>
+                        </div>
                       </div>
                       
                       {api.isCustom && (
@@ -355,7 +354,7 @@ const ApiTargetSelector = ({ onApiChange, currentApi }) => {
                             e.stopPropagation()
                             removeCustomApi(api.ip)
                           }}
-                          className="p-1 hover:bg-red-600 rounded text-red-400 hover:text-white"
+                          className="p-1 hover:bg-red-100 rounded text-red-400 hover:text-red-600"
                           title="Supprimer cette API"
                         >
                           <XMarkIcon className="h-3 w-3" />
@@ -368,9 +367,9 @@ const ApiTargetSelector = ({ onApiChange, currentApi }) => {
             )}
           </div>
 
-          {/* Info */}
-          <div className="px-4 py-2 border-t border-green-700 text-xs text-green-300">
-            💡 Toutes les APIs utilisent le port 5000. Cliquez pendant le scan pour changer d'API.
+          {/* Info footer */}
+          <div className="px-4 py-2 bg-gray-50 text-xs text-gray-600">
+            💡 Port 5000 par défaut
           </div>
         </div>
       )}
@@ -378,4 +377,4 @@ const ApiTargetSelector = ({ onApiChange, currentApi }) => {
   )
 }
 
-export default ApiTargetSelector
+export default ApiSelectorButton
