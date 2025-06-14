@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import ApiSelector from './ApiSelector'
 
 // Composant fallback pour les icônes manquantes
 const FallbackIcon = ({ className }) => (
@@ -88,7 +89,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                 <h1 className="text-white text-lg font-semibold">Running Admin</h1>
               </div>
               
-              <nav className="mt-5 flex-1 px-2 space-y-1 overflow-y-auto">
+              <nav className="mt-5 flex-1 px-2 space-y-1 overflow-y-auto scrollbar-thin">
                 {navigation.map((item) => (
                   <NavLink
                     key={item.name}
@@ -111,6 +112,9 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                   </NavLink>
                 ))}
               </nav>
+              
+              {/* Sélecteur d'API en bas */}
+              <ApiSelector />
             </div>
           </Transition.Child>
         </Dialog>
@@ -118,7 +122,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
 
       {/* Sidebar desktop */}
       <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
-        <div className="flex flex-col flex-grow pt-5 bg-green-700 overflow-y-auto">
+        <div className="flex flex-col flex-grow pt-5 bg-green-700 overflow-y-auto scrollbar-thin">
           <div className="flex items-center flex-shrink-0 px-4">
             <h1 className="text-white text-lg font-semibold">Running Admin</h1>
           </div>
@@ -175,6 +179,9 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
               </NavLink>
             ))}
           </nav>
+          
+          {/* Sélecteur d'API en bas - Desktop */}
+          <ApiSelector />
         </div>
       </div>
     </>

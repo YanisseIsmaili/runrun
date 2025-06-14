@@ -96,6 +96,100 @@ button {
     color: white !important;
   }
 
+  /* AJOUT À TON CSS EXISTANT - Scrollbars personnalisées ultra-fines */
+
+  /* Override des scrollbars existantes pour les rendre plus fines */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 3px !important;
+    height: 3px !important;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.3) !important;
+    border-radius: 2px !important;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.6) !important;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent !important;
+  }
+
+  /* Scrollbars encore plus fines */
+  .scrollbar-ultra-thin::-webkit-scrollbar {
+    width: 2px !important;
+    height: 2px !important;
+  }
+
+  .scrollbar-ultra-thin::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  .scrollbar-ultra-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.2) !important;
+    border-radius: 1px !important;
+  }
+
+  .scrollbar-ultra-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.5) !important;
+  }
+
+  /* Scrollbars invisibles */
+  .scrollbar-invisible::-webkit-scrollbar {
+    width: 0px !important;
+    height: 0px !important;
+  }
+
+  .scrollbar-invisible {
+    scrollbar-width: none !important;
+  }
+
+  /* Scrollbars pour les zones vertes (sidebar) */
+  .bg-green-700::-webkit-scrollbar,
+  .bg-green-800::-webkit-scrollbar {
+    width: 3px !important;
+    height: 3px !important;
+  }
+
+  .bg-green-700::-webkit-scrollbar-track,
+  .bg-green-800::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  .bg-green-700::-webkit-scrollbar-thumb,
+  .bg-green-800::-webkit-scrollbar-thumb {
+    background-color: rgba(34, 197, 94, 0.3) !important;
+    border-radius: 2px !important;
+  }
+
+  .bg-green-700::-webkit-scrollbar-thumb:hover,
+  .bg-green-800::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(34, 197, 94, 0.6) !important;
+  }
+
+  /* Firefox */
+  .scrollbar-thin {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(156, 163, 175, 0.3) transparent !important;
+  }
+
+  .scrollbar-ultra-thin {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(156, 163, 175, 0.2) transparent !important;
+  }
+
+  /* Transitions douces */
+  ::-webkit-scrollbar-thumb {
+    transition: background-color 0.2s ease !important;
+  }
+
+
   .btn-sm {
     @apply px-3 py-1.5 text-xs;
   }
