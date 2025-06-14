@@ -1,5 +1,6 @@
-// running-admin/src/components/Sidebar.jsx - FICHIER COMPLET avec couleur verte
+// running-admin/src/components/Sidebar.jsx - VERSION CORRIGÉE AVEC FALLBACK
 import { Fragment } from 'react'
+import React from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { 
@@ -8,17 +9,24 @@ import {
   ClockIcon, 
   CogIcon,
   ChartBarIcon,
-  MapPinIcon
+  MapIcon
 } from '@heroicons/react/24/outline'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+
+// Composant fallback pour les icônes manquantes
+const FallbackIcon = ({ className }) => (
+  <div className={`${className} flex items-center justify-center`}>
+    <span className="text-xs">?</span>
+  </div>
+)
 
 const navigation = [
   { name: 'Tableau de bord', href: '/', icon: HomeIcon },
   { name: 'Utilisateurs', href: '/users', icon: UsersIcon },
   { name: 'Historique des courses', href: '/history', icon: ClockIcon },
   { name: 'Statistiques', href: '/stats', icon: ChartBarIcon },
-  { name: 'Parcours', href: '/routes', icon: MapPinIcon }, // RENOMMÉ
+  { name: 'Parcours', href: '/routes', icon: MapIcon }, // Changé MapPinIcon -> MapIcon
   { name: 'Paramètres', href: '/settings', icon: CogIcon },
 ]
 
@@ -95,10 +103,10 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                     }
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <item.icon
-                      className="mr-3 flex-shrink-0 h-6 w-6 text-green-300"
-                      aria-hidden="true"
-                    />
+                    {React.createElement(item.icon || FallbackIcon, {
+                      className: "mr-3 flex-shrink-0 h-6 w-6 text-green-300",
+                      'aria-hidden': "true"
+                    })}
                     {item.name}
                   </NavLink>
                 ))}
@@ -159,10 +167,10 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
                   )
                 }
               >
-                <item.icon
-                  className="mr-3 flex-shrink-0 h-6 w-6 text-green-300"
-                  aria-hidden="true"
-                />
+                {React.createElement(item.icon || FallbackIcon, {
+                  className: "mr-3 flex-shrink-0 h-6 w-6 text-green-300",
+                  'aria-hidden': "true"
+                })}
                 {item.name}
               </NavLink>
             ))}

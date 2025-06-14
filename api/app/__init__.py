@@ -82,6 +82,7 @@ def create_app(config_name=None):
         from app.routes.runs import runs_bp
         from app.routes.routes import routes_bp
         from app.routes.admin import admin_bp
+        from app.routes.dashboard import dashboard_bp
         
         # Import du modèle stats_cache
         from app.models.stats_cache import StatsCache
@@ -91,6 +92,7 @@ def create_app(config_name=None):
         app.register_blueprint(runs_bp, url_prefix='/api/runs')
         app.register_blueprint(routes_bp, url_prefix='/api/routes')
         app.register_blueprint(admin_bp, url_prefix='/api/admin')
+        app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
         
         print("✅ Blueprints enregistrés avec succès")
     except ImportError as e:
