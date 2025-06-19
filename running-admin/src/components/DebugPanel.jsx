@@ -1,4 +1,4 @@
-// running-admin/src/components/DebugPanel.jsx - VERSION AMÉLIORÉE AVEC CONSOLE
+// running-admin/src/components/DebugPanel.jsx - VERSION ULTRA AMÉLIORÉE
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useApiConfig } from '../utils/globalApiConfig'
@@ -14,7 +14,18 @@ import {
   ShieldCheckIcon,
   ClockIcon,
   CpuChipIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  PlayIcon,
+  PauseIcon,
+  ChartBarIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  InformationCircleIcon,
+  Cog6ToothIcon,
+  FireIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline'
 
 const DebugPanel = () => {
@@ -22,20 +33,67 @@ const DebugPanel = () => {
   const { isConfigured, selectedApi } = useApiConfig()
   const [isOpen, setIsOpen] = useState(false)
   const [logs, setLogs] = useState([])
-  const [activeTab, setActiveTab] = useState('console') // console, auth, api, system
+  const [activeTab, setActiveTab] = useState('console')
   const [autoScroll, setAutoScroll] = useState(true)
   const [isRunningTests, setIsRunningTests] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
+  const [showTimestamps, setShowTimestamps] = useState(true)
+  const [logLevel, setLogLevel] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [stats, setStats] = useState({
+    totalLogs: 0,
+    errors: 0,
+    warnings: 0,
+    successes: 0,
+    sessionStart: Date.now()
+  })
+  const [systemMetrics, setSystemMetrics] = useState({
+    memory: 0,
+    localStorage: 0,
+    apiCalls: 0,
+    responseTime: 0
+  })
+  const [apiHealthHistory, setApiHealthHistory] = useState([])
+  const [monitoringEnabled, setMonitoringEnabled] = useState(false)
+  
   const consoleRef = useRef(null)
+  const metricsIntervalRef = useRef(null)
+  const healthCheckIntervalRef = useRef(null)
 
-  // Auto-scroll vers le bas quand de nouveaux logs arrivent
+  // Auto-scroll et mise à jour des stats
   useEffect(() => {
-    if (autoScroll && consoleRef.current) {
+    if (autoScroll && consoleRef.current && !isPaused) {
       consoleRef.current.scrollTop = consoleRef.current.scrollHeight
     }
-  }, [logs, autoScroll])
+    
+    const errorCount = logs.filter(log => log.type === 'error').length
+    const warningCount = logs.filter(log => log.type === 'warning').length
+    const successCount = logs.filter(log => log.type === 'success').length
+    
+    setStats(prev => ({
+      ...prev,
+      totalLogs: logs.length,
+      errors: errorCount,
+      warnings: warningCount,
+      successes: successCount
+    }))
+  }, [logs, autoScroll, isPaused])
 
-  // Fonction pour ajouter des logs avec types et couleurs
-  const addLog = (message, type = 'info', category = 'general') => {
+  // Monitoring système
+  useEffect(() => {
+    if (monitoringEnabled) {
+      startSystemMonitoring()
+    } else {
+      stopSystemMonitoring()
+    }
+    
+    return () => stopSystemMonitoring()
+  }, [monitoringEnabled])
+
+  // Fonctions utilitaires
+  const addLog = (message, type = 'info', category = 'general', data = null) => {
+    if (isPaused) return
+    
     const timestamp = new Date().toLocaleTimeString('fr-FR', { 
       hour12: false, 
       hour: '2-digit', 
@@ -50,417 +108,811 @@ const DebugPanel = () => {
       type, 
       category,
       timestamp,
-      fullDate: new Date().toISOString()
+      fullDate: new Date().toISOString(),
+      data: data || null,
+      stack: type === 'error' ? new Error().stack : null
     }
     
-    setLogs(prev => [...prev, log])
-    console.log(`[DEBUG PANEL ${category.toUpperCase()}] ${message}`)
+    setLogs(prev => [...prev.slice(-499), log]) // Garder max 500 logs
+    
+    // Log dans la vraie console aussi
+    const consoleMethod = type === 'error' ? 'error' : type === 'warning' ? 'warn' : 'log'
+    console[consoleMethod](`[DEBUG PANEL ${category.toUpperCase()}] ${message}`, data || '')
   }
 
-  // Test d'authentification complet
-  const runAuthTest = async () => {
-    if (isRunningTests) return
-    
-    setIsRunningTests(true)
-    addLog('🔐 Début des tests d\'authentification...', 'info', 'auth')
-    
-    try {
-      // Test 1: Connexion API
-      addLog('📡 Test de connexion API...', 'info', 'auth')
-      await api.auth.testConnection()
-      addLog('✅ API accessible et fonctionnelle', 'success', 'auth')
-      
-      // Test 2: Validation du token
-      addLog('🎫 Validation du token actuel...', 'info', 'auth')
-      const response = await api.auth.validateToken()
-      
-      if (response.data.status === 'success') {
-        const userData = response.data.data.user
-        addLog(`✅ Token valide - Utilisateur: ${userData.username}`, 'success', 'auth')
-        addLog(`👤 Email: ${userData.email}`, 'info', 'auth')
-        addLog(`👑 Admin: ${userData.is_admin ? 'Oui' : 'Non'}`, userData.is_admin ? 'success' : 'warning', 'auth')
-        addLog(`📅 Dernière connexion: ${userData.last_login || 'N/A'}`, 'info', 'auth')
-      } else {
-        addLog('❌ Token invalide ou expiré', 'error', 'auth')
-      }
-      
-      // Test 3: Permissions et accès aux routes
-      addLog('🔑 Test des permissions d\'accès...', 'info', 'auth')
-      
-      try {
-        await api.routes.getAll({ limit: 1 })
-        addLog('✅ Accès aux parcours autorisé', 'success', 'auth')
-      } catch (error) {
-        if (error.response?.status === 403) {
-          addLog('🚫 Accès aux parcours refusé - Permissions insuffisantes', 'error', 'auth')
-        } else {
-          addLog(`❌ Erreur d\'accès aux parcours: ${error.message}`, 'error', 'auth')
-        }
-      }
-
-      try {
-        await api.users.getAll({ limit: 1 })
-        addLog('✅ Accès à la gestion des utilisateurs autorisé', 'success', 'auth')
-      } catch (error) {
-        if (error.response?.status === 403) {
-          addLog('🚫 Accès à la gestion des utilisateurs refusé', 'warning', 'auth')
-        } else {
-          addLog(`❌ Erreur d\'accès aux utilisateurs: ${error.message}`, 'error', 'auth')
-        }
-      }
-      
-      addLog('🏁 Tests d\'authentification terminés', 'success', 'auth')
-      
-    } catch (error) {
-      addLog(`❌ Erreur critique: ${error.message}`, 'error', 'auth')
-      if (error.response) {
-        addLog(`📱 Code HTTP: ${error.response.status}`, 'error', 'auth')
-        addLog(`📋 Détails: ${JSON.stringify(error.response.data).substring(0, 200)}`, 'error', 'auth')
-      }
-    } finally {
-      setIsRunningTests(false)
-    }
-  }
-
-  // Test des APIs et endpoints
-  const runApiTest = async () => {
-    if (isRunningTests) return
-    
-    setIsRunningTests(true)
-    addLog('🌐 Début des tests API...', 'info', 'api')
-    
-    const endpoints = [
-      { name: 'Health Check', endpoint: '/api/health', method: 'GET' },
-      { name: 'Routes', endpoint: '/api/routes', method: 'GET' },
-      { name: 'Users', endpoint: '/api/users', method: 'GET' },
-      { name: 'Running History', endpoint: '/api/running-history', method: 'GET' },
-      { name: 'Statistics', endpoint: '/api/stats', method: 'GET' }
-    ]
-
-    for (const test of endpoints) {
-      try {
-        addLog(`📡 Test ${test.name}...`, 'info', 'api')
-        const start = performance.now()
-        
-        let response
-        switch (test.endpoint) {
-          case '/api/health':
-            response = await fetch(`${selectedApi?.url || ''}${test.endpoint}`)
-            break
-          case '/api/routes':
-            response = await api.routes.getAll({ limit: 1 })
-            break
-          case '/api/users':
-            response = await api.users.getAll({ limit: 1 })
-            break
-          default:
-            response = await fetch(`${selectedApi?.url || ''}${test.endpoint}`, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')}`
-              }
-            })
-        }
-        
-        const duration = Math.round(performance.now() - start)
-        const status = response.status || response.response?.status || 200
-        
-        if (status >= 200 && status < 300) {
-          addLog(`✅ ${test.name}: OK (${duration}ms)`, 'success', 'api')
-        } else if (status === 403) {
-          addLog(`🚫 ${test.name}: Accès refusé (${duration}ms)`, 'warning', 'api')
-        } else {
-          addLog(`❌ ${test.name}: Erreur ${status} (${duration}ms)`, 'error', 'api')
-        }
-        
-      } catch (error) {
-        addLog(`❌ ${test.name}: ${error.message}`, 'error', 'api')
-      }
-    }
-    
-    addLog('🏁 Tests API terminés', 'success', 'api')
-    setIsRunningTests(false)
-  }
-
-  // Informations système
-  const getSystemInfo = () => {
-    const info = {
-      userAgent: navigator.userAgent,
-      platform: navigator.platform,
-      language: navigator.language,
-      cookieEnabled: navigator.cookieEnabled,
-      onLine: navigator.onLine,
-      localStorage: typeof Storage !== 'undefined',
-      sessionStorage: typeof Storage !== 'undefined',
-      indexedDB: 'indexedDB' in window,
-      serviceWorker: 'serviceWorker' in navigator,
-      viewport: `${window.innerWidth}x${window.innerHeight}`,
-      screen: `${screen.width}x${screen.height}`,
-      colorDepth: screen.colorDepth,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      memory: navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'N/A',
-      connection: navigator.connection ? `${navigator.connection.effectiveType} (${navigator.connection.downlink}Mbps)` : 'N/A'
-    }
-    
-    Object.entries(info).forEach(([key, value]) => {
-      addLog(`💻 ${key}: ${value}`, 'info', 'system')
-    })
-  }
-
-  // Promotion admin
-  const promoteAdmin = async () => {
-    if (isRunningTests) return
-    
-    setIsRunningTests(true)
-    try {
-      addLog('👑 Tentative de promotion admin...', 'info', 'auth')
-      const response = await api.auth.promoteAdmin('PROMOTE_ADMIN_SECRET_2025')
-      
-      if (response.data.status === 'success') {
-        addLog('✅ Promotion admin réussie! 🎉', 'success', 'auth')
-        addLog('🔄 Rechargement recommandé pour mettre à jour les permissions...', 'warning', 'auth')
-      }
-    } catch (error) {
-      addLog(`❌ Échec promotion: ${error.response?.data?.message || error.message}`, 'error', 'auth')
-    } finally {
-      setIsRunningTests(false)
-    }
-  }
-
-  // Vider les logs
   const clearLogs = () => {
     setLogs([])
-    addLog('🧹 Console vidée', 'info', 'general')
+    addLog('🧹 Console vidée - Session redémarrée', 'info', 'system')
+    setStats(prev => ({ ...prev, sessionStart: Date.now() }))
   }
 
-  // Télécharger les logs
   const downloadLogs = () => {
-    const logContent = logs.map(log => 
-      `[${log.fullDate}] [${log.category.toUpperCase()}] [${log.type.toUpperCase()}] ${log.message}`
-    ).join('\n')
+    const logContent = logs.map(log => {
+      let content = `[${log.fullDate}] [${log.category.toUpperCase()}] [${log.type.toUpperCase()}] ${log.message}`
+      if (log.data) {
+        content += `\nDATA: ${JSON.stringify(log.data, null, 2)}`
+      }
+      if (log.stack && log.type === 'error') {
+        content += `\nSTACK: ${log.stack}`
+      }
+      return content
+    }).join('\n\n')
     
     const blob = new Blob([logContent], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `debug-logs-${new Date().toISOString().split('T')[0]}.txt`
+    a.download = `debug-logs-${new Date().toISOString().split('T')[0]}-${Date.now()}.txt`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
     
-    addLog('📥 Logs téléchargés', 'success', 'general')
+    addLog('📥 Logs téléchargés avec succès', 'success', 'system')
   }
 
-  // Filtrer les logs par onglet actif
-  const filteredLogs = logs.filter(log => {
-    switch (activeTab) {
-      case 'console': return true
-      case 'auth': return log.category === 'auth'
-      case 'api': return log.category === 'api'
-      case 'system': return log.category === 'system'
-      default: return true
+  const startSystemMonitoring = () => {
+    addLog('🚀 Monitoring système activé', 'info', 'system')
+    
+    // Métriques système toutes les 5 secondes
+    metricsIntervalRef.current = setInterval(() => {
+      updateSystemMetrics()
+    }, 5000)
+    
+    // Health check API toutes les 30 secondes
+    if (selectedApi?.url) {
+      healthCheckIntervalRef.current = setInterval(() => {
+        performHealthCheck()
+      }, 30000)
     }
+  }
+
+  const stopSystemMonitoring = () => {
+    if (metricsIntervalRef.current) {
+      clearInterval(metricsIntervalRef.current)
+      metricsIntervalRef.current = null
+    }
+    if (healthCheckIntervalRef.current) {
+      clearInterval(healthCheckIntervalRef.current)
+      healthCheckIntervalRef.current = null
+    }
+    addLog('⏹️ Monitoring système arrêté', 'info', 'system')
+  }
+
+  const updateSystemMetrics = () => {
+    try {
+      // Calcul de l'usage mémoire approximatif
+      const memUsage = performance.memory ? {
+        used: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024),
+        total: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024),
+        limit: Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024)
+      } : null
+
+      // Calcul de l'usage localStorage
+      let localStorageSize = 0
+      for (let key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+          localStorageSize += localStorage[key].length + key.length
+        }
+      }
+
+      setSystemMetrics({
+        memory: memUsage,
+        localStorage: Math.round(localStorageSize / 1024), // KB
+        apiCalls: systemMetrics.apiCalls,
+        responseTime: systemMetrics.responseTime
+      })
+
+      // Log si utilisation élevée
+      if (memUsage && memUsage.used > memUsage.limit * 0.8) {
+        addLog(`⚠️ Utilisation mémoire élevée: ${memUsage.used}MB/${memUsage.limit}MB`, 'warning', 'system')
+      }
+      
+      if (localStorageSize > 5 * 1024 * 1024) { // > 5MB
+        addLog(`⚠️ LocalStorage volumineux: ${Math.round(localStorageSize / 1024 / 1024)}MB`, 'warning', 'system')
+      }
+    } catch (error) {
+      addLog(`❌ Erreur monitoring: ${error.message}`, 'error', 'system')
+    }
+  }
+
+  const performHealthCheck = async () => {
+    if (!selectedApi?.url) return
+    
+    try {
+      const startTime = performance.now()
+      const response = await fetch(`${selectedApi.url}/api/health`, {
+        method: 'GET',
+        mode: 'cors',
+        signal: AbortSignal.timeout(10000)
+      })
+      const endTime = performance.now()
+      const responseTime = Math.round(endTime - startTime)
+
+      const healthData = {
+        timestamp: Date.now(),
+        status: response.ok ? 'healthy' : 'unhealthy',
+        responseTime,
+        statusCode: response.status
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        healthData.data = data
+        addLog(`💚 Health Check OK (${responseTime}ms) - DB: ${data.database || 'N/A'}`, 'success', 'api', data)
+      } else {
+        addLog(`💔 Health Check Failed (${response.status}) - ${responseTime}ms`, 'error', 'api')
+      }
+
+      setApiHealthHistory(prev => [...prev.slice(-19), healthData]) // Garder 20 derniers checks
+      setSystemMetrics(prev => ({ ...prev, responseTime }))
+      
+    } catch (error) {
+      addLog(`💥 Health Check Error: ${error.message}`, 'error', 'api')
+      setApiHealthHistory(prev => [...prev.slice(-19), {
+        timestamp: Date.now(),
+        status: 'error',
+        error: error.message
+      }])
+    }
+  }
+
+  // Tests avancés
+  const runAdvancedApiTest = async () => {
+    if (isRunningTests) return
+    
+    setIsRunningTests(true)
+    addLog('🚀 Début du diagnostic API avancé...', 'info', 'api')
+    
+    const endpoints = [
+      { name: 'Health Check', endpoint: '/api/health', method: 'GET', critical: true },
+      { name: 'Authentication', endpoint: '/api/auth/validate', method: 'GET', auth: true },
+      { name: 'Routes', endpoint: '/api/routes', method: 'GET', auth: true },
+      { name: 'Users', endpoint: '/api/users', method: 'GET', auth: true },
+      { name: 'Statistics', endpoint: '/api/stats', method: 'GET', auth: true },
+      { name: 'System Info', endpoint: '/api/system/info', method: 'GET', auth: true }
+    ]
+
+    let successCount = 0
+    let totalTests = endpoints.length
+
+    for (const test of endpoints) {
+      try {
+        addLog(`🧪 Test ${test.name}...`, 'info', 'api')
+        const startTime = performance.now()
+        
+        let response
+        const headers = {}
+        
+        if (test.auth) {
+          const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`
+          }
+        }
+
+        if (test.endpoint === '/api/health') {
+          response = await fetch(`${selectedApi?.url || ''}${test.endpoint}`)
+        } else {
+          response = await fetch(`${selectedApi?.url || ''}${test.endpoint}`, {
+            method: test.method,
+            headers: {
+              'Content-Type': 'application/json',
+              ...headers
+            },
+            signal: AbortSignal.timeout(10000)
+          })
+        }
+
+        const endTime = performance.now()
+        const responseTime = Math.round(endTime - startTime)
+
+        if (response.ok) {
+          const data = await response.json()
+          addLog(`✅ ${test.name} OK (${responseTime}ms) - Status: ${response.status}`, 'success', 'api', data)
+          successCount++
+        } else if (response.status === 401 && test.auth) {
+          addLog(`🔒 ${test.name} - Protection JWT active (${responseTime}ms)`, 'info', 'api')
+          successCount++ // Considéré comme un succès
+        } else {
+          const errorText = await response.text()
+          addLog(`❌ ${test.name} Failed - ${response.status} (${responseTime}ms)`, 'error', 'api', { status: response.status, error: errorText })
+        }
+
+        setSystemMetrics(prev => ({ ...prev, apiCalls: prev.apiCalls + 1 }))
+        
+        // Pause entre les tests
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+      } catch (error) {
+        addLog(`💥 ${test.name} Error: ${error.message}`, 'error', 'api', { error: error.message, stack: error.stack })
+      }
+    }
+
+    const successRate = Math.round((successCount / totalTests) * 100)
+    const resultType = successRate >= 80 ? 'success' : successRate >= 60 ? 'warning' : 'error'
+    addLog(`🏁 Tests terminés: ${successCount}/${totalTests} réussis (${successRate}%)`, resultType, 'api')
+    
+    setIsRunningTests(false)
+  }
+
+  const runAuthTest = async () => {
+    if (isRunningTests) return
+    
+    setIsRunningTests(true)
+    addLog('🔐 Diagnostic d\'authentification...', 'info', 'auth')
+    
+    try {
+      // Test 1: Vérification token
+      addLog('🎫 Vérification du token...', 'info', 'auth')
+      const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')
+      
+      if (!token) {
+        addLog('❌ Aucun token trouvé', 'error', 'auth')
+        return
+      }
+      
+      addLog(`✅ Token trouvé: ${token.substring(0, 20)}...`, 'success', 'auth')
+      
+      // Test 2: Validation token
+      const response = await api.auth.validateToken()
+      if (response.data.status === 'success') {
+        const userData = response.data.data.user
+        addLog(`✅ Token valide - User: ${userData.username} (${userData.email})`, 'success', 'auth', userData)
+        addLog(`👑 Privilèges: ${userData.is_admin ? 'Admin' : 'User'} | Actif: ${userData.is_active}`, 'info', 'auth')
+      } else {
+        addLog('❌ Token invalide', 'error', 'auth')
+      }
+      
+      // Test 3: Permissions
+      addLog('🛡️ Test des permissions...', 'info', 'auth')
+      try {
+        await api.users.getAll({ limit: 1 })
+        addLog('✅ Accès API users autorisé', 'success', 'auth')
+      } catch (error) {
+        if (error.response?.status === 401) {
+          addLog('❌ Accès API users refusé - Token expiré', 'error', 'auth')
+        } else if (error.response?.status === 403) {
+          addLog('⚠️ Accès API users refusé - Permissions insuffisantes', 'warning', 'auth')
+        } else {
+          addLog(`❌ Erreur test permissions: ${error.message}`, 'error', 'auth')
+        }
+      }
+      
+    } catch (error) {
+      addLog(`💥 Erreur diagnostic auth: ${error.message}`, 'error', 'auth', { error: error.message, stack: error.stack })
+    } finally {
+      setIsRunningTests(false)
+    }
+  }
+
+  const runSystemDiagnostic = async () => {
+    if (isRunningTests) return
+    
+    setIsRunningTests(true)
+    addLog('🔧 Diagnostic système...', 'info', 'system')
+    
+    try {
+      // Test navigateur
+      addLog(`🌐 Navigateur: ${navigator.userAgent}`, 'info', 'system')
+      addLog(`📱 Platform: ${navigator.platform}`, 'info', 'system')
+      addLog(`🌍 Langue: ${navigator.language}`, 'info', 'system')
+      
+      // Test connexion
+      addLog(`📶 En ligne: ${navigator.onLine ? 'Oui' : 'Non'}`, navigator.onLine ? 'success' : 'error', 'system')
+      
+      // Test stockage
+      const storageTest = {
+        localStorage: !!window.localStorage,
+        sessionStorage: !!window.sessionStorage,
+        indexedDB: !!window.indexedDB
+      }
+      
+      Object.entries(storageTest).forEach(([key, value]) => {
+        addLog(`💾 ${key}: ${value ? 'Disponible' : 'Indisponible'}`, value ? 'success' : 'error', 'system')
+      })
+      
+      // Test performance
+      if (performance.memory) {
+        const mem = performance.memory
+        addLog(`🧠 Mémoire JS: ${Math.round(mem.usedJSHeapSize/1024/1024)}MB utilisés / ${Math.round(mem.jsHeapSizeLimit/1024/1024)}MB limite`, 'info', 'system')
+      }
+      
+      // Test config API
+      addLog(`⚙️ API configurée: ${isConfigured ? 'Oui' : 'Non'}`, isConfigured ? 'success' : 'warning', 'system')
+      if (selectedApi) {
+        addLog(`🎯 API sélectionnée: ${selectedApi.name} (${selectedApi.url})`, 'info', 'system', selectedApi)
+      }
+      
+      // Test authentification
+      addLog(`🔐 Authentifié: ${isAuthenticated ? 'Oui' : 'Non'}`, isAuthenticated ? 'success' : 'warning', 'system')
+      if (user) {
+        addLog(`👤 Utilisateur: ${user.username} (${user.email})`, 'info', 'system', user)
+      }
+      
+    } catch (error) {
+      addLog(`💥 Erreur diagnostic système: ${error.message}`, 'error', 'system')
+    } finally {
+      setIsRunningTests(false)
+    }
+  }
+
+  // Filtrage des logs
+  const filteredLogs = logs.filter(log => {
+    const matchesTab = activeTab === 'console' || log.category === activeTab
+    const matchesLevel = logLevel === 'all' || log.type === logLevel
+    const matchesSearch = !searchTerm || log.message.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesTab && matchesLevel && matchesSearch
   })
 
-  if (process.env.NODE_ENV === 'production') return null
+  // Formattage des logs
+  const getLogIcon = (type) => {
+    switch (type) {
+      case 'success': return '✅'
+      case 'error': return '❌'
+      case 'warning': return '⚠️'
+      default: return 'ℹ️'
+    }
+  }
+
+  const getLogColor = (type) => {
+    switch (type) {
+      case 'success': return 'bg-green-900/30 text-green-300 border-l-green-500'
+      case 'error': return 'bg-red-900/30 text-red-300 border-l-red-500'
+      case 'warning': return 'bg-yellow-900/30 text-yellow-300 border-l-yellow-500'
+      default: return 'text-green-400 border-l-blue-500'
+    }
+  }
+
+  // Composant de métriques en temps réel
+  const MetricsDisplay = () => (
+    <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="bg-gray-800 p-2 rounded">
+        <div className="text-gray-400">Session</div>
+        <div className="text-green-400">{Math.round((Date.now() - stats.sessionStart) / 1000)}s</div>
+      </div>
+      <div className="bg-gray-800 p-2 rounded">
+        <div className="text-gray-400">Logs</div>
+        <div className="text-blue-400">{stats.totalLogs}</div>
+      </div>
+      <div className="bg-gray-800 p-2 rounded">
+        <div className="text-gray-400">Erreurs</div>
+        <div className="text-red-400">{stats.errors}</div>
+      </div>
+      <div className="bg-gray-800 p-2 rounded">
+        <div className="text-gray-400">API Calls</div>
+        <div className="text-yellow-400">{systemMetrics.apiCalls}</div>
+      </div>
+      {systemMetrics.memory && (
+        <div className="bg-gray-800 p-2 rounded col-span-2">
+          <div className="text-gray-400">Mémoire JS</div>
+          <div className="text-purple-400">{systemMetrics.memory.used}MB / {systemMetrics.memory.limit}MB</div>
+        </div>
+      )}
+    </div>
+  )
+
+  // Affichage conditionnel en dev seulement
+  if (import.meta.env.NODE_ENV === 'production') {
+    return (
+      <div className="fixed bottom-4 right-4 z-50">
+        <div className="bg-red-500 text-white px-3 py-1 rounded text-xs">
+          Debug Panel désactivé en production
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      {/* Bouton Debug avec thème vert */}
+      {/* Bouton Debug avec indicateurs visuels */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`btn transition-all duration-300 shadow-green ${
+        className={`btn transition-all duration-300 shadow-lg ${
           isOpen 
-            ? 'btn-primary' 
-            : logs.length > 0 
-              ? 'bg-yellow-500 hover:bg-yellow-600 text-white animate-pulse' 
-              : 'btn-secondary'
+            ? 'bg-green-600 hover:bg-green-700 text-white' 
+            : stats.errors > 0
+            ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+            : stats.warnings > 0
+            ? 'bg-yellow-500 hover:bg-yellow-600 text-white' 
+            : logs.length > 0
+            ? 'bg-blue-500 hover:bg-blue-600 text-white'
+            : 'bg-gray-600 hover:bg-gray-700 text-white'
         }`}
-        title="Panel de Debug"
+        title="Debug Panel - Console de développement"
       >
         <BugAntIcon className="h-4 w-4 mr-2" />
         🔧 Debug
-        {logs.length > 0 && !isOpen && (
-          <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full animate-bounce">
-            {logs.length}
-          </span>
+        {!isOpen && (
+          <div className="flex ml-2 space-x-1">
+            {stats.errors > 0 && (
+              <span className="px-1.5 py-0.5 bg-red-600 text-white text-xs rounded-full animate-bounce">
+                {stats.errors}
+              </span>
+            )}
+            {stats.warnings > 0 && (
+              <span className="px-1.5 py-0.5 bg-yellow-600 text-white text-xs rounded-full">
+                {stats.warnings}
+              </span>
+            )}
+            {logs.length > 0 && stats.errors === 0 && stats.warnings === 0 && (
+              <span className="px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                {logs.length}
+              </span>
+            )}
+          </div>
         )}
       </button>
       
-      {/* Panel de Debug */}
+      {/* Panel Debug Principal */}
       {isOpen && (
-        <div className="absolute bottom-16 right-0 w-[28rem] h-[32rem] bg-white/95 backdrop-blur-xl border-2 border-green-200 rounded-xl shadow-green-xl animate-scale-in">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-green-200 bg-green-card-gradient rounded-t-xl">
-            <div className="flex items-center space-x-2">
-              <CommandLineIcon className="h-5 w-5 text-green-700" />
-              <h3 className="font-semibold text-green-800">Debug Panel</h3>
-              <span className="px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">
-                DEV
-              </span>
+        <div className="absolute bottom-16 right-0 w-[36rem] h-[40rem] bg-gray-900 border-2 border-green-500 rounded-xl shadow-2xl animate-scale-in overflow-hidden flex flex-col">
+          
+          {/* Header avancé */}
+          <div className="flex items-center justify-between p-3 border-b border-gray-700 bg-gradient-to-r from-gray-800 to-gray-900">
+            <div className="flex items-center space-x-3">
+              <CommandLineIcon className="h-5 w-5 text-green-400" />
+              <div>
+                <h3 className="font-semibold text-green-400">Debug Console</h3>
+                <div className="text-xs text-gray-400">
+                  Session: {Math.round((Date.now() - stats.sessionStart) / 1000)}s | 
+                  Logs: {stats.totalLogs} | 
+                  Erreurs: {stats.errors}
+                </div>
+              </div>
+              <div className="flex space-x-1">
+                <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full">
+                  DEV
+                </span>
+                {monitoringEnabled && (
+                  <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded-full animate-pulse">
+                    LIVE
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
+            
+            <div className="flex items-center space-x-1">
+              {/* Contrôles rapides */}
+              <button
+                onClick={() => setMonitoringEnabled(!monitoringEnabled)}
+                className={`p-1.5 rounded ${monitoringEnabled ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-400'}`}
+                title={monitoringEnabled ? 'Arrêter monitoring' : 'Démarrer monitoring'}
+              >
+                {monitoringEnabled ? <PauseIcon className="h-3 w-3" /> : <PlayIcon className="h-3 w-3" />}
+              </button>
+              
+              <button
+                onClick={() => setIsPaused(!isPaused)}
+                className={`p-1.5 rounded ${isPaused ? 'bg-orange-600 text-white' : 'hover:bg-gray-700 text-gray-400'}`}
+                title={isPaused ? 'Reprendre logs' : 'Mettre en pause'}
+              >
+                {isPaused ? <PlayIcon className="h-3 w-3" /> : <PauseIcon className="h-3 w-3" />}
+              </button>
+              
+              <button
+                onClick={() => setAutoScroll(!autoScroll)}
+                className={`p-1.5 rounded ${autoScroll ? 'bg-green-600 text-white' : 'hover:bg-gray-700 text-gray-400'}`}
+                title={autoScroll ? 'Désactiver auto-scroll' : 'Activer auto-scroll'}
+              >
+                {autoScroll ? <EyeIcon className="h-3 w-3" /> : <EyeSlashIcon className="h-3 w-3" />}
+              </button>
+              
               {logs.length > 0 && (
                 <>
                   <button
                     onClick={downloadLogs}
-                    className="p-1 hover:bg-green-100 rounded text-green-700"
-                    title="Télécharger les logs"
+                    className="p-1.5 hover:bg-gray-700 rounded text-gray-400"
+                    title="Télécharger logs"
                   >
-                    <ArrowDownTrayIcon className="h-4 w-4" />
+                    <ArrowDownTrayIcon className="h-3 w-3" />
                   </button>
                   <button
                     onClick={clearLogs}
-                    className="p-1 hover:bg-green-100 rounded text-green-700"
-                    title="Vider les logs"
+                    className="p-1.5 hover:bg-gray-700 rounded text-gray-400"
+                    title="Vider console"
                   >
-                    <TrashIcon className="h-4 w-4" />
+                    <TrashIcon className="h-3 w-3" />
                   </button>
                 </>
               )}
+              
               <button 
                 onClick={() => setIsOpen(false)} 
-                className="p-1 hover:bg-green-100 rounded text-green-700"
+                className="p-1.5 hover:bg-gray-700 rounded text-gray-400"
                 title="Fermer"
               >
-                <XMarkIcon className="h-4 w-4" />
+                <XMarkIcon className="h-3 w-3" />
               </button>
             </div>
           </div>
           
-          {/* Onglets */}
-          <div className="flex border-b border-green-200 bg-green-50">
-            {[
-              { id: 'console', label: 'Console', icon: CommandLineIcon },
-              { id: 'auth', label: 'Auth', icon: ShieldCheckIcon },
-              { id: 'api', label: 'API', icon: ServerIcon },
-              { id: 'system', label: 'Système', icon: CpuChipIcon }
-            ].map(tab => (
+          {/* Onglets et filtres */}
+          <div className="flex items-center justify-between p-2 border-b border-gray-700 bg-gray-800">
+            <div className="flex space-x-1">
+              {[
+                { id: 'console', label: 'Console', icon: CommandLineIcon },
+                { id: 'auth', label: 'Auth', icon: ShieldCheckIcon },
+                { id: 'api', label: 'API', icon: ServerIcon },
+                { id: 'system', label: 'System', icon: CpuChipIcon }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center space-x-1 px-2 py-1 text-xs rounded transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-green-600 text-white'
+                      : 'hover:bg-gray-700 text-gray-400'
+                  }`}
+                >
+                  <tab.icon className="h-3 w-3" />
+                  <span>{tab.label}</span>
+                  {tab.id !== 'console' && (
+                    <span className="bg-gray-600 text-white px-1 rounded-full text-xs">
+                      {logs.filter(log => log.category === tab.id).length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              {/* Filtres niveau */}
+              <select
+                value={logLevel}
+                onChange={(e) => setLogLevel(e.target.value)}
+                className="bg-gray-700 text-white text-xs px-2 py-1 rounded border border-gray-600 w-24"
+              />
+              
+              {/* Timestamps */}
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-xs font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'text-green-700 border-b-2 border-green-500 bg-white'
-                    : 'text-green-600 hover:text-green-700 hover:bg-green-100'
-                }`}
+                onClick={() => setShowTimestamps(!showTimestamps)}
+                className={`p-1 text-xs rounded ${showTimestamps ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+                title="Afficher/masquer timestamps"
               >
-                <tab.icon className="h-3 w-3" />
-                <span>{tab.label}</span>
-                {tab.id !== 'console' && (
-                  <span className="ml-1 px-1 py-0.5 bg-green-200 text-green-700 text-xs rounded">
-                    {logs.filter(log => log.category === tab.id).length}
-                  </span>
-                )}
+                <ClockIcon className="h-3 w-3" />
               </button>
-            ))}
+            </div>
           </div>
 
-          {/* Contenu selon l'onglet */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Informations rapides */}
-            <div className="p-3 bg-green-50/50 border-b border-green-100 text-xs">
-              <div className="grid grid-cols-2 gap-2 text-green-700">
-                <div><strong>Utilisateur:</strong> {user?.username || 'Non connecté'}</div>
-                <div><strong>Authentifié:</strong> {isAuthenticated ? '✅' : '❌'}</div>
-                <div><strong>Admin:</strong> {user?.is_admin ? '✅' : '❌'}</div>
-                <div><strong>API:</strong> {isConfigured ? '🟢' : '🔴'} {selectedApi?.name || 'Non configurée'}</div>
-              </div>
-            </div>
-
-            {/* Actions rapides */}
-            <div className="p-3 border-b border-green-100 space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={runAuthTest}
-                  disabled={isRunningTests}
-                  className="btn btn-sm btn-primary disabled:opacity-50"
-                >
-                  {isRunningTests ? (
-                    <ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
-                  ) : (
-                    <ShieldCheckIcon className="h-3 w-3 mr-1" />
-                  )}
-                  Test Auth
-                </button>
-                <button
-                  onClick={runApiTest}
-                  disabled={isRunningTests || !isConfigured}
-                  className="btn btn-sm btn-secondary disabled:opacity-50"
-                >
-                  {isRunningTests ? (
-                    <ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
-                  ) : (
-                    <ServerIcon className="h-3 w-3 mr-1" />
-                  )}
-                  Test API
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={promoteAdmin}
-                  disabled={isRunningTests || user?.is_admin}
-                  className="btn btn-sm bg-yellow-500 hover:bg-yellow-600 text-white disabled:opacity-50"
-                >
-                  <UserIcon className="h-3 w-3 mr-1" />
-                  Promouvoir
-                </button>
-                <button
-                  onClick={getSystemInfo}
-                  className="btn btn-sm btn-secondary"
-                >
-                  <CpuChipIcon className="h-3 w-3 mr-1" />
-                  Info Système
-                </button>
-              </div>
-            </div>
-
-            {/* Console de logs */}
-            <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between px-3 py-1 bg-gray-900 text-green-400 text-xs">
-                <span>💻 Console ({filteredLogs.length} entrées)</span>
-                <div className="flex items-center space-x-2">
-                  <label className="flex items-center space-x-1">
-                    <input
-                      type="checkbox"
-                      checked={autoScroll}
-                      onChange={(e) => setAutoScroll(e.target.checked)}
-                      className="w-3 h-3"
-                    />
-                    <span>Auto-scroll</span>
-                  </label>
-                </div>
-              </div>
+          {/* Boutons d'action rapide */}
+          <div className="flex items-center justify-between p-2 border-b border-gray-700 bg-gray-850">
+            <div className="flex space-x-1">
+              <button
+                onClick={runAdvancedApiTest}
+                disabled={isRunningTests}
+                className="flex items-center space-x-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded disabled:opacity-50"
+              >
+                <ServerIcon className="h-3 w-3" />
+                <span>Test API</span>
+                {isRunningTests && <ArrowPathIcon className="h-3 w-3 animate-spin" />}
+              </button>
               
+              <button
+                onClick={runAuthTest}
+                disabled={isRunningTests}
+                className="flex items-center space-x-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded disabled:opacity-50"
+              >
+                <ShieldCheckIcon className="h-3 w-3" />
+                <span>Test Auth</span>
+              </button>
+              
+              <button
+                onClick={runSystemDiagnostic}
+                disabled={isRunningTests}
+                className="flex items-center space-x-1 px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded disabled:opacity-50"
+              >
+                <CpuChipIcon className="h-3 w-3" />
+                <span>Diagnostic</span>
+              </button>
+              
+              <button
+                onClick={performHealthCheck}
+                disabled={isRunningTests}
+                className="flex items-center space-x-1 px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded disabled:opacity-50"
+              >
+                <FireIcon className="h-3 w-3" />
+                <span>Health</span>
+              </button>
+            </div>
+            
+            <div className="text-xs text-gray-400">
+              {filteredLogs.length !== logs.length && `${filteredLogs.length}/${logs.length} logs`}
+            </div>
+          </div>
+
+          {/* Zone principale */}
+          <div className="flex-1 flex overflow-hidden">
+            
+            {/* Console principale */}
+            <div className="flex-1 flex flex-col">
+              {/* Zone de logs */}
               <div 
                 ref={consoleRef}
-                className="flex-1 overflow-y-auto bg-gray-900 text-green-300 p-2 font-mono text-xs leading-relaxed scrollbar-thin"
+                className="flex-1 overflow-y-auto p-2 bg-gray-900 font-mono text-xs space-y-1"
               >
                 {filteredLogs.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-gray-500">
                     <div className="text-center">
                       <CommandLineIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       <p>Console vide</p>
-                      <p className="text-xs mt-1">Exécutez des tests pour voir les logs</p>
+                      <p className="text-xs mt-1">
+                        {logs.length === 0 ? 'Exécutez des tests pour voir les logs' : 'Aucun log ne correspond aux filtres'}
+                      </p>
                     </div>
                   </div>
                 ) : (
                   filteredLogs.map(log => (
                     <div 
                       key={log.id} 
-                      className={`mb-1 p-1 rounded ${
-                        log.type === 'success' ? 'bg-green-900/30 text-green-300' :
-                        log.type === 'error' ? 'bg-red-900/30 text-red-300' :
-                        log.type === 'warning' ? 'bg-yellow-900/30 text-yellow-300' :
-                        'text-green-400'
-                      }`}
+                      className={`border-l-2 pl-2 py-1 rounded-r ${getLogColor(log.type)} hover:bg-gray-800/50 transition-colors`}
                     >
-                      <span className="text-gray-500">[{log.timestamp}]</span>
-                      <span className="text-gray-400 ml-1">[{log.category.toUpperCase()}]</span>
-                      <span className="ml-1">{log.message}</span>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-lg leading-none">{getLogIcon(log.type)}</span>
+                            {showTimestamps && (
+                              <span className="text-gray-500 text-xs">[{log.timestamp}]</span>
+                            )}
+                            <span className="text-gray-400 text-xs uppercase">[{log.category}]</span>
+                          </div>
+                          <div className="mt-1 break-words">{log.message}</div>
+                          
+                          {/* Données additionnelles */}
+                          {log.data && (
+                            <details className="mt-1">
+                              <summary className="text-gray-400 cursor-pointer text-xs hover:text-gray-300">
+                                📊 Données ({typeof log.data === 'object' ? Object.keys(log.data).length + ' propriétés' : typeof log.data})
+                              </summary>
+                              <pre className="mt-1 p-2 bg-gray-800 rounded text-xs overflow-x-auto">
+                                {JSON.stringify(log.data, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                          
+                          {/* Stack trace pour les erreurs */}
+                          {log.stack && log.type === 'error' && (
+                            <details className="mt-1">
+                              <summary className="text-red-400 cursor-pointer text-xs hover:text-red-300">
+                                🔍 Stack Trace
+                              </summary>
+                              <pre className="mt-1 p-2 bg-red-900/20 rounded text-xs overflow-x-auto text-red-300">
+                                {log.stack}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ))
                 )}
+              </div>
+              
+              {/* Barre de statut */}
+              <div className="p-2 border-t border-gray-700 bg-gray-800 text-xs text-gray-400">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <span>📊 Total: {stats.totalLogs}</span>
+                    <span className="text-green-400">✅ {stats.successes}</span>
+                    <span className="text-yellow-400">⚠️ {stats.warnings}</span>
+                    <span className="text-red-400">❌ {stats.errors}</span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {isPaused && <span className="text-orange-400">⏸️ PAUSE</span>}
+                    {!autoScroll && <span className="text-blue-400">📌 FIXED</span>}
+                    {monitoringEnabled && <span className="text-green-400 animate-pulse">🔴 LIVE</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Panel latéral de métriques */}
+            <div className="w-48 border-l border-gray-700 bg-gray-850 p-2 space-y-3">
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-2 flex items-center">
+                  <ChartBarIcon className="h-3 w-3 mr-1" />
+                  Métriques Session
+                </h4>
+                <MetricsDisplay />
+              </div>
+
+              {/* API Health History */}
+              {apiHealthHistory.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-gray-300 mb-2 flex items-center">
+                    <FireIcon className="h-3 w-3 mr-1" />
+                    API Health
+                  </h4>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {apiHealthHistory.slice(-10).map((health, index) => (
+                      <div key={index} className="flex items-center justify-between text-xs">
+                        <span className={health.status === 'healthy' ? 'text-green-400' : 'text-red-400'}>
+                          {health.status === 'healthy' ? '🟢' : '🔴'}
+                        </span>
+                        <span className="text-gray-400">
+                          {health.responseTime ? `${health.responseTime}ms` : 'Error'}
+                        </span>
+                        <span className="text-gray-500">
+                          {new Date(health.timestamp).toLocaleTimeString('fr-FR', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Infos système */}
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-2 flex items-center">
+                  <Cog6ToothIcon className="h-3 w-3 mr-1" />
+                  Système
+                </h4>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">API:</span>
+                    <span className={isConfigured ? 'text-green-400' : 'text-red-400'}>
+                      {isConfigured ? '✓' : '✗'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Auth:</span>
+                    <span className={isAuthenticated ? 'text-green-400' : 'text-red-400'}>
+                      {isAuthenticated ? '✓' : '✗'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Online:</span>
+                    <span className={navigator.onLine ? 'text-green-400' : 'text-red-400'}>
+                      {navigator.onLine ? '✓' : '✗'}
+                    </span>
+                  </div>
+                  {systemMetrics.localStorage > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Storage:</span>
+                      <span className="text-blue-400">{systemMetrics.localStorage}KB</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions rapides */}
+              <div>
+                <h4 className="text-xs font-medium text-gray-300 mb-2 flex items-center">
+                  <SparklesIcon className="h-3 w-3 mr-1" />
+                  Actions
+                </h4>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => addLog('🎯 Test manuel ajouté', 'info', 'manual')}
+                    className="w-full text-left text-xs text-gray-400 hover:text-gray-300 p-1 rounded hover:bg-gray-700"
+                  >
+                    + Ajouter log test
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.clear()
+                      addLog('🧹 Console navigateur vidée', 'info', 'system')
+                    }}
+                    className="w-full text-left text-xs text-gray-400 hover:text-gray-300 p-1 rounded hover:bg-gray-700"
+                  >
+                    🧹 Clear console
+                  </button>
+                  <button
+                    onClick={() => {
+                      const memory = performance.memory
+                      if (memory) {
+                        addLog(`🧠 Mémoire: ${Math.round(memory.usedJSHeapSize/1024/1024)}MB`, 'info', 'system', memory)
+                      }
+                    }}
+                    className="w-full text-left text-xs text-gray-400 hover:text-gray-300 p-1 rounded hover:bg-gray-700"
+                  >
+                    📊 Check mémoire
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -13,8 +13,13 @@ import {
   ChevronDownIcon,
   CircleStackIcon,
   NoSymbolIcon,
-  ClockIcon
+  ClockIcon,
+  Cog6ToothIcon
 } from '@heroicons/react/24/outline'
+
+// Import de la configuration depuis .env
+import apiConfigUtils from '../utils/apiConfig'
+import ApiConfigManager from './ApiConfigManager'
 
 const ApiSelectorButton = ({ onApiChange, className = "" }) => {
   const [isOpen, setIsOpen] = useState(false)
@@ -26,26 +31,25 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
   const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 })
   const dropdownRef = useRef(null)
 
-  // APIs par défaut à scanner (toutes sur port 5000)
-  const defaultApis = [
-    { ip: '192.168.0.47', name: 'Dev' },
-    { ip: '127.0.0.1', name: 'Loopback' },
-    { ip: 'localhost', name: 'Serveur Principal' },
-    { ip: '192.168.27.66', name: 'Serveur Distant' },
-    { ip: '192.168.0.1', name: 'Gateway' },
-    { ip: '10.0.0.1', name: 'VPN Gateway' },
-    { ip: '192.168.27.77' , name: 'API Yaniss'}
-  ]
+  // Chargement de la configuration depuis .env et localStorage
+  const [apiConfig, setApiConfig] = useState(() => {
+    const config = apiConfigUtils.getCompleteApiConfig()
+    
+    // Debug en mode développement
+    if (apiConfigUtils.isDebugMode()) {
+      apiConfigUtils.debugApiConfig()
+    }
+    
+    return config
+  })
+
+  // APIs par défaut depuis la configuration
+  const defaultApis = apiConfig.defaultApis
+  const defaultPort = apiConfig.config.defaultPort
+  const apiTimeout = apiConfig.config.apiTimeout
 
   // Charger les APIs personnalisées depuis localStorage
-  const [customApis, setCustomApis] = useState(() => {
-    try {
-      const stored = localStorage.getItem('custom_apis')
-      return stored ? JSON.parse(stored) : []
-    } catch {
-      return []
-    }
-  })
+  const [customApis, setCustomApis] = useState(() => apiConfig.customApis)
 
   // Charger l'API sélectionnée depuis la config globale
   useEffect(() => {
@@ -105,7 +109,7 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
     
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      const timeoutId = setTimeout(() => controller.abort(), apiTimeout)
 
       const response = await fetch(`${apiUrl}/api/health`, {
         method: 'GET',
@@ -200,7 +204,7 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           databaseConnected: false,
           responseTime: Date.now() - startTime,
           error: error.message,
-          details: 'Timeout - Serveur non accessible (>5s)',
+          details: `Timeout - Serveur non accessible (>${apiTimeout/1000}s)`,
           diagnosticLevel: 'network_only'
         }
       } else if (error.message.includes('fetch')) {
@@ -246,18 +250,18 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
       setScanProgress({ current: i + 1, total: allApis.length })
       
       try {
-        const apiUrl = `http://${apiConfig.ip}:5000`
-        console.log(`🧪 Test ${apiConfig.name} (${apiConfig.ip})...`)
+        const apiUrl = `http://${apiConfig.ip}:${defaultPort}`
+        console.log(`🧪 Test ${apiConfig.name} (${apiConfig.ip}:${defaultPort})...`)
         
         const testResult = await advancedApiTest(apiUrl)
         
         discoveredApis.push({
-          id: `${apiConfig.ip}:5000`,
+          id: `${apiConfig.ip}:${defaultPort}`,
           url: apiUrl,
           ip: apiConfig.ip,
-          port: 5000,
+          port: defaultPort,
           name: apiConfig.name,
-          description: `API Running App sur ${apiConfig.ip}`,
+          description: `API Running App sur ${apiConfig.ip}:${defaultPort}`,
           isCustom: customApis.some(custom => custom.ip === apiConfig.ip),
           ...testResult
         })
@@ -274,18 +278,19 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
       } catch (error) {
         console.error(`💥 Erreur critique scan ${apiConfig.name}:`, error)
         discoveredApis.push({
-          id: `${apiConfig.ip}:5000`,
-          url: `http://${apiConfig.ip}:5000`,
+          id: `${apiConfig.ip}:${defaultPort}`,
+          url: `http://${apiConfig.ip}:${defaultPort}`,
           ip: apiConfig.ip,
-          port: 5000,
+          port: defaultPort,
           name: apiConfig.name,
-          description: `API Running App sur ${apiConfig.ip}`,
+          description: `API Running App sur ${apiConfig.ip}:${defaultPort}`,
           status: 'critical_error',
           serverAccessible: false,
           databaseConnected: false,
           responseTime: 0,
           error: error.message,
           details: 'Erreur critique pendant le test',
+          diagnosticLevel: 'none',
           isCustom: customApis.some(custom => custom.ip === apiConfig.ip)
         })
       }
@@ -376,8 +381,41 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
   const removeCustomApi = (ipToRemove) => {
     const updatedCustomApis = customApis.filter(api => api.ip !== ipToRemove)
     setCustomApis(updatedCustomApis)
-    localStorage.setItem('custom_apis', JSON.stringify(updatedCustomApis))
+    
+    // Utiliser l'utilitaire pour sauvegarder
+    apiConfigUtils.saveCustomApis(updatedCustomApis)
+    
+    console.log('🗑️ API personnalisée supprimée:', ipToRemove)
   }
+
+  // Charger l'API par défaut si spécifiée dans l'environnement
+  useEffect(() => {
+    const defaultSelectedIp = apiConfigUtils.getDefaultSelectedApi()
+    if (defaultSelectedIp && !selectedApi) {
+      const defaultApi = apiConfigUtils.findApiByIp(defaultSelectedIp)
+      if (defaultApi) {
+        const apiWithUrl = {
+          ...defaultApi,
+          id: `${defaultApi.ip}:${defaultPort}`,
+          url: apiConfigUtils.generateApiUrl(defaultApi, defaultPort),
+          port: defaultPort
+        }
+        setSelectedApi(apiWithUrl)
+        console.log('🎯 API par défaut sélectionnée depuis .env:', defaultApi.name)
+      }
+    }
+  }, [defaultPort, selectedApi])
+
+  // Log de la configuration au démarrage
+  useEffect(() => {
+    if (apiConfigUtils.isDebugMode()) {
+      console.log('🔧 ApiSelectorButton - Configuration chargée:')
+      console.log(`  - APIs par défaut: ${defaultApis.length}`)
+      console.log(`  - APIs personnalisées: ${customApis.length}`) 
+      console.log(`  - Port par défaut: ${defaultPort}`)
+      console.log(`  - Timeout: ${apiTimeout}ms`)
+    }
+  }, [])
 
   /**
    * Obtient l'icône appropriée selon l'état de l'API avec diagnostic avancé
@@ -539,6 +577,14 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                 <PlusIcon className="h-3 w-3 mr-1" />
                 Ajouter
               </button>
+              
+              <button
+                onClick={() => setShowConfigManager(!showConfigManager)}
+                className="btn bg-blue-600 hover:bg-blue-700 text-white btn-sm"
+              >
+                <Cog6ToothIcon className="h-3 w-3 mr-1" />
+                Configurer API
+              </button>
             </div>
 
             {/* Barre de progression du scan */}
@@ -695,10 +741,6 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
             {/* Légende des états */}
             <div className="flex items-center justify-between text-xs text-gray-500 border-t pt-2">
               <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span>OK complet</span>
-                </div>
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
                   <span>DB déconnectée</span>

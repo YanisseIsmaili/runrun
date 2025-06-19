@@ -1,10 +1,10 @@
-// running-admin/src/components/Layout.jsx - Avec intégration des sélecteurs API
+// running-admin/src/components/Layout.jsx - Avec bouton Configurer API permanent
 import { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useApiConfig } from '../utils/globalApiConfig'
 import ApiSelectorButton from './ApiSelectorButton'
-import ApiTargetSelector from './ApiTargetSelector'
+import ApiConfigManager from './ApiConfigManager'
 import {
   Bars3Icon,
   XMarkIcon,
@@ -16,14 +16,15 @@ import {
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   WifiIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ServerIcon
 } from '@heroicons/react/24/outline'
 
 const Layout = () => {
   const { user, logout } = useAuth()
   const { isConfigured, selectedApi } = useApiConfig()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showApiConfig, setShowApiConfig] = useState(false)
+  const [showApiConfigManager, setShowApiConfigManager] = useState(false)
   const location = useLocation()
 
   const navigation = [
@@ -49,22 +50,22 @@ const Layout = () => {
   const ApiStatus = () => {
     if (!isConfigured) {
       return (
-        <div className="alert alert-warning p-2">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
           <div className="flex items-center space-x-2">
-            <ExclamationTriangleIcon className="h-4 w-4" />
-            <span className="text-sm">API non configurée</span>
+            <ExclamationTriangleIcon className="h-4 w-4 text-yellow-600" />
+            <span className="text-sm text-yellow-700">API non configurée</span>
           </div>
         </div>
       )
     }
 
     return (
-      <div className="status-indicator status-connected">
+      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
         <div className="flex items-center space-x-2">
-          <WifiIcon className="h-4 w-4" />
+          <WifiIcon className="h-4 w-4 text-green-600" />
           <div className="text-sm">
-            <div className="font-medium">{selectedApi?.name}</div>
-            <div className="text-xs opacity-75">{selectedApi?.responseTime}ms</div>
+            <div className="font-medium text-green-800">{selectedApi?.name}</div>
+            <div className="text-xs text-green-600">{selectedApi?.responseTime}ms</div>
           </div>
         </div>
       </div>
@@ -76,60 +77,77 @@ const Layout = () => {
       {/* Sidebar mobile */}
       {sidebarOpen && (
         <div className="fixed inset-0 flex z-40 md:hidden">
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
+          <div 
+            className="fixed inset-0 bg-gray-600 bg-opacity-75" 
+            onClick={() => setSidebarOpen(false)}
+          />
           <div className="relative flex-1 flex flex-col max-w-xs w-full pt-5 pb-4 bg-white">
             <div className="absolute top-0 right-0 -mr-12 pt-2">
               <button
-                className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
                 onClick={() => setSidebarOpen(false)}
+                className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
               >
                 <XMarkIcon className="h-6 w-6 text-white" />
               </button>
             </div>
             
-            {/* Logo mobile */}
             <div className="flex-shrink-0 flex items-center px-4">
               <h1 className="text-xl font-bold text-gray-900">Running Admin</h1>
             </div>
             
-            {/* Navigation mobile */}
-            <div className="mt-5 flex-1 h-0 overflow-y-auto">
-              <nav className="px-2 space-y-1">
-                {navigation.map((item) => (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`nav-link ${
-                      isActive(item.href) ? 'nav-link-active' : 'nav-link-inactive'
-                    }`}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <item.icon className="mr-4 flex-shrink-0 h-6 w-6" />
-                    {item.name}
-                  </Link>
-                ))}
-                
-                {user?.is_admin && (
-                  <div className="pt-4">
-                    <h3 className="px-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Administration
-                    </h3>
-                    {adminNavigation.map((item) => (
-                      <Link
-                        key={item.name}
-                        to={item.href}
-                        className={`nav-link ${
-                          isActive(item.href) ? 'nav-link-active' : 'nav-link-inactive'
-                        }`}
-                        onClick={() => setSidebarOpen(false)}
-                      >
-                        <item.icon className="mr-4 flex-shrink-0 h-6 w-6" />
-                        {item.name}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </nav>
+            <nav className="mt-5 flex-1 px-2 space-y-1 overflow-y-auto">
+              {/* Navigation principale */}
+              {navigation.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    isActive(item.href)
+                      ? 'bg-green-100 text-green-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />
+                  {item.name}
+                </Link>
+              ))}
+              
+              {/* Navigation admin */}
+              {user?.is_admin && (
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  {adminNavigation.map((item) => (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                        isActive(item.href)
+                          ? 'bg-green-100 text-green-900'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }`}
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />
+                      {item.name}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </nav>
+            
+            {/* Zone API en bas - Mobile */}
+            <div className="flex-shrink-0 p-4 border-t border-gray-200 space-y-3">
+              <ApiStatus />
+              <button
+                onClick={() => {
+                  setShowApiConfigManager(true)
+                  setSidebarOpen(false)
+                }}
+                className="w-full btn bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <ServerIcon className="h-4 w-4 mr-2" />
+                Configurer API
+              </button>
             </div>
           </div>
         </div>
@@ -138,21 +156,22 @@ const Layout = () => {
       {/* Sidebar desktop */}
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64">
-          <div className="flex flex-col h-0 flex-1 bg-white border-r border-gray-200">
-            {/* Logo */}
-            <div className="flex items-center h-16 flex-shrink-0 px-4 bg-white border-b border-gray-200">
-              <h1 className="text-xl font-bold text-gray-900">Running Admin</h1>
-            </div>
-            
-            {/* Navigation */}
-            <div className="flex-1 flex flex-col overflow-y-auto">
-              <nav className="flex-1 px-2 py-4 bg-white space-y-1">
+          <div className="flex flex-col h-0 flex-1 bg-white shadow">
+            <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
+              <div className="flex items-center flex-shrink-0 px-4">
+                <h1 className="text-xl font-bold text-gray-900">Running Admin</h1>
+              </div>
+              
+              <nav className="mt-5 flex-1 px-2 space-y-1">
+                {/* Navigation principale */}
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
                     to={item.href}
-                    className={`nav-link ${
-                      isActive(item.href) ? 'nav-link-active' : 'nav-link-inactive'
+                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                      isActive(item.href)
+                        ? 'bg-green-100 text-green-900'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
                     <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />
@@ -160,39 +179,38 @@ const Layout = () => {
                   </Link>
                 ))}
                 
+                {/* Navigation admin */}
                 {user?.is_admin && (
-                  <div className="pt-4">
-                    <h3 className="px-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Administration
-                    </h3>
-                    <div className="mt-2 space-y-1">
-                      {adminNavigation.map((item) => (
-                        <Link
-                          key={item.name}
-                          to={item.href}
-                          className={`nav-link ${
-                            isActive(item.href) ? 'nav-link-active' : 'nav-link-inactive'
-                          }`}
-                        >
-                          <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />
-                          {item.name}
-                        </Link>
-                      ))}
-                    </div>
+                  <div className="border-t border-gray-200 pt-4 mt-4">
+                    {adminNavigation.map((item) => (
+                      <Link
+                        key={item.name}
+                        to={item.href}
+                        className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                          isActive(item.href)
+                            ? 'bg-green-100 text-green-900'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />
+                        {item.name}
+                      </Link>
+                    ))}
                   </div>
                 )}
               </nav>
-              
-              {/* Statut API en bas de sidebar */}
-              <div className="flex-shrink-0 p-4 border-t border-gray-200">
-                <ApiStatus />
-                <button
-                  onClick={() => setShowApiConfig(!showApiConfig)}
-                  className="mt-2 w-full text-left text-xs text-gray-500 hover:text-gray-700"
-                >
-                  Configurer API
-                </button>
-              </div>
+            </div>
+            
+            {/* Zone API en bas - Desktop */}
+            <div className="flex-shrink-0 p-4 border-t border-gray-200 space-y-3">
+              <ApiStatus />
+              <button
+                onClick={() => setShowApiConfigManager(true)}
+                className="w-full btn bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <ServerIcon className="h-4 w-4 mr-2" />
+                Configurer API
+              </button>
             </div>
           </div>
         </div>
@@ -225,8 +243,8 @@ const Layout = () => {
             
             {/* Actions header */}
             <div className="ml-4 flex items-center space-x-4">
-              {/* Sélecteur API compact */}
-              <div className="hidden md:block">
+              {/* Sélecteur API compact pour desktop */}
+              <div className="hidden lg:block">
                 <ApiSelectorButton 
                   onApiChange={(api) => {
                     console.log('API changée:', api)
@@ -234,15 +252,6 @@ const Layout = () => {
                   className="w-64"
                 />
               </div>
-              
-              {/* Bouton config API */}
-              <button
-                onClick={() => setShowApiConfig(!showApiConfig)}
-                className="btn-icon text-gray-400 hover:text-gray-600 rounded-md"
-                title="Configuration API"
-              >
-                <Cog6ToothIcon className="h-5 w-5" />
-              </button>
               
               {/* Profil utilisateur */}
               <div className="flex items-center space-x-3">
@@ -252,7 +261,7 @@ const Layout = () => {
                 </div>
                 <button
                   onClick={logout}
-                  className="btn-icon text-gray-400 hover:text-red-600 rounded-md"
+                  className="p-2 text-gray-400 hover:text-red-600 rounded-md transition-colors"
                   title="Déconnexion"
                 >
                   <ArrowRightOnRectangleIcon className="h-5 w-5" />
@@ -262,33 +271,20 @@ const Layout = () => {
           </div>
         </div>
 
-        {/* Configuration API étendue */}
-        {showApiConfig && (
-          <div className="bg-gray-50 border-b border-gray-200 p-4">
-            <div className="max-w-7xl mx-auto">
-              <ApiTargetSelector 
-                showExpanded={true}
-                onApiChange={(api) => {
-                  console.log('API configurée:', api)
-                  setShowApiConfig(false)
-                }}
-              />
-            </div>
-          </div>
-        )}
-
         {/* Avertissement si API non configurée */}
         {!isConfigured && (
-          <div className="alert alert-warning px-4 py-3 border-b border-yellow-200">
-            <div className="flex items-center max-w-7xl mx-auto">
-              <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-              <p className="text-sm">
-                <strong>Attention :</strong> Aucun serveur API n'est configuré. 
-                Certaines fonctionnalités peuvent ne pas fonctionner correctement.
-              </p>
+          <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-3">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div className="flex items-center">
+                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 mr-2" />
+                <p className="text-sm text-yellow-700">
+                  <strong>Attention :</strong> Aucun serveur API n'est configuré. 
+                  Certaines fonctionnalités peuvent ne pas fonctionner correctement.
+                </p>
+              </div>
               <button
-                onClick={() => setShowApiConfig(true)}
-                className="ml-4 btn btn-warning btn-sm"
+                onClick={() => setShowApiConfigManager(true)}
+                className="btn bg-yellow-600 hover:bg-yellow-700 text-white btn-sm"
               >
                 Configurer maintenant
               </button>
@@ -305,6 +301,12 @@ const Layout = () => {
           </div>
         </main>
       </div>
+
+      {/* Gestionnaire de configuration API */}
+      <ApiConfigManager 
+        isOpen={showApiConfigManager} 
+        onClose={() => setShowApiConfigManager(false)} 
+      />
     </div>
   )
 }
