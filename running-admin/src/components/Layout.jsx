@@ -137,7 +137,18 @@ const Layout = () => {
             
             {/* Zone API en bas - Mobile */}
             <div className="flex-shrink-0 p-4 border-t border-gray-200 space-y-3">
-              <ApiStatus />
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Serveurs API
+                </h3>
+                <ApiStatus />
+                <div className="lg:hidden">
+                  <ApiSelectorButton 
+                    onApiChange={(api) => console.log('API changée:', api)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
               <button
                 onClick={() => {
                   setShowApiConfigManager(true)
@@ -203,7 +214,16 @@ const Layout = () => {
             
             {/* Zone API en bas - Desktop */}
             <div className="flex-shrink-0 p-4 border-t border-gray-200 space-y-3">
-              <ApiStatus />
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Serveurs API
+                </h3>
+                <ApiStatus />
+                <ApiSelectorButton 
+                  onApiChange={(api) => console.log('API changée:', api)}
+                  className="w-full"
+                />
+              </div>
               <button
                 onClick={() => setShowApiConfigManager(true)}
                 className="w-full btn bg-blue-600 hover:bg-blue-700 text-white"
@@ -243,16 +263,6 @@ const Layout = () => {
             
             {/* Actions header */}
             <div className="ml-4 flex items-center space-x-4">
-              {/* Sélecteur API compact pour desktop */}
-              <div className="hidden lg:block">
-                <ApiSelectorButton 
-                  onApiChange={(api) => {
-                    console.log('API changée:', api)
-                  }}
-                  className="w-64"
-                />
-              </div>
-              
               {/* Profil utilisateur */}
               <div className="flex items-center space-x-3">
                 <div className="text-sm text-right">

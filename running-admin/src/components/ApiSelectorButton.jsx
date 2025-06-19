@@ -1,23 +1,21 @@
 // running-admin/src/components/ApiSelectorButton.jsx
 import { useState, useEffect, useRef } from 'react'
+import ReactDOM from 'react-dom'
 import { 
-  GlobeAltIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
   ExclamationCircleIcon,
   ArrowPathIcon,
   ServerIcon,
-  WifiIcon,
   PlusIcon,
   XMarkIcon,
   ChevronDownIcon,
   CircleStackIcon,
-  NoSymbolIcon,
   ClockIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline'
 
-// Import de la configuration depuis .env
 import apiConfigUtils from '../utils/apiConfig'
 import ApiConfigManager from './ApiConfigManager'
 
@@ -29,32 +27,55 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newApiInput, setNewApiInput] = useState('')
   const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 })
-  const dropdownRef = useRef(null)
+  const [showConfigManager, setShowConfigManager] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const buttonRef = useRef(null)
 
-  // Chargement de la configuration depuis .env et localStorage
-  const [apiConfig, setApiConfig] = useState(() => {
-    const config = apiConfigUtils.getCompleteApiConfig()
-    
-    // Debug en mode développement
-    if (apiConfigUtils.isDebugMode()) {
-      apiConfigUtils.debugApiConfig()
-    }
-    
-    return config
-  })
-
-  // APIs par défaut depuis la configuration
+  // Configuration
+  const [apiConfig] = useState(() => apiConfigUtils.getCompleteApiConfig())
   const defaultApis = apiConfig.defaultApis
   const defaultPort = apiConfig.config.defaultPort
   const apiTimeout = apiConfig.config.apiTimeout
-
-  // Charger les APIs personnalisées depuis localStorage
   const [customApis, setCustomApis] = useState(() => apiConfig.customApis)
 
-  // Charger l'API sélectionnée depuis la config globale
+  // Drag & Drop
+  const handleMouseDown = (e) => {
+    if (e.target.closest('[data-drag-handle]')) {
+      setIsDragging(true)
+      const rect = e.currentTarget.getBoundingClientRect()
+      setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+      e.preventDefault()
+    }
+  }
+
+  const handleMouseMove = (e) => {
+    if (isDragging) {
+      setPosition({
+        x: Math.max(0, Math.min(window.innerWidth - 400, e.clientX - dragOffset.x)),
+        y: Math.max(0, Math.min(window.innerHeight - 500, e.clientY - dragOffset.y))
+      })
+    }
+  }
+
+  const handleMouseUp = () => setIsDragging(false)
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+      }
+    }
+  }, [isDragging, dragOffset])
+
+  // Configuration API
   useEffect(() => {
     const loadSelectedApi = () => {
-      if (window.GLOBAL_API_CONFIG && window.GLOBAL_API_CONFIG.selectedApi) {
+      if (window.GLOBAL_API_CONFIG?.selectedApi) {
         setSelectedApi(window.GLOBAL_API_CONFIG.selectedApi)
       } else {
         try {
@@ -62,48 +83,41 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           if (saved) {
             const api = JSON.parse(saved)
             setSelectedApi(api)
-            if (window.GLOBAL_API_CONFIG) {
-              window.GLOBAL_API_CONFIG.updateConfig(api)
-            }
+            window.GLOBAL_API_CONFIG?.updateConfig(api)
           }
         } catch (error) {
-          console.error('Erreur chargement API sauvegardée:', error)
+          console.error('Erreur chargement API:', error)
         }
       }
     }
 
     loadSelectedApi()
-
-    const handleConfigChange = (event) => {
-      setSelectedApi(event.detail.api)
-    }
-
+    const handleConfigChange = (event) => setSelectedApi(event.detail.api)
     window.addEventListener('apiConfigChanged', handleConfigChange)
     return () => window.removeEventListener('apiConfigChanged', handleConfigChange)
   }, [])
 
-  // Fermer le dropdown si on clique ailleurs
+  // Fermer menu
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (!event.target.closest('[data-api-menu]') && 
+          !buttonRef.current?.contains(event.target)) {
         setIsOpen(false)
         setShowAddForm(false)
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
 
   useEffect(() => {
     scanAvailableApis()
   }, [customApis])
 
-  /**
-   * Test avancé de l'API avec diagnostic détaillé
-   * @param {string} apiUrl - URL de l'API à tester
-   * @returns {Object} Résultat détaillé du test
-   */
+  // Test API avancé
   const advancedApiTest = async (apiUrl) => {
     const startTime = Date.now()
     
@@ -115,25 +129,18 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
         method: 'GET',
         mode: 'cors',
         signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
       })
 
       clearTimeout(timeoutId)
       const responseTime = Date.now() - startTime
 
       if (response.ok) {
-        // Serveur accessible - analyser la réponse
         try {
           const healthData = await response.json()
-          
-          // Analyser le statut de la base de données
           const dbStatus = healthData.database || healthData.status
-          const isDatabaseConnected = dbStatus === 'connected' || 
-                                      dbStatus === 'healthy' || 
-                                      dbStatus === 'success' ||
-                                      (healthData.database && healthData.database.connected === true)
+          const isDatabaseConnected = ['connected', 'healthy', 'success'].includes(dbStatus) ||
+                                      healthData.database?.connected === true
           
           return {
             status: 'server_ok',
@@ -142,108 +149,50 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
             responseTime,
             healthData,
             statusCode: response.status,
-            details: isDatabaseConnected ? 'Serveur et base de données OK' : 'Serveur OK mais base de données déconnectée',
+            details: isDatabaseConnected ? 'Serveur et DB OK' : 'Serveur OK, DB déconnectée',
             diagnosticLevel: 'full'
           }
-        } catch (parseError) {
-          // Réponse 200 mais JSON invalide
+        } catch {
           return {
             status: 'server_ok_json_error',
             serverAccessible: true,
             databaseConnected: false,
             responseTime,
             statusCode: response.status,
-            details: 'Serveur accessible mais réponse JSON invalide',
+            details: 'Serveur accessible, JSON invalide',
             diagnosticLevel: 'partial'
           }
         }
-      } else if (response.status === 500) {
-        // Serveur accessible mais erreur interne (probablement DB)
-        try {
-          const errorData = await response.json()
-          return {
-            status: 'server_error',
-            serverAccessible: true,
-            databaseConnected: false,
-            responseTime,
-            statusCode: response.status,
-            errorData,
-            details: 'Serveur accessible - Erreur interne (vérifiez la base de données)',
-            diagnosticLevel: 'server_only'
-          }
-        } catch {
-          return {
-            status: 'server_error',
-            serverAccessible: true,
-            databaseConnected: false,
-            responseTime,
-            statusCode: response.status,
-            details: 'Serveur accessible - Erreur 500 (probable problème DB)',
-            diagnosticLevel: 'server_only'
-          }
-        }
       } else {
-        // Autres codes d'erreur HTTP
         return {
-          status: 'server_http_error',
+          status: 'server_error',
           serverAccessible: true,
           databaseConnected: false,
           responseTime,
           statusCode: response.status,
-          details: `Serveur accessible - Erreur HTTP ${response.status}`,
+          details: `Erreur HTTP ${response.status}`,
           diagnosticLevel: 'server_only'
         }
       }
-      
     } catch (error) {
-      // Erreur de connexion réseau
-      if (error.name === 'AbortError') {
-        return {
-          status: 'timeout',
-          serverAccessible: false,
-          databaseConnected: false,
-          responseTime: Date.now() - startTime,
-          error: error.message,
-          details: `Timeout - Serveur non accessible (>${apiTimeout/1000}s)`,
-          diagnosticLevel: 'network_only'
-        }
-      } else if (error.message.includes('fetch')) {
-        return {
-          status: 'network_error',
-          serverAccessible: false,
-          databaseConnected: false,
-          responseTime: Date.now() - startTime,
-          error: error.message,
-          details: 'Erreur réseau - Serveur non accessible',
-          diagnosticLevel: 'network_only'
-        }
-      } else {
-        return {
-          status: 'unknown_error',
-          serverAccessible: false,
-          databaseConnected: false,
-          responseTime: Date.now() - startTime,
-          error: error.message,
-          details: 'Erreur inconnue lors du test',
-          diagnosticLevel: 'none'
-        }
+      return {
+        status: error.name === 'AbortError' ? 'timeout' : 'network_error',
+        serverAccessible: false,
+        databaseConnected: false,
+        responseTime: Date.now() - startTime,
+        error: error.message,
+        details: error.name === 'AbortError' ? 'Timeout serveur' : 'Erreur réseau',
+        diagnosticLevel: 'network_only'
       }
     }
   }
 
   const scanAvailableApis = async () => {
     setIsScanning(true)
-    setScanProgress({ current: 0, total: 0 })
     const discoveredApis = []
-
-    // Combiner les APIs par défaut et personnalisées
-    const allApis = [
-      ...defaultApis,
-      ...customApis.map(custom => ({ ip: custom.ip, name: custom.name }))
-    ]
-
+    const allApis = [...defaultApis, ...customApis.map(c => ({ ip: c.ip, name: c.name }))]
+    
     setScanProgress({ current: 0, total: allApis.length })
-    console.log('🔍 Scan avancé des APIs sur port 5000...')
 
     for (let i = 0; i < allApis.length; i++) {
       const apiConfig = allApis[i]
@@ -251,8 +200,6 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
       
       try {
         const apiUrl = `http://${apiConfig.ip}:${defaultPort}`
-        console.log(`🧪 Test ${apiConfig.name} (${apiConfig.ip}:${defaultPort})...`)
-        
         const testResult = await advancedApiTest(apiUrl)
         
         discoveredApis.push({
@@ -261,90 +208,52 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           ip: apiConfig.ip,
           port: defaultPort,
           name: apiConfig.name,
-          description: `API Running App sur ${apiConfig.ip}:${defaultPort}`,
-          isCustom: customApis.some(custom => custom.ip === apiConfig.ip),
+          isCustom: customApis.some(c => c.ip === apiConfig.ip),
           ...testResult
         })
-
-        // Log détaillé selon le résultat
-        if (testResult.serverAccessible && testResult.databaseConnected) {
-          console.log(`✅ ${apiConfig.name}: Serveur + DB OK (${testResult.responseTime}ms)`)
-        } else if (testResult.serverAccessible && !testResult.databaseConnected) {
-          console.log(`⚠️ ${apiConfig.name}: Serveur OK, DB déconnectée (${testResult.responseTime}ms)`)
-        } else {
-          console.log(`❌ ${apiConfig.name}: ${testResult.details}`)
-        }
-
       } catch (error) {
-        console.error(`💥 Erreur critique scan ${apiConfig.name}:`, error)
         discoveredApis.push({
           id: `${apiConfig.ip}:${defaultPort}`,
           url: `http://${apiConfig.ip}:${defaultPort}`,
           ip: apiConfig.ip,
           port: defaultPort,
           name: apiConfig.name,
-          description: `API Running App sur ${apiConfig.ip}:${defaultPort}`,
           status: 'critical_error',
           serverAccessible: false,
           databaseConnected: false,
           responseTime: 0,
           error: error.message,
-          details: 'Erreur critique pendant le test',
+          details: 'Erreur critique',
           diagnosticLevel: 'none',
-          isCustom: customApis.some(custom => custom.ip === apiConfig.ip)
+          isCustom: customApis.some(c => c.ip === apiConfig.ip)
         })
       }
     }
 
-    // Trier par priorité: OK complet > Serveur OK > Erreurs
+    // Tri par priorité
     discoveredApis.sort((a, b) => {
-      // Priorité 1: Serveur + DB OK
       if (a.serverAccessible && a.databaseConnected && !(b.serverAccessible && b.databaseConnected)) return -1
       if (b.serverAccessible && b.databaseConnected && !(a.serverAccessible && a.databaseConnected)) return 1
-      
-      // Priorité 2: Serveur OK (même si DB KO)
       if (a.serverAccessible && !b.serverAccessible) return -1
       if (b.serverAccessible && !a.serverAccessible) return 1
-      
-      // Priorité 3: Temps de réponse pour les OK
-      if (a.serverAccessible && b.serverAccessible) {
-        return a.responseTime - b.responseTime
-      }
-      
-      // Sinon tri par nom
+      if (a.serverAccessible && b.serverAccessible) return a.responseTime - b.responseTime
       return a.name.localeCompare(b.name)
     })
 
     setAvailableApis(discoveredApis)
     setIsScanning(false)
-    setScanProgress({ current: 0, total: 0 })
-
-    const okCount = discoveredApis.filter(api => api.serverAccessible && api.databaseConnected).length
-    const serverOnlyCount = discoveredApis.filter(api => api.serverAccessible && !api.databaseConnected).length
-    const offlineCount = discoveredApis.filter(api => !api.serverAccessible).length
-    
-    console.log(`🏁 Scan terminé: ${okCount} OK complets, ${serverOnlyCount} serveur seul, ${offlineCount} hors ligne`)
   }
 
   const handleApiSelect = (api) => {
-    console.log('Sélection API:', api)
     setSelectedApi(api)
     setIsOpen(false)
 
-    // Sauvegarder la sélection
     try {
       localStorage.setItem('selected_api_config', JSON.stringify(api))
-      if (window.GLOBAL_API_CONFIG) {
-        window.GLOBAL_API_CONFIG.updateConfig(api)
-      }
-      if (onApiChange) {
-        onApiChange(api)
-      }
+      window.GLOBAL_API_CONFIG?.updateConfig(api)
+      onApiChange?.(api)
       
-      // Émettre un événement global
-      window.dispatchEvent(new CustomEvent('apiConfigChanged', { 
-        detail: { api } 
-      }))
+      window.dispatchEvent(new CustomEvent('apiConfigChanged', { detail: { api } }))
     } catch (error) {
       console.error('Erreur sauvegarde API:', error)
     }
@@ -366,60 +275,21 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
       return
     }
 
-    const newApi = {
-      ip: newApiInput,
-      name: `Custom ${newApiInput}`
-    }
-
-    const updatedCustomApis = [...customApis, newApi]
-    setCustomApis(updatedCustomApis)
-    localStorage.setItem('custom_apis', JSON.stringify(updatedCustomApis))
+    const newApi = { ip: newApiInput, name: `Custom ${newApiInput}` }
+    const updated = [...customApis, newApi]
+    setCustomApis(updated)
+    localStorage.setItem('custom_apis', JSON.stringify(updated))
     setNewApiInput('')
     setShowAddForm(false)
   }
 
   const removeCustomApi = (ipToRemove) => {
-    const updatedCustomApis = customApis.filter(api => api.ip !== ipToRemove)
-    setCustomApis(updatedCustomApis)
-    
-    // Utiliser l'utilitaire pour sauvegarder
-    apiConfigUtils.saveCustomApis(updatedCustomApis)
-    
-    console.log('🗑️ API personnalisée supprimée:', ipToRemove)
+    const updated = customApis.filter(api => api.ip !== ipToRemove)
+    setCustomApis(updated)
+    apiConfigUtils.saveCustomApis(updated)
   }
 
-  // Charger l'API par défaut si spécifiée dans l'environnement
-  useEffect(() => {
-    const defaultSelectedIp = apiConfigUtils.getDefaultSelectedApi()
-    if (defaultSelectedIp && !selectedApi) {
-      const defaultApi = apiConfigUtils.findApiByIp(defaultSelectedIp)
-      if (defaultApi) {
-        const apiWithUrl = {
-          ...defaultApi,
-          id: `${defaultApi.ip}:${defaultPort}`,
-          url: apiConfigUtils.generateApiUrl(defaultApi, defaultPort),
-          port: defaultPort
-        }
-        setSelectedApi(apiWithUrl)
-        console.log('🎯 API par défaut sélectionnée depuis .env:', defaultApi.name)
-      }
-    }
-  }, [defaultPort, selectedApi])
-
-  // Log de la configuration au démarrage
-  useEffect(() => {
-    if (apiConfigUtils.isDebugMode()) {
-      console.log('🔧 ApiSelectorButton - Configuration chargée:')
-      console.log(`  - APIs par défaut: ${defaultApis.length}`)
-      console.log(`  - APIs personnalisées: ${customApis.length}`) 
-      console.log(`  - Port par défaut: ${defaultPort}`)
-      console.log(`  - Timeout: ${apiTimeout}ms`)
-    }
-  }, [])
-
-  /**
-   * Obtient l'icône appropriée selon l'état de l'API avec diagnostic avancé
-   */
+  // UI Helpers
   const getApiStatusIcon = (api) => {
     if (api.serverAccessible && api.databaseConnected) {
       return <CheckCircleIcon className="h-4 w-4 text-green-500" />
@@ -432,72 +302,79 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
     }
   }
 
-  /**
-   * Obtient la couleur du texte selon l'état avec nuances
-   */
-  const getApiStatusColor = (api) => {
-    if (api.serverAccessible && api.databaseConnected) {
-      return 'text-green-600'
-    } else if (api.serverAccessible && !api.databaseConnected) {
-      return 'text-yellow-600'
-    } else if (api.status === 'timeout') {
-      return 'text-orange-600'
-    } else {
-      return 'text-red-600'
-    }
-  }
-
-  /**
-   * Obtient le badge de statut avec détails avancés
-   */
   const getStatusBadge = (api) => {
     if (api.serverAccessible && api.databaseConnected) {
-      return <span className="badge bg-green-500 text-white">✓ OK</span>
+      return (
+        <div className="flex items-center space-x-1">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+            ✓ FULL
+          </span>
+          <CircleStackIcon className="h-3 w-3 text-green-600" title="Base de données connectée" />
+        </div>
+      )
     } else if (api.serverAccessible && !api.databaseConnected) {
-      return <span className="badge bg-yellow-500 text-white">⚠ DB</span>
+      return (
+        <div className="flex items-center space-x-1">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+            ⚠ DB OFF
+          </span>
+          <CircleStackIcon className="h-3 w-3 text-red-600" title="Base de données déconnectée" />
+        </div>
+      )
     } else if (api.status === 'timeout') {
-      return <span className="badge bg-orange-500 text-white">⏱ TIME</span>
-    } else if (api.status === 'network_error') {
-      return <span className="badge bg-red-500 text-white">🌐 NET</span>
+      return (
+        <div className="flex items-center space-x-1">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
+            ⏱ TIMEOUT
+          </span>
+          <CircleStackIcon className="h-3 w-3 text-gray-400" title="Timeout - DB inconnue" />
+        </div>
+      )
     } else {
-      return <span className="badge bg-gray-500 text-white">❌ OFF</span>
+      return (
+        <div className="flex items-center space-x-1">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+            ❌ OFF
+          </span>
+          <CircleStackIcon className="h-3 w-3 text-gray-400" title="Serveur inaccessible" />
+        </div>
+      )
     }
-  }
-
-  /**
-   * Obtient le badge de diagnostic technique
-   */
-  const getDiagnosticBadge = (api) => {
-    if (!api.diagnosticLevel) return null
-
-    const badges = {
-      'full': <span className="badge bg-blue-500 text-white text-xs">🔍 Full</span>,
-      'partial': <span className="badge bg-purple-500 text-white text-xs">⚡ Partial</span>,
-      'server_only': <span className="badge bg-orange-500 text-white text-xs">🖥️ Server</span>,
-      'network_only': <span className="badge bg-red-500 text-white text-xs">📡 Network</span>,
-      'none': <span className="badge bg-gray-500 text-white text-xs">❓ None</span>
-    }
-
-    return badges[api.diagnosticLevel] || null
   }
 
   const availableCount = availableApis.filter(api => api.serverAccessible && api.databaseConnected).length
   const serverOnlyCount = availableApis.filter(api => api.serverAccessible && !api.databaseConnected).length
 
+  // Calculer position initiale
+  const getInitialPosition = () => {
+    if (!buttonRef.current) return { x: 100, y: 100 }
+    const rect = buttonRef.current.getBoundingClientRect()
+    return {
+      x: Math.max(10, Math.min(window.innerWidth - 420, rect.left)),
+      y: Math.max(10, Math.min(window.innerHeight - 520, rect.bottom + 8))
+    }
+  }
+
   return (
-    <div ref={dropdownRef} className={`relative ${className}`}>
-      {/* Bouton principal */}
+    <div className={`relative ${className}`}>
+      {/* Bouton Principal */}
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!position.x && !position.y) {
+            setPosition(getInitialPosition())
+          }
+          setIsOpen(!isOpen)
+        }}
         className={`btn transition-all duration-300 w-full ${
-          selectedApi && selectedApi.serverAccessible && selectedApi.databaseConnected
-            ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white'
-            : selectedApi && selectedApi.serverAccessible && !selectedApi.databaseConnected
-            ? 'bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white'
+          selectedApi?.serverAccessible && selectedApi?.databaseConnected
+            ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg'
+            : selectedApi?.serverAccessible && !selectedApi?.databaseConnected
+            ? 'bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white shadow-lg'
             : selectedApi
-            ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white'
-            : 'border-green-300 text-green-800 hover:bg-green-50'
+            ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-lg'
+            : 'border-green-300 text-green-800 hover:bg-green-50 bg-white/90'
         }`}
       >
         <div className="flex items-center justify-between w-full">
@@ -505,9 +382,7 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
             {selectedApi ? (
               <>
                 {getApiStatusIcon(selectedApi)}
-                <span className="text-sm font-medium">
-                  {selectedApi.name}
-                </span>
+                <span className="text-sm font-medium">{selectedApi.name}</span>
               </>
             ) : (
               <>
@@ -519,275 +394,350 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
           
           {selectedApi && (
             <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-1">
-                <CircleStackIcon className={`h-3 w-3 ${
-                  selectedApi.databaseConnected ? 'text-green-200' : 'text-red-300'
-                }`} />
-                <span className="text-xs text-green-200">{selectedApi.responseTime}ms</span>
-              </div>
+              <CircleStackIcon className={`h-3 w-3 ${
+                selectedApi.databaseConnected ? 'text-green-200' : 'text-red-300'
+              }`} />
+              <span className="text-xs text-green-200">{selectedApi.responseTime}ms</span>
             </div>
           )}
           <ChevronDownIcon className={`h-4 w-4 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
         </div>
       </button>
 
-      {/* Dropdown menu */}
-      {isOpen && (
-        <div className="absolute z-50 mt-2 w-96 card border-green-200 shadow-xl animate-slide-in-left">
-          
-          {/* Header avec compteurs */}
-          <div className="card-header bg-gradient-to-r from-green-50 to-green-100 border-green-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium text-green-800">Serveurs API</span>
-                <div className="flex space-x-1">
-                  <span className="badge bg-green-600 text-white">{availableCount} OK</span>
-                  {serverOnlyCount > 0 && (
-                    <span className="badge bg-yellow-600 text-white">{serverOnlyCount} DB-</span>
-                  )}
-                </div>
-              </div>
-              {isScanning && (
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs text-green-600">
-                    {scanProgress.current}/{scanProgress.total}
-                  </span>
-                  <ArrowPathIcon className="h-4 w-4 text-green-600 animate-spin" />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="px-4 py-3 border-b border-green-100 bg-green-25">
-            <div className="flex space-x-2">
-              <button
-                onClick={scanAvailableApis}
-                disabled={isScanning}
-                className="btn bg-green-600 hover:bg-green-700 text-white btn-sm transition-all duration-300 hover:scale-105 disabled:opacity-50"
-              >
-                <ArrowPathIcon className={`h-3 w-3 mr-1 transition-transform duration-300 ${isScanning ? 'animate-spin' : 'group-hover:rotate-180'}`} />
-                <span>{isScanning ? 'Scan...' : 'Scanner'}</span>
-              </button>
-              
-              <button
-                onClick={() => setShowAddForm(!showAddForm)}
-                className="btn border-green-300 text-green-700 hover:bg-green-50 btn-sm"
-              >
-                <PlusIcon className="h-3 w-3 mr-1" />
-                Ajouter
-              </button>
-              
-              <button
-                onClick={() => setShowConfigManager(!showConfigManager)}
-                className="btn bg-blue-600 hover:bg-blue-700 text-white btn-sm"
-              >
-                <Cog6ToothIcon className="h-3 w-3 mr-1" />
-                Configurer API
-              </button>
-            </div>
-
-            {/* Barre de progression du scan */}
-            {isScanning && scanProgress.total > 0 && (
-              <div className="mt-2">
-                <div className="w-full bg-green-200 rounded-full h-1.5">
-                  <div 
-                    className="bg-green-600 h-1.5 rounded-full transition-all duration-300"
-                    style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Formulaire d'ajout */}
-          {showAddForm && (
-            <div className="px-4 py-3 border-b border-green-100 bg-blue-25">
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="IP ou hostname..."
-                  value={newApiInput}
-                  onChange={(e) => setNewApiInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleAddCustomApi()}
-                  className="input flex-1 text-sm"
-                />
-                <button
-                  onClick={handleAddCustomApi}
-                  className="btn bg-blue-600 hover:bg-blue-700 text-white btn-sm"
-                >
-                  <PlusIcon className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={() => setShowAddForm(false)}
-                  className="btn border-gray-300 text-gray-600 hover:bg-gray-50 btn-sm"
-                >
-                  <XMarkIcon className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Liste des APIs */}
-          <div className="max-h-72 overflow-y-auto">
-            {availableApis.length === 0 ? (
-              <div className="px-4 py-8 text-center text-gray-500">
-                <NoSymbolIcon className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">Aucune API trouvée</p>
-                <p className="text-xs text-gray-400">Lancez un scan pour découvrir les serveurs</p>
-              </div>
-            ) : (
-              availableApis.map((api) => (
-                <div
-                  key={api.id}
-                  onClick={() => handleApiSelect(api)}
-                  className={`px-4 py-3 cursor-pointer transition-all duration-200 border-l-4 ${
-                    selectedApi && selectedApi.id === api.id
-                      ? 'bg-green-50 border-l-green-500'
-                      : 'hover:bg-gray-50 border-l-transparent'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      {getApiStatusIcon(api)}
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-sm font-medium ${getApiStatusColor(api)}`}>
-                            {api.name}
-                          </span>
-                          {getStatusBadge(api)}
-                          {getDiagnosticBadge(api)}
-                          {api.isCustom && (
-                            <span className="badge bg-blue-500 text-white">Custom</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {api.ip}:{api.port}
-                          {api.statusCode && (
-                            <span className={`ml-2 px-1 py-0.5 rounded text-xs ${
-                              api.statusCode >= 200 && api.statusCode < 300 ? 'bg-green-100 text-green-700' :
-                              api.statusCode >= 400 && api.statusCode < 500 ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-red-100 text-red-700'
-                            }`}>
-                              HTTP {api.statusCode}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {api.details}
-                        </div>
-                        {/* Informations de diagnostic avancées */}
-                        {api.healthData && (
-                          <div className="text-xs text-blue-600 mt-1">
-                            🔍 DB: {api.healthData.database || 'N/A'} | 
-                            Status: {api.healthData.status || 'N/A'}
-                          </div>
-                        )}
-                        {api.errorData && (
-                          <div className="text-xs text-red-600 mt-1">
-                            ❌ Erreur: {api.errorData.message || api.error || 'Inconnue'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {api.serverAccessible && (
-                        <div className="flex items-center space-x-1 text-xs text-gray-500">
-                          <ClockIcon className="h-3 w-3" />
-                          <span>{api.responseTime}ms</span>
-                        </div>
-                      )}
-                      
-                      {api.isCustom && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removeCustomApi(api.ip)
-                          }}
-                          className="text-red-500 hover:text-red-700 transition-colors"
-                          title="Supprimer cette API personnalisée"
-                        >
-                          <XMarkIcon className="h-3 w-3" />
-                        </button>
+      {/* Menu Portail */}
+      {isOpen && typeof document !== 'undefined' && 
+        ReactDOM.createPortal(
+          <div
+            data-api-menu
+            className="fixed z-[99999] w-[400px] card shadow-2xl animate-slide-in-left"
+            style={{
+              left: position.x,
+              top: position.y,
+              cursor: isDragging ? 'grabbing' : 'default'
+            }}
+            onMouseDown={handleMouseDown}
+          >
+            {/* Header Déplaçable */}
+            <div 
+              data-drag-handle
+              className="card-header cursor-grab active:cursor-grabbing select-none"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <ServerIcon className="h-5 w-5 text-green-600" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-green-800">Serveurs API</h3>
+                    <div className="flex space-x-2 mt-1">
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-600 text-white rounded-full">
+                        {availableCount} OK
+                      </span>
+                      {serverOnlyCount > 0 && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-600 text-white rounded-full">
+                          {serverOnlyCount} DB-
+                        </span>
                       )}
                     </div>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-
-          {/* Footer avec légende et statistiques avancées */}
-          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 space-y-2">
-            {/* Statistiques détaillées */}
-            <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
-              <div className="text-center">
-                <div className="font-semibold text-green-600">{availableCount}</div>
-                <div className="text-gray-500">Complets</div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-yellow-600">{serverOnlyCount}</div>
-                <div className="text-gray-500">Serveur OK</div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-red-600">
-                  {availableApis.length - availableCount - serverOnlyCount}
+                
+                <div className="flex items-center space-x-2">
+                  {isScanning && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-green-600 font-medium">
+                        {scanProgress.current}/{scanProgress.total}
+                      </span>
+                      <ArrowPathIcon className="h-4 w-4 text-green-600 animate-spin" />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    style={{
+                      backgroundColor: 'white',
+                      border: '3px solid #dc2626',
+                      color: '#dc2626',
+                      padding: '8px',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 8px rgba(220,38,38,0.2)',
+                      cursor: 'pointer'
+                    }}
+                    className="hover:bg-red-50"
+                    title="Fermer"
+                  >
+                    <XMarkIcon className="h-4 w-4" style={{ strokeWidth: 3 }} />
+                  </button>
                 </div>
-                <div className="text-gray-500">Hors ligne</div>
               </div>
             </div>
 
-            {/* Légende des états */}
-            <div className="flex items-center justify-between text-xs text-gray-500 border-t pt-2">
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span>DB déconnectée</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span>Timeout</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <span>Hors ligne</span>
-                </div>
+            {/* Actions */}
+            <div className="px-6 py-4 border-b border-green-100 bg-green-25 space-y-3">
+              <div className="flex space-x-2">
+                <button
+                  onClick={scanAvailableApis}
+                  disabled={isScanning}
+                  className="btn bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white flex-1 transition-all duration-300"
+                >
+                  <ArrowPathIcon className={`h-4 w-4 mr-2 ${isScanning ? 'animate-spin' : ''}`} />
+                  {isScanning ? 'Scan...' : 'Scanner'}
+                </button>
+                
+                <button
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  style={{
+                    backgroundColor: 'white',
+                    border: '3px solid black',
+                    color: 'black',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+                    cursor: 'pointer'
+                  }}
+                  className="hover:bg-gray-100"
+                  title="Ajouter un serveur"
+                >
+                  <PlusIcon className="h-4 w-4" style={{ strokeWidth: 3 }} />
+                </button>
+                
+                <button
+                  onClick={() => setShowConfigManager(true)}
+                  style={{
+                    backgroundColor: '#2563eb',
+                    border: '3px solid #1d4ed8',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 8px rgba(37,99,235,0.3)',
+                    cursor: 'pointer'
+                  }}
+                  className="hover:bg-blue-700"
+                  title="Configuration"
+                >
+                  <Cog6ToothIcon className="h-4 w-4" style={{ strokeWidth: 3 }} />
+                </button>
               </div>
-              
-              {/* Temps de scan */}
-              {!isScanning && availableApis.length > 0 && (
-                <div className="text-gray-400">
-                  Scan: {Math.round(availableApis.reduce((acc, api) => acc + (api.responseTime || 0), 0) / availableApis.length)}ms moy.
+
+              {/* Barre de progression */}
+              {isScanning && scanProgress.total > 0 && (
+                <div className="w-full bg-green-200 rounded-full h-2">
+                  <div 
+                    className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }}
+                  />
                 </div>
               )}
             </div>
 
-            {/* Indicateur de qualité du scan */}
-            <div className="flex items-center justify-between text-xs border-t pt-2">
-              <div className="flex items-center space-x-2">
-                <span className="text-gray-500">Qualité du diagnostic:</span>
-                <div className="flex space-x-1">
-                  {availableApis.filter(api => api.diagnosticLevel === 'full').length > 0 && (
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                      {availableApis.filter(api => api.diagnosticLevel === 'full').length} Complets
-                    </span>
-                  )}
-                  {availableApis.filter(api => api.diagnosticLevel === 'partial').length > 0 && (
-                    <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
-                      {availableApis.filter(api => api.diagnosticLevel === 'partial').length} Partiels
-                    </span>
-                  )}
-                  {availableApis.filter(api => api.diagnosticLevel === 'server_only').length > 0 && (
-                    <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
-                      {availableApis.filter(api => api.diagnosticLevel === 'server_only').length} Serveur
-                    </span>
-                  )}
+            {/* Formulaire d'ajout */}
+            {showAddForm && (
+              <div className="px-6 py-4 border-b border-green-100 bg-blue-25">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Ajouter un serveur personnalisé
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      placeholder="IP ou hostname..."
+                      value={newApiInput}
+                      onChange={(e) => setNewApiInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddCustomApi()}
+                      className="form-input flex-1"
+                    />
+                    <button
+                      onClick={handleAddCustomApi}
+                      style={{
+                        backgroundColor: '#16a34a',
+                        border: '3px solid #15803d',
+                        color: 'white',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 8px rgba(22,163,74,0.3)',
+                        cursor: 'pointer'
+                      }}
+                      className="hover:bg-green-700"
+                      title="Ajouter"
+                    >
+                      <PlusIcon className="h-4 w-4" style={{ strokeWidth: 3 }} />
+                    </button>
+                    <button
+                      onClick={() => setShowAddForm(false)}
+                      style={{
+                        backgroundColor: 'white',
+                        border: '3px solid #dc2626',
+                        color: '#dc2626',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 8px rgba(220,38,38,0.2)',
+                        cursor: 'pointer'
+                      }}
+                      className="hover:bg-red-50"
+                      title="Annuler"
+                    >
+                      <XMarkIcon className="h-4 w-4" style={{ strokeWidth: 3 }} />
+                    </button>
+                  </div>
                 </div>
               </div>
+            )}
+
+            {/* Liste des APIs */}
+            <div className="max-h-72 overflow-y-auto scrollbar-thin">
+              {availableApis.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-500">
+                  <ServerIcon className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-sm font-medium">Aucune API trouvée</p>
+                  <p className="text-xs text-gray-400 mt-1">Lancez un scan pour découvrir les serveurs</p>
+                </div>
+              ) : (
+                <div className="space-y-1 p-2">
+                  {availableApis.map((api, index) => (
+                    <div
+                      key={api.id}
+                      onClick={() => handleApiSelect(api)}
+                      className={`p-4 cursor-pointer rounded-xl transition-all duration-200 border-2 animate-slide-in-left ${
+                        selectedApi?.id === api.id
+                          ? 'bg-green-50 border-green-500 shadow-md'
+                          : 'hover:bg-gray-50 border-transparent hover:border-green-200'
+                      }`}
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3 flex-1 min-w-0">
+                          {getApiStatusIcon(api)}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <span className="text-sm font-medium text-gray-900 truncate">
+                                {api.name}
+                              </span>
+                              {getStatusBadge(api)}
+                              {api.isCustom && (
+                                <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                                  Custom
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {api.ip}:{api.port}
+                              {api.statusCode && (
+                                <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
+                                  api.statusCode >= 200 && api.statusCode < 300 ? 'bg-green-100 text-green-700' :
+                                  api.statusCode >= 400 && api.statusCode < 500 ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  HTTP {api.statusCode}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">{api.details}</div>
+                            
+                            {/* Diagnostic avancé DB */}
+                            {api.healthData && (
+                              <div className="text-xs mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-medium text-blue-800">Diagnostic:</span>
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                    api.databaseConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    DB: {api.healthData.database || 'Inconnue'}
+                                  </span>
+                                </div>
+                                {api.healthData.status && (
+                                  <div className="text-blue-700 text-xs mt-1">
+                                    Status: {api.healthData.status}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Erreurs détaillées */}
+                            {api.errorData && (
+                              <div className="text-xs mt-2 p-2 bg-red-50 rounded border border-red-200">
+                                <div className="text-red-800 font-medium">Erreur serveur:</div>
+                                <div className="text-red-700 text-xs mt-1">
+                                  {api.errorData.message || api.error || 'Erreur inconnue'}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2 ml-3">
+                          {api.serverAccessible && (
+                            <div className="flex items-center space-x-1 text-xs text-gray-500">
+                              <ClockIcon className="h-3 w-3" />
+                              <span className="font-medium">{api.responseTime}ms</span>
+                            </div>
+                          )}
+                          
+                          {api.isCustom && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeCustomApi(api.ip)
+                              }}
+                              style={{
+                                backgroundColor: 'white',
+                                border: '3px solid #dc2626',
+                                color: '#dc2626',
+                                padding: '6px',
+                                borderRadius: '6px',
+                                boxShadow: '0 2px 4px rgba(220,38,38,0.2)',
+                                cursor: 'pointer'
+                              }}
+                              className="hover:bg-red-50"
+                              title="Supprimer cette API personnalisée"
+                            >
+                              <XMarkIcon className="h-3 w-3" style={{ strokeWidth: 3 }} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Statistiques */}
+            <div className="card-footer">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-lg font-bold text-green-600">{availableCount}</div>
+                  <div className="text-xs text-gray-500">Complets</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-yellow-600">{serverOnlyCount}</div>
+                  <div className="text-xs text-gray-500">Serveur OK</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-red-600">
+                    {availableApis.length - availableCount - serverOnlyCount}
+                  </div>
+                  <div className="text-xs text-gray-500">Hors ligne</div>
+                </div>
+              </div>
+              
+              {!isScanning && availableApis.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-green-100 text-center">
+                  <div className="text-xs text-gray-500">
+                    Temps moyen: {Math.round(
+                      availableApis.filter(api => api.responseTime).reduce((acc, api) => acc + api.responseTime, 0) / 
+                      availableApis.filter(api => api.responseTime).length || 0
+                    )}ms
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+          , document.body)
+      }
+      
+      {/* Gestionnaire de configuration */}
+      {showConfigManager && (
+        <ApiConfigManager 
+          isOpen={showConfigManager} 
+          onClose={() => setShowConfigManager(false)} 
+        />
       )}
     </div>
   )
