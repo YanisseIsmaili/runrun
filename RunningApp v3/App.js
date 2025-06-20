@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, SafeAreaView, StyleSheet } from 'react-native';
 
 // Contexts
 import { AuthProvider } from './src/context/AuthContext';
@@ -172,15 +172,24 @@ export default function App() {
   }, []);
 
   return (
-    <SettingsProvider>
-      <AuthProvider>
-        <RunProvider>
-          <NavigationContainer>
-            <StatusBar style="auto" />
-            <AppNavigation />
-          </NavigationContainer>
-        </RunProvider>
-      </AuthProvider>
-    </SettingsProvider>
+    <SafeAreaView style={styles.container}>
+      <SettingsProvider>
+        <AuthProvider>
+          <RunProvider>
+            <NavigationContainer>
+              <StatusBar style="auto" />
+              <AppNavigation />
+            </NavigationContainer>
+          </RunProvider>
+        </AuthProvider>
+      </SettingsProvider>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+});

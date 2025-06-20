@@ -12,45 +12,21 @@ export const useSettings = () => {
 };
 
 const DEFAULT_SETTINGS = {
-  // Unités
-  distanceUnit: 'km', // 'km' ou 'miles'
-  speedUnit: 'kmh', // 'kmh' ou 'mph'
-  
-  // Notifications
+  distanceUnit: 'km',
+  speedUnit: 'kmh',
   notificationsEnabled: true,
-  progressNotifications: true,
-  motivationalNotifications: true,
-  
-  // Audio
   voiceGuidanceEnabled: true,
-  voiceLanguage: 'fr',
-  
-  // Suivi
   autoStartRun: false,
   autoPauseRun: true,
-  gpsAccuracy: 'high', // 'high', 'medium', 'low'
-  
-  // Affichage
-  mapType: 'standard', // 'standard', 'satellite', 'hybrid'
-  showSpeedOnMap: true,
-  showDistanceOnMap: true,
-  
-  // Objectifs
-  weeklyDistanceGoal: 10, // km
+  gpsAccuracy: 'high',
+  mapType: 'standard',
+  weeklyDistanceGoal: 10,
   weeklyRunsGoal: 3,
-  
-  // Privacité
-  shareLocation: false,
-  shareStats: true,
-  
-  // Profil utilisateur
-  weight: 70, // kg
-  height: 175, // cm
+  weight: 70,
+  height: 175,
   age: 30,
-  fitnessLevel: 'intermediate', // 'beginner', 'intermediate', 'advanced'
-  
-  // Thème
-  theme: 'auto', // 'light', 'dark', 'auto'
+  fitnessLevel: 'intermediate',
+  theme: 'auto',
   primaryColor: '#4CAF50',
 };
 
@@ -88,120 +64,32 @@ export const SettingsProvider = ({ children }) => {
     }
   };
 
-  const resetSettings = async () => {
-    try {
-      setSettings(DEFAULT_SETTINGS);
-      await AsyncStorage.setItem('userSettings', JSON.stringify(DEFAULT_SETTINGS));
-      return true;
-    } catch (error) {
-      console.error('Erreur lors de la réinitialisation des paramètres:', error);
-      return false;
-    }
-  };
-
-  // Fonctions utilitaires pour les conversions d'unités
-  const convertDistance = (distance, fromUnit = 'km', toUnit = null) => {
-    const targetUnit = toUnit || settings.distanceUnit;
-    
-    if (fromUnit === targetUnit) return distance;
-    
-    if (fromUnit === 'km' && targetUnit === 'miles') {
-      return distance * 0.621371;
-    } else if (fromUnit === 'miles' && targetUnit === 'km') {
-      return distance / 0.621371;
-    }
-    
-    return distance;
-  };
-
-  const convertSpeed = (speed, fromUnit = 'kmh', toUnit = null) => {
-    const targetUnit = toUnit || settings.speedUnit;
-    
-    if (fromUnit === targetUnit) return speed;
-    
-    if (fromUnit === 'kmh' && targetUnit === 'mph') {
-      return speed * 0.621371;
-    } else if (fromUnit === 'mph' && targetUnit === 'kmh') {
-      return speed / 0.621371;
-    }
-    
-    return speed;
-  };
-
-  const formatDistance = (distance, unit = null) => {
-    const targetUnit = unit || settings.distanceUnit;
-    const convertedDistance = convertDistance(distance, 'km', targetUnit);
+  const formatDistance = (distance) => {
+    const convertedDistance = settings.distanceUnit === 'miles' 
+      ? distance * 0.621371 
+      : distance;
     
     if (convertedDistance < 1) {
       return `${Math.round(convertedDistance * 1000)} m`;
     } else {
-      return `${convertedDistance.toFixed(2)} ${targetUnit}`;
+      return `${convertedDistance.toFixed(2)} ${settings.distanceUnit}`;
     }
   };
 
-  const formatSpeed = (speed, unit = null) => {
-    const targetUnit = unit || settings.speedUnit;
-    const convertedSpeed = convertSpeed(speed, 'kmh', targetUnit);
+  const formatSpeed = (speed) => {
+    const convertedSpeed = settings.speedUnit === 'mph' 
+      ? speed * 0.621371 
+      : speed;
     
-    return `${convertedSpeed.toFixed(1)} ${targetUnit}`;
-  };
-
-  const calculateBMI = () => {
-    const heightInMeters = settings.height / 100;
-    return settings.weight / (heightInMeters * heightInMeters);
-  };
-
-  const getBMICategory = () => {
-    const bmi = calculateBMI();
-    
-    if (bmi < 18.5) return 'Insuffisance pondérale';
-    if (bmi < 25) return 'Poids normal';
-    if (bmi < 30) return 'Surpoids';
-    return 'Obésité';
-  };
-
-  const getCaloriesPerKm = () => {
-    // Formule approximative basée sur le poids
-    // Calories par km = poids en kg × 1.036
-    return settings.weight * 1.036;
-  };
-
-  const getRecommendedPace = () => {
-    // Allure recommandée basée sur le niveau de forme physique
-    switch (settings.fitnessLevel) {
-      case 'beginner':
-        return '7:00'; // 7 min/km
-      case 'intermediate':
-        return '5:30'; // 5:30 min/km
-      case 'advanced':
-        return '4:30'; // 4:30 min/km
-      default:
-        return '6:00'; // 6 min/km
-    }
+    return `${convertedSpeed.toFixed(1)} ${settings.speedUnit}`;
   };
 
   const value = {
-    // État
     settings,
     loading,
-    
-    // Actions
     updateSettings,
-    resetSettings,
-    
-    // Utilitaires de conversion
-    convertDistance,
-    convertSpeed,
     formatDistance,
     formatSpeed,
-    
-    // Calculs santé
-    calculateBMI,
-    getBMICategory,
-    getCaloriesPerKm,
-    getRecommendedPace,
-    
-    // Constantes
     DEFAULT_SETTINGS,
   };
 
