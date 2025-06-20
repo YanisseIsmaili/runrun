@@ -1,36 +1,58 @@
 {
   "expo": {
     "name": "RunningApp",
-    "slug": "runningapp",
+    "slug": "running-tracker-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1a1a1a"
     },
-    "jsEngine": "hermes",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "jsEngine": "jsc"
+      "bundleIdentifier": "com.yourcompany.runningapp",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Cette app utilise la géolocalisation pour tracker vos courses.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cette app utilise la géolocalisation pour tracker vos courses même en arrière-plan."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1a1a1a"
       },
+      "package": "com.yourcompany.runningapp",
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
-      ]
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Cette app utilise la géolocalisation pour tracker vos courses.",
+          "locationAlwaysPermission": "Cette app utilise la géolocalisation pour continuer le tracking en arrière-plan.",
+          "locationWhenInUsePermission": "Cette app utilise la géolocalisation pour tracker vos courses.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
+    ]
   }
 }
