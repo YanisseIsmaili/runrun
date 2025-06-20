@@ -1,5 +1,7 @@
+// SplashScreen.js - Si nécessaire
 import React, { useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 
 const SplashScreen = ({ navigation }) => {

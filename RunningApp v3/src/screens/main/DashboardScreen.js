@@ -5,11 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   RefreshControl,
   Dimensions,
   StatusBar,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useRun } from '../../context/RunContext';
@@ -63,9 +64,9 @@ const DashboardScreen = ({ navigation }) => {
       
       {/* En-tête */}
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.greeting}>
-            {getGreeting()}, {user?.first_name || 'Runner'} !
+            {getGreeting()}, {user?.first_name || user?.firstName || 'Runner'} !
           </Text>
           <Text style={styles.motivationalText}>
             Prêt pour votre prochaine course ?
@@ -92,22 +93,28 @@ const DashboardScreen = ({ navigation }) => {
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Ionicons name="fitness-outline" size={24} color="#4CAF50" />
-              <Text style={styles.statValue}>{weeklyStats.runs}</Text>
+              <Text style={styles.statValue}>{weeklyStats?.runs || 0}</Text>
               <Text style={styles.statLabel}>Courses</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="navigate-outline" size={24} color="#2196F3" />
-              <Text style={styles.statValue}>{formatDistance(weeklyStats.distance / 1000)}</Text>
+              <Text style={styles.statValue}>
+                {formatDistance((weeklyStats?.distance || 0) / 1000)}
+              </Text>
               <Text style={styles.statLabel}>Distance</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="time-outline" size={24} color="#FF9800" />
-              <Text style={styles.statValue}>{formatDuration(weeklyStats.duration)}</Text>
+              <Text style={styles.statValue}>
+                {formatDuration(weeklyStats?.duration || 0)}
+              </Text>
               <Text style={styles.statLabel}>Temps</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="speedometer-outline" size={24} color="#9C27B0" />
-              <Text style={styles.statValue}>{weeklyStats.averagePace}</Text>
+              <Text style={styles.statValue}>
+                {weeklyStats?.averagePace || '00:00'}
+              </Text>
               <Text style={styles.statLabel}>Allure</Text>
             </View>
           </View>
@@ -160,7 +167,7 @@ const DashboardScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
           
-          {runHistory.length > 0 ? (
+          {runHistory && runHistory.length > 0 ? (
             runHistory.slice(0, 3).map((run) => (
               <TouchableOpacity
                 key={run.id}
@@ -175,7 +182,7 @@ const DashboardScreen = ({ navigation }) => {
                     {formatDistance((run.distance || 0) / 1000)}
                   </Text>
                   <Text style={styles.runItemDate}>
-                    {new Date(run.startTime).toLocaleDateString()}
+                    {new Date(run.startTime || run.start_time).toLocaleDateString()}
                   </Text>
                 </View>
                 <View style={styles.runItemStats}>
@@ -198,13 +205,35 @@ const DashboardScreen = ({ navigation }) => {
                 style={styles.startRunButton}
                 onPress={() => navigation.navigate('Running')}
               >
-                <Text style={styles.startRunButtonText}>Démarrer une course</Text>
+                <Text style={styles.startRunButtonText}>Commencer maintenant</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        <View style={styles.bottomSpacing} />
+        {/* Objectifs et motivation */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Vos progrès</Text>
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <Ionicons name="trophy-outline" size={24} color="#FFD700" />
+              <Text style={styles.goalTitle}>Objectif hebdomadaire</Text>
+            </View>
+            <View style={styles.goalProgress}>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill, 
+                    { width: `${Math.min((weeklyStats?.distance || 0) / 10000 * 100, 100)}%` }
+                  ]} 
+                />
+              </View>
+              <Text style={styles.goalText}>
+                {formatDistance((weeklyStats?.distance || 0) / 1000)} / 10 km
+              </Text>
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -213,183 +242,222 @@ const DashboardScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
   },
   header: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 10 : 20,
+    paddingBottom: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  headerLeft: {
+    flex: 1,
   },
   greeting: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: 'white',
-    marginBottom: 4,
   },
   motivationalText: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 4,
   },
   profileButton: {
-    padding: 4,
+    padding: 8,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
   },
   section: {
-    marginTop: 20,
+    margin: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 12,
   },
   seeAllText: {
-    color: '#4CAF50',
     fontSize: 14,
+    color: '#4CAF50',
     fontWeight: '600',
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   statCard: {
-    flex: 1,
-    minWidth: (width - 52) / 2,
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
+    width: (width - 48) / 2,
+    marginBottom: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
-    marginVertical: 8,
+    marginTop: 8,
   },
   statLabel: {
     fontSize: 12,
     color: '#666',
+    marginTop: 4,
   },
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   quickActionButton: {
-    flex: 1,
-    minWidth: (width - 52) / 2,
-    aspectRatio: 1.2,
     borderRadius: 12,
-    justifyContent: 'center',
+    padding: 16,
     alignItems: 'center',
-    elevation: 2,
+    width: (width - 48) / 2,
+    marginBottom: 12,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   quickActionText: {
     color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginTop: 8,
-    textAlign: 'center',
+    fontSize: 14,
   },
   runItem: {
     backgroundColor: 'white',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
   },
   runItemIconContainer: {
-    justifyContent: 'center',
+    backgroundColor: '#E8F5E8',
+    borderRadius: 8,
+    padding: 8,
     marginRight: 12,
   },
   runItemDetails: {
     flex: 1,
-    justifyContent: 'center',
   },
   runItemDistance: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
   },
   runItemDate: {
     fontSize: 14,
-    color: '#757575',
-    marginTop: 4,
+    color: '#666',
+    marginTop: 2,
   },
   runItemStats: {
-    justifyContent: 'center',
     alignItems: 'flex-end',
   },
   runItemDuration: {
-    fontSize: 14,
-    color: '#757575',
-    marginBottom: 4,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
   },
   runItemPace: {
     fontSize: 12,
-    color: '#757575',
+    color: '#666',
+    marginTop: 2,
   },
   emptyStateContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 40,
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 40,
-    elevation: 1,
+    marginTop: 8,
   },
   emptyStateText: {
-    color: '#666',
     fontSize: 16,
+    color: '#666',
     textAlign: 'center',
     marginTop: 16,
-    marginBottom: 20,
     lineHeight: 24,
   },
   startRunButton: {
     backgroundColor: '#4CAF50',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 24,
+    marginTop: 16,
   },
   startRunButtonText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
-  bottomSpacing: {
-    height: 20,
+  goalCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  goalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginLeft: 8,
+  },
+  goalProgress: {
+    alignItems: 'center',
+  },
+  progressBar: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: 8,
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+  },
+  goalText: {
+    fontSize: 14,
+    color: '#666',
   },
 });
 

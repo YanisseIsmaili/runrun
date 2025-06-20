@@ -1,3 +1,4 @@
+// RegisterScreen.js - Correction import  
 import React, { useState } from 'react';
 import {
   View,
@@ -7,11 +8,11 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
@@ -72,42 +73,46 @@ const RegisterScreen = ({ navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.header}>
-            <Text style={styles.title}>Inscription</Text>
-            <Text style={styles.subtitle}>Créez votre compte Running App</Text>
+            <Text style={styles.title}>Créer un compte</Text>
+            <Text style={styles.subtitle}>Rejoignez notre communauté de coureurs</Text>
           </View>
 
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Prénom"
-                value={formData.firstName}
-                onChangeText={(value) => handleInputChange('firstName', value)}
-                autoCapitalize="words"
-              />
+            <View style={styles.inputRow}>
+              <View style={[styles.inputContainer, styles.halfInput]}>
+                <Text style={styles.label}>Prénom</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.firstName}
+                  onChangeText={(value) => handleInputChange('firstName', value)}
+                  placeholder="Votre prénom"
+                  autoCapitalize="words"
+                />
+              </View>
+              <View style={[styles.inputContainer, styles.halfInput]}>
+                <Text style={styles.label}>Nom</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.lastName}
+                  onChangeText={(value) => handleInputChange('lastName', value)}
+                  placeholder="Votre nom"
+                  autoCapitalize="words"
+                />
+              </View>
             </View>
 
             <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Nom"
-                value={formData.lastName}
-                onChangeText={(value) => handleInputChange('lastName', value)}
-                autoCapitalize="words"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
                 value={formData.email}
                 onChangeText={(value) => handleInputChange('email', value)}
+                placeholder="votre@email.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -115,60 +120,52 @@ const RegisterScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Mot de passe"
-                value={formData.password}
-                onChangeText={(value) => handleInputChange('password', value)}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons 
-                  name={showPassword ? "eye-outline" : "eye-off-outline"} 
-                  size={20} 
-                  color="#666" 
+              <Text style={styles.label}>Mot de passe</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  value={formData.password}
+                  onChangeText={(value) => handleInputChange('password', value)}
+                  placeholder="Votre mot de passe"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
                 />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={24}
+                    color="#666"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirmer le mot de passe"
-                value={formData.confirmPassword}
-                onChangeText={(value) => handleInputChange('confirmPassword', value)}
-                secureTextEntry={!showConfirmPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons 
-                  name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} 
-                  size={20} 
-                  color="#666" 
+              <Text style={styles.label}>Confirmer le mot de passe</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  value={formData.confirmPassword}
+                  onChangeText={(value) => handleInputChange('confirmPassword', value)}
+                  placeholder="Confirmez votre mot de passe"
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
                 />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye-off' : 'eye'}
+                    size={24}
+                    color="#666"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <TouchableOpacity
-              style={[styles.registerButton, loading && styles.disabledButton]}
-              onPress={handleRegister}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text style={styles.registerButtonText}>S'inscrire</Text>
-              )}
-            </TouchableOpacity>
 
             {error && (
               <View style={styles.errorContainer}>
@@ -176,12 +173,26 @@ const RegisterScreen = ({ navigation }) => {
               </View>
             )}
 
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Déjà un compte ? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                <Text style={styles.linkText}>Se connecter</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.registerButton, loading && styles.disabledButton]}
+              onPress={handleRegister}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text style={styles.registerButtonText}>Créer mon compte</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.loginLink}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <Text style={styles.loginLinkText}>
+                Déjà un compte ? <Text style={styles.loginLinkBold}>Se connecter</Text>
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -192,25 +203,25 @@ const RegisterScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
     marginBottom: 40,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#333',
     marginBottom: 8,
   },
   subtitle: {
@@ -219,76 +230,88 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   form: {
-    width: '100%',
+    flex: 1,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    marginBottom: 20,
   },
-  inputIcon: {
-    marginRight: 12,
+  halfInput: {
+    width: '48%',
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
   },
   input: {
-    flex: 1,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
     color: '#333',
   },
-  eyeIcon: {
-    padding: 4,
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#333',
+  },
+  eyeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  errorContainer: {
+    backgroundColor: '#fee',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  errorText: {
+    color: '#d00',
+    fontSize: 14,
+    textAlign: 'center',
   },
   registerButton: {
     backgroundColor: '#4CAF50',
-    borderRadius: 12,
     paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 20,
   },
   disabledButton: {
-    opacity: 0.7,
+    backgroundColor: '#ccc',
   },
   registerButtonText: {
     color: 'white',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
-  errorContainer: {
-    backgroundColor: '#ffebee',
-    borderLeftWidth: 4,
-    borderLeftColor: '#f44336',
-    padding: 12,
-    marginTop: 16,
-    borderRadius: 4,
+  loginLink: {
+    alignItems: 'center',
   },
-  errorText: {
-    color: '#c62828',
-    fontSize: 14,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 32,
-  },
-  footerText: {
+  loginLinkText: {
     fontSize: 16,
     color: '#666',
   },
-  linkText: {
-    fontSize: 16,
+  loginLinkBold: {
     color: '#4CAF50',
     fontWeight: '600',
   },

@@ -5,7 +5,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
-import { Platform, SafeAreaView, StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Contexts
 import { AuthProvider } from './src/context/AuthContext';
@@ -70,8 +71,6 @@ function MainTabs() {
           backgroundColor: 'white',
           borderTopWidth: 1,
           borderTopColor: '#e0e0e0',
-          height: Platform.OS === 'ios' ? 90 : 70,
-          paddingBottom: Platform.OS === 'ios' ? 25 : 10,
           paddingTop: 10,
         },
         headerShown: false,
@@ -172,7 +171,7 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaProvider>
       <SettingsProvider>
         <AuthProvider>
           <RunProvider>
@@ -183,7 +182,7 @@ export default function App() {
           </RunProvider>
         </AuthProvider>
       </SettingsProvider>
-    </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
