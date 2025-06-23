@@ -49,7 +49,7 @@ function MainTabs() {
             case 'Dashboard':
               iconName = focused ? 'home' : 'home-outline';
               break;
-            case 'Running':
+            case 'Run':  // Changé de 'Running' vers 'Run'
               iconName = focused ? 'play-circle' : 'play-circle-outline';
               break;
             case 'History':
@@ -82,7 +82,7 @@ function MainTabs() {
         options={{ title: 'Accueil' }}
       />
       <Tab.Screen 
-        name="Running" 
+        name="Run"  // Changé de 'Running' vers 'Run' pour correspondre à la navigation
         component={RunningScreen}
         options={{ title: 'Course' }}
       />
@@ -150,6 +150,18 @@ function AppNavigation() {
         name="RunDetail" 
         component={RunDetailScreen}
         options={{ title: 'Détails de la course' }}
+      />
+      {/* Ajout de l'écran Statistics manquant */}
+      <Stack.Screen 
+        name="Statistics" 
+        component={ProfileScreen} // Temporairement, on peut créer un vrai écran plus tard
+        options={{ title: 'Statistiques' }}
+      />
+      {/* Ajout de l'écran Settings */}
+      <Stack.Screen 
+        name="Settings" 
+        component={ProfileScreen} // Temporairement
+        options={{ title: 'Paramètres' }}
       />
     </Stack.Navigator>
   );

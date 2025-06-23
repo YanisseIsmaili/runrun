@@ -20,14 +20,20 @@ const { width } = Dimensions.get('window');
 
 const DashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const { 
-    runHistory, 
-    loading, 
-    fetchRunHistory, 
-    getWeeklyStats, 
-    formatDuration 
-  } = useRun();
-  const { formatDistance } = useSettings();
+  
+  // Protection complète du contexte RunContext
+  const runContext = useRun();
+  const {
+    runHistory = [],
+    loading = false,
+    fetchRunHistory,
+    getWeeklyStats,
+    formatDuration
+  } = runContext || {};
+  
+  // Protection du contexte SettingsContext
+  const settingsContext = useSettings();
+  const { formatDistance } = settingsContext || { formatDistance: (d) => `${d.toFixed(2)} km` };
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -37,9 +43,11 @@ const DashboardScreen = ({ navigation }) => {
 
   const loadData = async () => {
     try {
-      await fetchRunHistory();
+      if (fetchRunHistory) {
+        await fetchRunHistory();
+      }
     } catch (error) {
-      console.error('Erreur:', error);
+      console.error('Erreur lors du chargement des données:', error);
     }
   };
 
@@ -56,7 +64,45 @@ const DashboardScreen = ({ navigation }) => {
     return 'Bonsoir';
   };
 
-  const weeklyStats = getWeeklyStats();
+  // Protection de getWeeklyStats avec valeurs par défaut
+  const getDefaultWeeklyStats = () => ({
+    runs: 0,
+    distance: 0,
+    duration: 0,
+    calories: 0,
+    averagePace: '00:00'
+  });
+
+  const weeklyStats = getWeeklyStats ? getWeeklyStats() : getDefaultWeeklyStats();
+
+  // Formatage sécurisé des données
+  const formatSafeDistance = (distance) => {
+    if (typeof distance !== 'number' || isNaN(distance)) return '0.00 km';
+    return formatDistance ? formatDistance(distance / 1000) : `${(distance / 1000).toFixed(2)} km`;
+  };
+
+  const formatSafeDuration = (duration) => {
+    if (typeof duration !== 'number' || isNaN(duration)) return '0:00';
+    return formatDuration ? formatDuration(duration) : '0:00';
+  };
+
+  // Assurer que runHistory est toujours un tableau
+  const safeRunHistory = Array.isArray(runHistory) ? runHistory : [];
+  const recentRuns = safeRunHistory.slice(0, 3);
+
+  const formatRunDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return 'Date inconnue';
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -87,72 +133,79 @@ const DashboardScreen = ({ navigation }) => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Statistiques rapides */}
+        {/* Statistiques de la semaine */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cette semaine</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Cette semaine</Text>
+          </View>
+          
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Ionicons name="fitness-outline" size={24} color="#4CAF50" />
-              <Text style={styles.statValue}>{weeklyStats?.runs || 0}</Text>
+              <Ionicons name="footsteps-outline" size={24} color="#4CAF50" />
+              <Text style={styles.statValue}>{weeklyStats.runs || 0}</Text>
               <Text style={styles.statLabel}>Courses</Text>
             </View>
+            
             <View style={styles.statCard}>
-              <Ionicons name="navigate-outline" size={24} color="#2196F3" />
+              <Ionicons name="speedometer-outline" size={24} color="#FF9800" />
               <Text style={styles.statValue}>
-                {formatDistance((weeklyStats?.distance || 0) / 1000)}
+                {formatSafeDistance(weeklyStats.distance || 0)}
               </Text>
               <Text style={styles.statLabel}>Distance</Text>
             </View>
+            
             <View style={styles.statCard}>
-              <Ionicons name="time-outline" size={24} color="#FF9800" />
+              <Ionicons name="time-outline" size={24} color="#2196F3" />
               <Text style={styles.statValue}>
-                {formatDuration(weeklyStats?.duration || 0)}
+                {formatSafeDuration(weeklyStats.duration || 0)}
               </Text>
               <Text style={styles.statLabel}>Temps</Text>
             </View>
+            
             <View style={styles.statCard}>
-              <Ionicons name="speedometer-outline" size={24} color="#9C27B0" />
-              <Text style={styles.statValue}>
-                {weeklyStats?.averagePace || '00:00'}
-              </Text>
-              <Text style={styles.statLabel}>Allure</Text>
+              <Ionicons name="flame-outline" size={24} color="#F44336" />
+              <Text style={styles.statValue}>{weeklyStats.calories || 0}</Text>
+              <Text style={styles.statLabel}>Calories</Text>
             </View>
           </View>
         </View>
 
         {/* Actions rapides */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Actions rapides</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Actions rapides</Text>
+          </View>
+          
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity
               style={[styles.quickActionButton, { backgroundColor: '#4CAF50' }]}
-              onPress={() => navigation.navigate('Running')}
+              onPress={() => navigation.navigate('Run')}
             >
-              <Ionicons name="play-circle" size={32} color="white" />
+              <Ionicons name="play-circle-outline" size={32} color="white" />
               <Text style={styles.quickActionText}>Nouvelle course</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
               style={[styles.quickActionButton, { backgroundColor: '#FF9800' }]}
-              onPress={() => navigation.navigate('Proposed')}
-            >
-              <Ionicons name="map" size={32} color="white" />
-              <Text style={styles.quickActionText}>Parcours</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#9C27B0' }]}
               onPress={() => navigation.navigate('History')}
             >
-              <Ionicons name="analytics" size={32} color="white" />
+              <Ionicons name="list-outline" size={32} color="white" />
               <Text style={styles.quickActionText}>Historique</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#607D8B' }]}
-              onPress={() => navigation.navigate('Profile')}
+              style={[styles.quickActionButton, { backgroundColor: '#2196F3' }]}
+              onPress={() => navigation.navigate('Statistics')}
             >
-              <Ionicons name="settings" size={32} color="white" />
+              <Ionicons name="bar-chart-outline" size={32} color="white" />
+              <Text style={styles.quickActionText}>Statistiques</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.quickActionButton, { backgroundColor: '#9C27B0' }]}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Ionicons name="settings-outline" size={32} color="white" />
               <Text style={styles.quickActionText}>Paramètres</Text>
             </TouchableOpacity>
           </View>
@@ -162,32 +215,41 @@ const DashboardScreen = ({ navigation }) => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Courses récentes</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('History')}>
-              <Text style={styles.seeAllText}>Voir tout</Text>
-            </TouchableOpacity>
+            {safeRunHistory.length > 3 && (
+              <TouchableOpacity onPress={() => navigation.navigate('History')}>
+                <Text style={styles.seeAllText}>Voir tout</Text>
+              </TouchableOpacity>
+            )}
           </View>
           
-          {runHistory && runHistory.length > 0 ? (
-            runHistory.slice(0, 3).map((run) => (
-              <TouchableOpacity
-                key={run.id}
+          {loading ? (
+            <View style={styles.emptyStateContainer}>
+              <Ionicons name="refresh-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyStateText}>Chargement...</Text>
+            </View>
+          ) : recentRuns.length > 0 ? (
+            recentRuns.map((run, index) => (
+              <TouchableOpacity 
+                key={run.id || index} 
                 style={styles.runItem}
-                onPress={() => navigation.navigate('RunDetail', { runId: run.id })}
+                onPress={() => navigation.navigate('RunDetail', { run })}
               >
                 <View style={styles.runItemIconContainer}>
-                  <Ionicons name="fitness" size={24} color="#4CAF50" />
+                  <Ionicons name="footsteps" size={24} color="#4CAF50" />
                 </View>
+                
                 <View style={styles.runItemDetails}>
                   <Text style={styles.runItemDistance}>
-                    {formatDistance((run.distance || 0) / 1000)}
+                    {formatSafeDistance(run.distance || 0)}
                   </Text>
                   <Text style={styles.runItemDate}>
-                    {new Date(run.startTime || run.start_time).toLocaleDateString()}
+                    {formatRunDate(run.startTime || run.date)}
                   </Text>
                 </View>
+                
                 <View style={styles.runItemStats}>
                   <Text style={styles.runItemDuration}>
-                    {formatDuration(run.duration || 0)}
+                    {formatSafeDuration(run.duration || 0)}
                   </Text>
                   <Text style={styles.runItemPace}>
                     {run.pace || '00:00'}/km
@@ -197,39 +259,40 @@ const DashboardScreen = ({ navigation }) => {
             ))
           ) : (
             <View style={styles.emptyStateContainer}>
-              <Ionicons name="fitness-outline" size={48} color="#ccc" />
+              <Ionicons name="footsteps-outline" size={48} color="#ccc" />
               <Text style={styles.emptyStateText}>
-                Aucune course enregistrée.{'\n'}Commencez votre première course !
+                Aucune course enregistrée.{'\n'}
+                Commencez votre première course !
               </Text>
               <TouchableOpacity
                 style={styles.startRunButton}
-                onPress={() => navigation.navigate('Running')}
+                onPress={() => navigation.navigate('Run')}
               >
-                <Text style={styles.startRunButtonText}>Commencer maintenant</Text>
+                <Text style={styles.startRunButtonText}>Commencer</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* Objectifs et motivation */}
+        {/* Objectif hebdomadaire */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vos progrès</Text>
           <View style={styles.goalCard}>
             <View style={styles.goalHeader}>
               <Ionicons name="trophy-outline" size={24} color="#FFD700" />
               <Text style={styles.goalTitle}>Objectif hebdomadaire</Text>
             </View>
+            
             <View style={styles.goalProgress}>
               <View style={styles.progressBar}>
                 <View 
                   style={[
                     styles.progressFill, 
-                    { width: `${Math.min((weeklyStats?.distance || 0) / 10000 * 100, 100)}%` }
+                    { width: `${Math.min((weeklyStats.distance / 1000 / 10) * 100, 100)}%` }
                   ]} 
                 />
               </View>
               <Text style={styles.goalText}>
-                {formatDistance((weeklyStats?.distance || 0) / 1000)} / 10 km
+                {(weeklyStats.distance / 1000).toFixed(1)} / 10.0 km
               </Text>
             </View>
           </View>
@@ -242,11 +305,11 @@ const DashboardScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f5f5',
   },
   header: {
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 10 : 20,
     paddingBottom: 20,
     flexDirection: 'row',
@@ -461,4 +524,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default DashboardScreen;
+export default DashboardScreen;   

@@ -3,11 +3,9 @@
     "name": "Running App V3",
     "slug": "running-app-v3",
     "version": "1.0.0",
-    "platforms": ["ios", "android"],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -17,24 +15,37 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.runningapp.v3",
+      "config": {
+        "googleMapsApiKey": "VOTRE_CLE_GOOGLE_MAPS_IOS"
+      },
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour suivre vos courses.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cette application utilise votre localisation pour suivre vos courses même en arrière-plan.",
-        "UIBackgroundModes": ["location"]
+        "NSLocationWhenInUseUsageDescription": "Cette application utilise votre localisation pour enregistrer vos parcours de course.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cette application utilise votre localisation pour enregistrer vos parcours de course même en arrière-plan.",
+        "NSMotionUsageDescription": "Cette application utilise les capteurs de mouvement pour améliorer la précision du suivi de course."
       }
     },
     "android": {
-      "package": "com.runningapp.v3",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4CAF50"
       },
+      "package": "com.runningapp.v3",
+      "config": {
+        "googleMaps": {
+          "apiKey": "VOTRE_CLE_GOOGLE_MAPS_ANDROID"
+        }
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION"
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "WAKE_LOCK",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
       ]
     },
     "web": {
@@ -45,21 +56,41 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Cette application utilise votre localisation pour suivre vos courses.",
-          "locationAlwaysPermission": "Cette application utilise votre localisation pour suivre vos courses même en arrière-plan.",
-          "locationWhenInUsePermission": "Cette application utilise votre localisation pour suivre vos courses.",
+          "locationAlwaysAndWhenInUsePermission": "Cette application utilise votre localisation pour enregistrer vos parcours de course.",
+          "locationAlwaysPermission": "Cette application peut utiliser votre localisation en arrière-plan pour continuer l'enregistrement de votre course.",
+          "locationWhenInUsePermission": "Cette application utilise votre localisation pour enregistrer vos parcours de course.",
           "isIosBackgroundLocationEnabled": true,
-          "isAndroidBackgroundLocationEnabled": true
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#4CAF50",
+          "sounds": ["./assets/notification-sound.wav"]
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Cette application utilise les capteurs de mouvement pour améliorer la précision du suivi de course."
+        }
+      ],
+      [
+        "expo-task-manager"
       ]
     ],
-    "experiments": {
-      "typedRoutes": false
-    },
+    "scheme": "running-app-v3",
     "extra": {
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "votre-project-id-eas"
       }
-    }
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": "exposdk:51.0.0"
   }
 }
