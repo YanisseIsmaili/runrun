@@ -1,4 +1,4 @@
-# api/app/routes/runs.py
+# api/app/routes/runs.py - CODE COMPLET CORRIGÉ
 from flask import Blueprint, request, jsonify, make_response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
@@ -13,12 +13,56 @@ import io
 
 runs_bp = Blueprint('runs', __name__)
 
+# 🔧 NOUVEAU: Fonction helper pour normaliser les données de run
+def normalize_run_data(run_dict):
+    """Normalise les données de run pour assurer la compatibilité frontend"""
+    
+    # S'assurer que les champs numériques sont bien des nombres
+    numeric_fields = ['distance', 'duration', 'avg_speed', 'max_speed', 'elevation_gain']
+    for field in numeric_fields:
+        if run_dict.get(field) is not None:
+            try:
+                run_dict[field] = float(run_dict[field])
+            except (ValueError, TypeError):
+                run_dict[field] = 0.0
+    
+    # S'assurer que les calories existent sous les deux noms
+    if run_dict.get('calories_burned') and not run_dict.get('calories'):
+        run_dict['calories'] = run_dict['calories_burned']
+    elif run_dict.get('calories') and not run_dict.get('calories_burned'):
+        run_dict['calories_burned'] = run_dict['calories']
+    
+    # Distance en km pour le frontend
+    if run_dict.get('distance'):
+        run_dict['distance_km'] = round(run_dict['distance'] / 1000, 2)
+    
+    # Status par défaut
+    if not run_dict.get('status'):
+        run_dict['status'] = 'finished'
+    
+    # Format de durée lisible
+    if run_dict.get('duration'):
+        duration = int(run_dict['duration'])
+        hours = duration // 3600
+        minutes = (duration % 3600) // 60
+        seconds = duration % 60
+        run_dict['duration_formatted'] = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    
+    # Calcul de l'allure
+    if run_dict.get('distance') and run_dict.get('duration'):
+        distance_km = run_dict['distance'] / 1000
+        duration_minutes = run_dict['duration'] / 60
+        if distance_km > 0:
+            run_dict['pace'] = round(duration_minutes / distance_km, 2)
+    
+    return run_dict
+
 @runs_bp.route('', methods=['GET'])
 @jwt_required()
 def get_all_runs():
     """Récupère toutes les courses avec filtres et pagination"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         current_user = User.query.get(current_user_id)
         
         page = request.args.get('page', 1, type=int)
@@ -69,6 +113,7 @@ def get_all_runs():
         enriched_runs = []
         for run in runs.items:
             run_dict = run.to_dict()
+            run_dict = normalize_run_data(run_dict)
             
             # Ajouter les infos utilisateur
             if run.user:
@@ -111,9 +156,9 @@ def get_all_runs():
 @runs_bp.route('/<int:run_id>', methods=['GET'])
 @jwt_required()
 def get_run(run_id):
-    """Récupère une course spécifique"""
+    """Récupère une course spécifique avec normalisation"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         current_user = User.query.get(current_user_id)
         
         run = Run.query.get_or_404(run_id)
@@ -134,12 +179,16 @@ def get_run(run_id):
         if run.route:
             run_dict['route'] = run.route.to_dict()
         
+        # 🔧 CORRECTION: Normaliser avant retour
+        normalized_data = normalize_run_data(run_dict)
+        
         return jsonify({
             "status": "success",
-            "data": run_dict
+            "data": normalized_data
         }), 200
         
     except Exception as e:
+        print(f"❌ Erreur récupération course {run_id}: {e}")
         return jsonify({
             "status": "error",
             "message": "Course non trouvée",
@@ -149,9 +198,9 @@ def get_run(run_id):
 @runs_bp.route('', methods=['POST'])
 @jwt_required()
 def create_run():
-    """Crée une nouvelle course"""
+    """Crée une nouvelle course avec normalisation des données"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())  # Conversion explicite
         data = request.get_json()
         
         if not data:
@@ -167,6 +216,9 @@ def create_run():
                 "message": "Distance invalide"
             }), 400
         
+        # 🔧 CORRECTION: Gestion des calories avec les deux noms possibles
+        calories = data.get('calories') or data.get('calories_burned')
+        
         # Créer la course
         run = Run(
             user_id=current_user_id,
@@ -177,7 +229,7 @@ def create_run():
             max_speed=data.get('max_speed'),
             avg_heart_rate=data.get('avg_heart_rate'),
             max_heart_rate=data.get('max_heart_rate'),
-            calories_burned=data.get('calories_burned'),
+            calories_burned=calories,  # Toujours stocker dans calories_burned
             elevation_gain=data.get('elevation_gain'),
             status=data.get('status', 'finished'),
             weather_conditions=data.get('weather_conditions'),
@@ -189,14 +241,21 @@ def create_run():
         db.session.add(run)
         db.session.commit()
         
+        # 🔧 CORRECTION: Normaliser les données avant de les retourner
+        run_dict = run.to_dict()
+        normalized_data = normalize_run_data(run_dict)
+        
+        print(f"✅ Course créée pour user {current_user_id}: {normalized_data}")
+        
         return jsonify({
             "status": "success",
             "message": "Course créée avec succès",
-            "data": run.to_dict()
+            "data": normalized_data
         }), 201
         
     except Exception as e:
         db.session.rollback()
+        print(f"❌ Erreur création course: {e}")
         return jsonify({
             "status": "error",
             "message": "Erreur lors de la création de la course",
@@ -208,7 +267,7 @@ def create_run():
 def update_run(run_id):
     """Met à jour une course"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         current_user = User.query.get(current_user_id)
         
         run = Run.query.get_or_404(run_id)
@@ -244,6 +303,10 @@ def update_run(run_id):
                     }), 400
                 setattr(run, field, data[field])
         
+        # Gestion spéciale pour les calories (accepter les deux noms)
+        if 'calories' in data:
+            run.calories_burned = data['calories']
+        
         # Mise à jour des dates si fournies
         if data.get('start_time'):
             run.start_time = datetime.fromisoformat(data['start_time'])
@@ -254,10 +317,14 @@ def update_run(run_id):
         run.updated_at = datetime.utcnow()
         db.session.commit()
         
+        # Normaliser les données de retour
+        run_dict = run.to_dict()
+        normalized_data = normalize_run_data(run_dict)
+        
         return jsonify({
             "status": "success",
             "message": "Course mise à jour avec succès",
-            "data": run.to_dict()
+            "data": normalized_data
         }), 200
         
     except Exception as e:
@@ -273,7 +340,7 @@ def update_run(run_id):
 def delete_run(run_id):
     """Supprime une course"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         current_user = User.query.get(current_user_id)
         
         run = Run.query.get_or_404(run_id)
@@ -362,7 +429,7 @@ def bulk_delete_runs():
 def export_runs():
     """Exporte les courses en CSV"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         current_user = User.query.get(current_user_id)
         
         # Paramètres d'export
@@ -418,7 +485,7 @@ def export_runs():
                 user_name,
                 route_name,
                 run.start_time.strftime('%Y-%m-%d %H:%M'),
-                run.distance,
+                run.distance / 1000 if run.distance else 0,
                 duration_min,
                 run.avg_speed or '',
                 run.max_speed or '',
@@ -450,7 +517,7 @@ def export_runs():
 def get_runs_summary():
     """Récupère un résumé des statistiques des courses"""
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         current_user = User.query.get(current_user_id)
         
         # Si admin, stats globales, sinon stats personnelles
