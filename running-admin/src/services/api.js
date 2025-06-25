@@ -1,78 +1,49 @@
-// running-admin/src/services/api.js - Version avec configuration globale
+// running-admin/src/services/api.js
 import axios from 'axios'
 import globalApiConfig from '../utils/globalApiConfig'
 
+// Configuration de base
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+const API_TIMEOUT = parseInt(import.meta.env.VITE_NETWORK_TIMEOUT) || 30000
+
+// Créer l'instance axios
+const instance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// Service d'urgence pour gérer les erreurs critiques
 const emergencyService = {
   logError: (error, context = '') => {
-    console.error(`[${context}]`, error)
-  }
-}
-
-// Fonction pour obtenir l'URL de base
-const getBaseURL = () => {
-  // Priorité à la configuration globale
-  const globalConfig = globalApiConfig.getBaseURL()
-  if (globalConfig) {
-    return globalConfig
-  }
+    console.error(`[Emergency Service] ${context}:`, error)
+    // Ici vous pourriez envoyer l'erreur à un service de monitoring
+  },
   
-  // Fallback sur .env
-  const envUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
-  console.warn('⚠️ Utilisation URL .env (pas de config globale):', envUrl)
-  return envUrl
+  handleCriticalError: (error) => {
+    console.error('Erreur critique détectée:', error)
+    // Actions d'urgence si nécessaire
+  }
 }
 
-// Créer l'instance axios avec URL dynamique
-const instance = axios.create({
-  baseURL: getBaseURL(),
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  }
-})
-
-// Mettre à jour l'URL de base quand la config globale change
-globalApiConfig.addListener((data) => {
-  if (data.baseURL) {
-    instance.defaults.baseURL = data.baseURL
-    console.log('🔄 Instance axios mise à jour automatiquement:', data.baseURL)
-  }
-})
-
-// Exposer l'instance globalement pour les composants
-if (typeof window !== 'undefined') {
-  window.api = instance
-}
-
-console.log('🔧 [API] Service initialisé avec URL:', instance.defaults.baseURL)
-
-// Intercepteur pour ajouter le token d'authentification
+// Intercepteur de requêtes
 instance.interceptors.request.use(
   (config) => {
-    try {
-      // Vérifier si l'URL de base est configurée
-      if (!globalApiConfig.isConfigured() && !import.meta.env.VITE_API_BASE_URL) {
-        console.warn('⚠️ Aucune API configurée - la requête pourrait échouer')
-      }
-
-      // Priorité à sessionStorage (session courante) puis localStorage (persistant)
-      const token = sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token')
-      
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-
-      // Log pour debug
-      console.log(`📡 [${config.method?.toUpperCase()}] ${config.url}`, {
-        baseURL: config.baseURL,
-        hasToken: !!token,
-        apiConfigured: globalApiConfig.isConfigured()
-      })
-      
-    } catch (error) {
-      console.warn('Erreur lors de la récupération du token:', error)
-      emergencyService.logError(error, 'token_retrieval')
+    // Ajouter le token d'authentification
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
     }
+
+    // Utiliser l'URL de l'API configurée si disponible
+    const apiConfig = globalApiConfig.getConfig()
+    if (apiConfig.isConfigured && apiConfig.baseURL) {
+      config.baseURL = apiConfig.baseURL
+    }
+
+    console.log(`🌐 ${config.method?.toUpperCase()} ${config.url}`)
     return config
   },
   (error) => {
@@ -81,56 +52,34 @@ instance.interceptors.request.use(
   }
 )
 
-// Intercepteur pour gérer les réponses et erreurs
+// Intercepteur de réponses
 instance.interceptors.response.use(
   (response) => {
+    console.log(`✅ ${response.status} ${response.config.url}`)
     return response
   },
   (error) => {
-    // Gestion des erreurs de réseau
-    if (!error.response) {
-      console.error('Erreur de réseau:', error.message)
-      
-      // Message d'erreur contextuel selon la configuration
-      if (!globalApiConfig.isConfigured()) {
-        error.userMessage = 'Aucun serveur API configuré. Veuillez sélectionner un serveur dans les paramètres.'
-      } else {
-        error.userMessage = `Impossible de contacter le serveur API (${globalApiConfig.getBaseURL()}). ` +
-          'Veuillez vérifier votre connexion réseau et l\'état du serveur.'
-      }
-      
-      emergencyService.logError(error, 'network_error')
-    }
+    console.error(`❌ ${error.response?.status || 'Network'} ${error.config?.url}:`, error.message)
+
     // Gestion des erreurs d'authentification
-    else if (error.response.status === 401) {
-      console.error('Erreur d\'authentification:', error.response.data)
-      
-      // Ne pas déconnecter sur les routes de validation/login
-      if (error.config.url.includes('/validate') || error.config.url.includes('/login')) {
-        error.userMessage = 'Identifiants invalides ou session expirée.'
-      } else {
-        error.userMessage = 'Session expirée. Veuillez vous reconnecter.'
-        
-        // Rediriger vers login si pas sur page de login
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          setTimeout(() => {
-            window.location.href = '/login'
-          }, 2000)
-        }
-      }
-      
+    if (error.response?.status === 401) {
+      console.warn('Token expiré, redirection vers login')
+      localStorage.removeItem('auth_token')
+      sessionStorage.removeItem('auth_token')
+      window.location.href = '/login'
+      error.userMessage = 'Session expirée. Veuillez vous reconnecter.'
       emergencyService.logError(error, 'auth_error')
     }
-    // Gestion des erreurs de permissions
-    else if (error.response.status === 403) {
-      console.error('Erreur de permissions:', error.response.data)
-      error.userMessage = 'Vous n\'avez pas les permissions nécessaires pour cette action.'
-      emergencyService.logError(error, 'permission_error')
+    // Erreurs réseau
+    else if (!error.response) {
+      console.error('Erreur réseau:', error.message)
+      error.userMessage = 'Erreur de connexion. Vérifiez votre connexion internet et la configuration de l\'API.'
+      emergencyService.logError(error, 'network_error')
     }
-    // Gestion des erreurs serveur
+    // Erreurs serveur (5xx)
     else if (error.response.status >= 500) {
-      console.error('Erreur serveur:', error.response.data)
-      error.userMessage = 'Erreur interne du serveur. Veuillez réessayer plus tard.'
+      console.error('Erreur serveur:', error.response.status, error.response.data)
+      error.userMessage = 'Erreur serveur temporaire. Veuillez réessayer plus tard.'
       emergencyService.logError(error, 'server_error')
     }
     // Autres erreurs
@@ -200,31 +149,173 @@ const users = {
 
 // Service courses/runs
 const runs = {
+  // Récupérer toutes les courses avec pagination et filtres
   getAll: (params = {}) => {
-    const queryParams = new URLSearchParams(params)
-    return instance.get(`/api/runs?${queryParams}`)
+    // Nettoyer les paramètres undefined pour éviter les erreurs d'URL
+    const cleanParams = Object.entries(params).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        acc[key] = value
+      }
+      return acc
+    }, {})
+    
+    const queryParams = new URLSearchParams(cleanParams)
+    const url = Object.keys(cleanParams).length > 0 
+      ? `/api/runs?${queryParams.toString()}` 
+      : '/api/runs'
+    
+    console.log('🏃 API Call runs.getAll:', url)
+    return instance.get(url)
   },
   
-  getById: (runId) => instance.get(`/api/runs/${runId}`),
+  // Récupérer une course par ID
+  getById: (runId) => {
+    console.log('🏃 API Call runs.getById:', runId)
+    return instance.get(`/api/runs/${runId}`)
+  },
   
-  create: (runData) => instance.post('/api/runs', runData),
+  // Créer une nouvelle course
+  create: (runData) => {
+    console.log('🏃 API Call runs.create:', runData)
+    return instance.post('/api/runs', runData)
+  },
   
-  update: (runId, runData) => instance.put(`/api/runs/${runId}`, runData),
+  // Mettre à jour une course
+  update: (runId, runData) => {
+    console.log('🏃 API Call runs.update:', runId, runData)
+    return instance.put(`/api/runs/${runId}`, runData)
+  },
   
-  delete: (runId) => instance.delete(`/api/runs/${runId}`),
+  // Supprimer une course
+  delete: (runId) => {
+    console.log('🏃 API Call runs.delete:', runId)
+    return instance.delete(`/api/runs/${runId}`)
+  },
   
-  start: (runData) => instance.post('/api/runs/start', runData),
+  // Supprimer plusieurs courses
+  bulkDelete: (runIds) => {
+    console.log('🏃 API Call runs.bulkDelete:', runIds)
+    return instance.post('/api/runs/bulk-delete', { run_ids: runIds })
+  },
   
-  stop: (runId) => instance.post(`/api/runs/${runId}/stop`),
+  // Démarrer une course
+  start: (runData) => {
+    console.log('🏃 API Call runs.start:', runData)
+    return instance.post('/api/runs/start', runData)
+  },
   
-  addLocation: (runId, locationData) => 
-    instance.post(`/api/runs/${runId}/locations`, locationData),
+  // Arrêter une course
+  stop: (runId, endData = {}) => {
+    console.log('🏃 API Call runs.stop:', runId, endData)
+    return instance.post(`/api/runs/${runId}/stop`, endData)
+  },
   
-  getLocations: (runId) => instance.get(`/api/runs/${runId}/locations`),
+  // Mettre en pause une course
+  pause: (runId) => {
+    console.log('🏃 API Call runs.pause:', runId)
+    return instance.post(`/api/runs/${runId}/pause`)
+  },
   
-  getStats: (userId = null) => {
-    const url = userId ? `/api/runs/stats/${userId}` : '/api/runs/stats'
+  // Reprendre une course
+  resume: (runId) => {
+    console.log('🏃 API Call runs.resume:', runId)
+    return instance.post(`/api/runs/${runId}/resume`)
+  },
+  
+  // Ajouter une localisation à une course en cours
+  addLocation: (runId, locationData) => {
+    console.log('🏃 API Call runs.addLocation:', runId, locationData)
+    return instance.post(`/api/runs/${runId}/locations`, locationData)
+  },
+  
+  // Récupérer les localisations d'une course
+  getLocations: (runId) => {
+    console.log('🏃 API Call runs.getLocations:', runId)
+    return instance.get(`/api/runs/${runId}/locations`)
+  },
+  
+  // Récupérer les statistiques des courses
+  getStats: (userId = null, params = {}) => {
+    const cleanParams = Object.entries(params).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        acc[key] = value
+      }
+      return acc
+    }, {})
+    
+    const queryParams = new URLSearchParams(cleanParams)
+    const url = userId 
+      ? `/api/runs/stats/${userId}?${queryParams}` 
+      : `/api/runs/stats?${queryParams}`
+    
+    console.log('🏃 API Call runs.getStats:', url)
     return instance.get(url)
+  },
+  
+  // Exporter les données de courses
+  export: (params = {}) => {
+    const cleanParams = Object.entries(params).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        acc[key] = value
+      }
+      return acc
+    }, {})
+    
+    const queryParams = new URLSearchParams(cleanParams)
+    console.log('🏃 API Call runs.export:', queryParams.toString())
+    return instance.get(`/api/runs/export?${queryParams}`, {
+      responseType: 'blob'
+    })
+  },
+  
+  // Exporter plusieurs courses sélectionnées
+  bulkExport: (runIds, format = 'csv') => {
+    console.log('🏃 API Call runs.bulkExport:', runIds, format)
+    return instance.post('/api/runs/bulk-export', { 
+      run_ids: runIds, 
+      format 
+    }, {
+      responseType: 'blob'
+    })
+  },
+  
+  // Récupérer les courses par utilisateur
+  getByUser: (userId, params = {}) => {
+    const cleanParams = Object.entries(params).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        acc[key] = value
+      }
+      return acc
+    }, {})
+    
+    const queryParams = new URLSearchParams(cleanParams)
+    const url = `/api/users/${userId}/runs?${queryParams}`
+    console.log('🏃 API Call runs.getByUser:', url)
+    return instance.get(url)
+  },
+  
+  // Récupérer les courses actives/en cours
+  getActive: () => {
+    console.log('🏃 API Call runs.getActive')
+    return instance.get('/api/runs/active')
+  },
+  
+  // Récupérer le résumé des courses récentes
+  getRecent: (limit = 10) => {
+    console.log('🏃 API Call runs.getRecent:', limit)
+    return instance.get(`/api/runs/recent?limit=${limit}`)
+  },
+  
+  // Recherche avancée de courses
+  search: (searchParams) => {
+    console.log('🏃 API Call runs.search:', searchParams)
+    return instance.post('/api/runs/search', searchParams)
+  },
+  
+  // Dupliquer une course (créer une copie)
+  duplicate: (runId) => {
+    console.log('🏃 API Call runs.duplicate:', runId)
+    return instance.post(`/api/runs/${runId}/duplicate`)
   }
 }
 
@@ -310,36 +401,26 @@ const utils = {
     return error.response?.status === 401
   },
   
-  isPermissionError: (error) => {
-    return error.response?.status === 403
-  },
-  
   isServerError: (error) => {
     return error.response?.status >= 500
   },
   
-  // Nouvelle fonction pour vérifier la configuration
-  isConfigured: () => {
-    return globalApiConfig.isConfigured()
-  },
-  
-  // Obtenir l'URL configurée
-  getCurrentBaseURL: () => {
-    return globalApiConfig.getBaseURL()
-  },
-  
-  // Tester la connexion à l'API configurée
-  testConnection: async () => {
-    return await globalApiConfig.testConnection()
+  // Fonction pour gérer les timeouts
+  withTimeout: (promise, timeoutMs = API_TIMEOUT) => {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), timeoutMs)
+      )
+    ])
   }
 }
 
-// Fonctions wrapper simplifiées pour compatibilité
-const getActiveRuns = () => routes.getActiveRuns()
-const getAll = (params = {}) => routes.getAll(params)
+// Export de l'instance axios pour l'utilisation globale
+window.api = instance
 
-// Export default avec toutes les fonctions
-const api = {
+// Export par défaut
+export default {
   auth,
   users,
   runs,
@@ -347,11 +428,6 @@ const api = {
   admin,
   health,
   utils,
-  // Instance axios pour accès direct si nécessaire
   instance,
-  // Fonctions de compatibilité
-  getActiveRuns,
-  getAll
+  emergencyService
 }
-
-export default api
