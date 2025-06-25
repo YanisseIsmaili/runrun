@@ -1,4 +1,4 @@
-# api/app/models/user.py
+# api/app/models/user.py - CORRECTION MODÈLE USER
 from app import db
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -28,6 +28,16 @@ class User(db.Model):
     def set_password(self, password):
         """Méthode pour définir le mot de passe"""
         self.password_hash = generate_password_hash(password)
+    
+    @property
+    def password(self):
+        """Empêcher la lecture du mot de passe"""
+        raise AttributeError('Le mot de passe ne peut pas être lu')
+    
+    @password.setter
+    def password(self, password):
+        """Setter pour le mot de passe - appelle set_password"""
+        self.set_password(password)
     
     def verify_password(self, password):
         """Méthode pour vérifier le mot de passe"""
