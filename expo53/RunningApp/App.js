@@ -1,4 +1,4 @@
-// App.js - Version complète avec navigation et historique
+// App.js - Version avec centrage GPS automatique
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -55,6 +55,10 @@ function MainRunScreen({ navigation }) {
   const [showTrail, setShowTrail] = useState(true);
   const [trailDensity, setTrailDensity] = useState('normal');
 
+  // 🔧 NOUVEAU: État pour le centrage automatique
+  const [followUser, setFollowUser] = useState(true);
+  const [mapInitialized, setMapInitialized] = useState(false);
+
   const intervalRef = useRef(null);
   const locationSubscription = useRef(null);
   const mapRef = useRef(null);
@@ -74,6 +78,27 @@ function MainRunScreen({ navigation }) {
     requestLocationPermission();
     loadUser();
   }, []);
+
+  // 🔧 NOUVEAU: Centrage automatique de la carte
+  useEffect(() => {
+    if (location && mapRef.current && followUser && mapInitialized) {
+      const region = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.005, // Zoom plus serré
+        longitudeDelta: 0.005,
+      };
+      
+      mapRef.current.animateToRegion(region, 500);
+    }
+  }, [location, followUser, mapInitialized]);
+
+  // 🔧 NOUVEAU: Activer le suivi automatique pendant la course
+  useEffect(() => {
+    if (isRunning && !isPaused) {
+      setFollowUser(true);
+    }
+  }, [isRunning, isPaused]);
 
   useEffect(() => {
     if (isRunning && !isPaused) {
@@ -160,15 +185,7 @@ function MainRunScreen({ navigation }) {
         accuracy: Location.Accuracy.High,
       });
       setLocation(currentLocation);
-      
-      if (mapRef.current && currentLocation) {
-        mapRef.current.animateToRegion({
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
-      }
+      setMapInitialized(true); // 🔧 NOUVEAU: Marquer la carte comme initialisée
     } catch (error) {
       console.error('Erreur géolocalisation:', error);
     }
@@ -180,7 +197,7 @@ function MainRunScreen({ navigation }) {
         {
           accuracy: Location.Accuracy.High,
           timeInterval: 1000,
-          distanceInterval: 5,
+          distanceInterval: 2, // 🔧 AMÉLIORATION: Distance plus petite pour un suivi plus précis
         },
         (newLocation) => {
           setLocation(newLocation);
@@ -209,15 +226,6 @@ function MainRunScreen({ navigation }) {
             setRouteCoordinates(prev => [...prev, newCoordinate]);
             
             checkForNewSegment(newTotalDistance);
-            
-            if (mapRef.current) {
-              mapRef.current.animateToRegion({
-                latitude: newLocation.coords.latitude,
-                longitude: newLocation.coords.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }, 500);
-            }
           }
           
           setPreviousLocation(newLocation);
@@ -232,6 +240,32 @@ function MainRunScreen({ navigation }) {
     if (locationSubscription.current) {
       locationSubscription.current.remove();
       locationSubscription.current = null;
+    }
+  };
+
+  // 🔧 NOUVEAU: Fonction pour basculer le suivi
+  const toggleFollowUser = () => {
+    setFollowUser(!followUser);
+  };
+
+  // 🔧 NOUVEAU: Fonction pour centrer manuellement
+  const centerOnUser = () => {
+    if (location && mapRef.current) {
+      const region = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      };
+      mapRef.current.animateToRegion(region, 1000);
+      setFollowUser(true);
+    }
+  };
+
+  // 🔧 NOUVEAU: Détecter quand l'utilisateur bouge la carte manuellement
+  const handleMapPanDrag = () => {
+    if (followUser) {
+      setFollowUser(false);
     }
   };
 
@@ -345,6 +379,7 @@ function MainRunScreen({ navigation }) {
     setSegments([]);
     setCurrentSegment(null);
     setTrail([]);
+    setFollowUser(true); // 🔧 NOUVEAU: Activer le suivi au démarrage
     setPreviousLocation(location);
     segmentStartTime.current = Date.now();
     segmentStartDistance.current = 0;
@@ -384,6 +419,7 @@ function MainRunScreen({ navigation }) {
     setIsRunning(false);
     setIsPaused(false);
     setCurrentSegment(null);
+    setFollowUser(false); // 🔧 NOUVEAU: Désactiver le suivi à l'arrêt
     stopLocationTracking();
 
     await saveRunToAPI();
@@ -437,6 +473,7 @@ function MainRunScreen({ navigation }) {
     setSegments([]);
     setCurrentSegment(null);
     setTrail([]);
+    setFollowUser(true); // 🔧 NOUVEAU: Réactiver le suivi après reset
     stopLocationTracking();
   };
 
@@ -462,8 +499,8 @@ function MainRunScreen({ navigation }) {
     return {
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
+      latitudeDelta: 0.005, // 🔧 AMÉLIORATION: Zoom plus serré
+      longitudeDelta: 0.005,
     };
   };
 
@@ -511,6 +548,18 @@ function MainRunScreen({ navigation }) {
           </View>
           
           <View style={styles.trailControls}>
+            {/* 🔧 NOUVEAU: Bouton de suivi GPS */}
+            <TouchableOpacity onPress={toggleFollowUser} style={styles.trailButton}>
+              <Ionicons 
+                name={followUser ? "navigate" : "navigate-outline"} 
+                size={16} 
+                color={followUser ? "#10B981" : "rgba(255, 255, 255, 0.6)"} 
+              />
+              <Text style={[styles.trailButtonText, { color: followUser ? "#10B981" : "rgba(255, 255, 255, 0.6)" }]}>
+                Auto
+              </Text>
+            </TouchableOpacity>
+            
             <TouchableOpacity onPress={toggleTrail} style={styles.trailButton}>
               <Ionicons 
                 name={showTrail ? "footsteps" : "footsteps-outline"} 
@@ -551,9 +600,10 @@ function MainRunScreen({ navigation }) {
               style={styles.map}
               initialRegion={getMapRegion()}
               showsUserLocation={true}
-              followsUserLocation={isRunning && !isPaused}
+              followsUserLocation={false} // 🔧 CHANGEMENT: Désactivé pour contrôle manuel
               showsMyLocationButton={false}
               mapType="standard"
+              onPanDrag={handleMapPanDrag} // 🔧 NOUVEAU: Détecter le mouvement manuel
             >
               {showTrail && trail.map((point, index) => (
                 <Circle
@@ -602,6 +652,21 @@ function MainRunScreen({ navigation }) {
               )}
             </MapView>
             
+            {/* 🔧 NOUVEAU: Bouton de centrage flottant */}
+            {!followUser && location && (
+              <TouchableOpacity 
+                style={styles.centerButton} 
+                onPress={centerOnUser}
+              >
+                <LinearGradient
+                  colors={['rgba(99, 102, 241, 0.9)', 'rgba(139, 92, 246, 0.9)']}
+                  style={styles.centerButtonGradient}
+                >
+                  <Ionicons name="locate" size={20} color="white" />
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+            
             <Animated.View style={[
               styles.speedOverlay,
               {
@@ -639,6 +704,7 @@ function MainRunScreen({ navigation }) {
           </View>
         )}
 
+        {/* Reste du code inchangé... */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <LinearGradient
@@ -747,6 +813,7 @@ function MainRunScreen({ navigation }) {
             <Text style={styles.userStatusText}>
               Connecté : {user.username}
               {showTrail && trail.length > 0 && ` • ${trail.length} points`}
+              {followUser && " • Suivi GPS actif"}
             </Text>
           )}
         </View>
@@ -1175,6 +1242,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.8)',
     marginLeft: 4,
+  },
+  // 🔧 NOUVEAU: Styles pour le bouton de centrage
+  centerButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    borderRadius: 25,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  centerButtonGradient: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   formContainer: {
     flex: 1,
