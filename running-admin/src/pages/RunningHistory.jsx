@@ -1,153 +1,303 @@
 import { useState, useEffect } from 'react'
-import { MagnifyingGlassIcon, FunnelIcon, ChartBarIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { 
+  MagnifyingGlassIcon, 
+  FunnelIcon, 
+  ClockIcon,
+  ArrowPathIcon,
+  MapPinIcon,
+  ExclamationTriangleIcon,
+  EyeIcon,
+  TrashIcon,
+  PlayIcon,
+  ChartBarIcon,
+  XMarkIcon,
+  HeartIcon,
+  FireIcon
+} from '@heroicons/react/24/outline'
+import { useApiConfig } from '../utils/globalApiConfig'
 import api from '../services/api'
 
-// Données temporaires pour le développement
-const tempRuns = Array.from({ length: 45 }, (_, i) => ({
-  id: i + 1,
-  user: {
-    id: 100 + (i % 10),
-    name: ['Alexandre Dupont', 'Sophie Martin', 'Thomas Bernard', 'Julie Leclerc', 'Mathieu Petit', 
-           'Lucie Robert', 'Nicolas Dubois', 'Emma Moreau', 'Antoine Leroy', 'Camille Simon'][i % 10]
-  },
-  date: new Date(2024, 3 - Math.floor(i / 15), 30 - (i % 30)),
-  distance: Math.round((3 + Math.random() * 15) * 10) / 10,
-  duration: Math.floor((20 + Math.random() * 90) * 60),
-  avg_pace: `${4 + Math.floor(Math.random() * 3)}:${Math.floor(Math.random() * 60).toString().padStart(2, '0')}`,
-  avg_heart_rate: Math.floor(140 + Math.random() * 40),
-  elevation_gain: Math.floor(Math.random() * 500)
-}))
-
-const RunningHistory = () => {
-  const [runs, setRuns] = useState([])
-  const [filteredRuns, setFilteredRuns] = useState([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [sortField, setSortField] = useState('date')
-  const [sortDirection, setSortDirection] = useState('desc')
-  const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
-    minDistance: '',
-    maxDistance: '',
-    userId: ''
-  })
-  const runsPerPage = 10
-  
-  useEffect(() => {
-    const fetchRuns = async () => {
-      setLoading(true)
-      setError(null)
-      
-      try {
-        // Dans un projet réel, remplacez ceci par un appel API pour obtenir les données réelles
-        // const response = await api.runs.getAll(currentPage, runsPerPage)
-        // setRuns(response.data.runs)
-        // setTotalPages(Math.ceil(response.data.total / runsPerPage))
-        
-        // Utilisation des données temporaires pour le développement
-        setRuns(tempRuns)
-        setTotalPages(Math.ceil(tempRuns.length / runsPerPage))
-      } catch (err) {
-        console.error('Erreur lors du chargement des courses', err)
-        setError('Impossible de charger la liste des courses')
-      } finally {
-        setLoading(false)
-      }
-    }
+const useDebugIntegration = () => {
+  const addDebugLog = (message, type = 'info', category = 'history') => {
+    window.dispatchEvent(new CustomEvent('debugLog', { 
+      detail: { 
+        message: `[HISTORY] ${message}`, 
+        type, 
+        category,
+        timestamp: new Date().toLocaleTimeString('fr-FR', { 
+          hour12: false, 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit',
+          fractionalSecondDigits: 3
+        })
+      } 
+    }))
     
-    fetchRuns()
-  }, [currentPage])
-  
-  useEffect(() => {
-    // Filtrer et trier les courses
-    let result = [...runs]
-    
-    // Appliquer les filtres
-    if (filters.startDate) {
-      const startDate = new Date(filters.startDate)
-      result = result.filter(run => new Date(run.date) >= startDate)
-    }
-    
-    if (filters.endDate) {
-      const endDate = new Date(filters.endDate)
-      endDate.setHours(23, 59, 59)
-      result = result.filter(run => new Date(run.date) <= endDate)
-    }
-    
-    if (filters.minDistance) {
-      result = result.filter(run => run.distance >= parseFloat(filters.minDistance))
-    }
-    
-    if (filters.maxDistance) {
-      result = result.filter(run => run.distance <= parseFloat(filters.maxDistance))
-    }
-    
-    if (filters.userId) {
-      result = result.filter(run => run.user.id === parseInt(filters.userId))
-    }
-    
-    // Filtre de recherche
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase()
-      result = result.filter(
-        run => 
-          run.user.name.toLowerCase().includes(searchLower) ||
-          run.date.toLocaleDateString().includes(searchLower) ||
-          run.distance.toString().includes(searchLower)
-      )
-    }
-    
-    // Tri
-    result.sort((a, b) => {
-      let fieldA = a[sortField]
-      let fieldB = b[sortField]
-      
-      // Gestion spéciale pour les dates
-      if (sortField === 'date') {
-        fieldA = new Date(fieldA)
-        fieldB = new Date(fieldB)
-      }
-      
-      // Gestion spéciale pour avg_pace (format mm:ss)
-      if (sortField === 'avg_pace') {
-        const [minA, secA] = fieldA.split(':').map(Number)
-        const [minB, secB] = fieldB.split(':').map(Number)
-        fieldA = minA * 60 + secA
-        fieldB = minB * 60 + secB
-      }
-      
-      // Gestion spéciale pour les objets imbriqués (user.name)
-      if (sortField === 'user') {
-        fieldA = a.user.name
-        fieldB = b.user.name
-      }
-      
-      if (fieldA < fieldB) return sortDirection === 'asc' ? -1 : 1
-      if (fieldA > fieldB) return sortDirection === 'asc' ? 1 : -1
-      return 0
-    })
-    
-    setFilteredRuns(result)
-    setTotalPages(Math.ceil(result.length / runsPerPage))
-  }, [runs, searchTerm, sortField, sortDirection, filters])
-  
-  // Fonction pour gérer le tri
-  const handleSort = (field) => {
-    if (field === sortField) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortField(field)
-      setSortDirection('asc')
-    }
+    const consoleMethod = type === 'error' ? 'error' : type === 'warning' ? 'warn' : 'log'
+    console[consoleMethod](`[HISTORY] ${message}`)
   }
   
-  // Formatage de la durée (secondes -> format MM:SS ou HH:MM:SS)
+  return { addDebugLog }
+}
+
+const RunningHistory = () => {
+  const { isConfigured, selectedApi } = useApiConfig()
+  const { addDebugLog } = useDebugIntegration()
+  
+  const [runs, setRuns] = useState([])
+  const [filteredRuns, setFilteredRuns] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filters, setFilters] = useState({
+    period: 'all',
+    minDistance: '',
+    maxDistance: '',
+    userId: '',
+    sortBy: 'start_time',
+    sortOrder: 'desc'
+  })
+  const [showFilters, setShowFilters] = useState(false)
+  
+  const [selectedRun, setSelectedRun] = useState(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pages: 1,
+    per_page: 20,
+    total: 0
+  })
+
+  useEffect(() => {
+    addDebugLog('🚀 Initialisation RunningHistory')
+    if (isConfigured) {
+      addDebugLog(`✅ API configurée: ${selectedApi?.name || 'Inconnue'} (${selectedApi?.url || 'URL manquante'})`)
+      fetchRuns()
+    } else {
+      addDebugLog('❌ API non configurée - impossible de charger l\'historique', 'error')
+    }
+  }, [isConfigured, pagination.page])
+
+  useEffect(() => {
+    applyFilters()
+  }, [runs, searchTerm, filters])
+
+  const fetchRuns = async () => {
+    if (!isConfigured) {
+      setError('API non configurée')
+      addDebugLog('❌ Tentative d\'appel API sans configuration', 'error')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    addDebugLog(`🔄 Début récupération courses - Page ${pagination.page}`)
+    
+    const startTime = Date.now()
+    
+    try {
+      const params = {
+        page: pagination.page,
+        per_page: pagination.per_page,
+        search: searchTerm || undefined,
+        sort_by: filters.sortBy,
+        sort_order: filters.sortOrder
+      }
+
+      if (filters.period !== 'all') {
+        const now = new Date()
+        let startDate = new Date()
+        
+        switch (filters.period) {
+          case 'week':
+            startDate.setDate(now.getDate() - 7)
+            break
+          case 'month':
+            startDate.setMonth(now.getMonth() - 1)
+            break
+          case 'year':
+            startDate.setFullYear(now.getFullYear() - 1)
+            break
+        }
+        
+        params.start_date = startDate.toISOString()
+      }
+
+      if (filters.minDistance) params.min_distance = filters.minDistance
+      if (filters.maxDistance) params.max_distance = filters.maxDistance
+      if (filters.userId) params.user_id = filters.userId
+
+      addDebugLog(`📋 Paramètres requête: ${JSON.stringify(params)}`, 'info')
+      
+      try {
+        const response = await api.runs.getAll(params)
+        const responseTime = Date.now() - startTime
+        
+        addDebugLog(`✅ Réponse reçue en ${responseTime}ms`, 'success')
+        
+        if (response.data?.status === 'success' && response.data?.data?.runs) {
+          const runsData = response.data.data.runs
+          const paginationData = response.data.data.pagination
+          
+          setRuns(runsData)
+          setPagination(prev => ({
+            ...prev,
+            pages: paginationData?.pages || 1,
+            total: paginationData?.total || runsData.length
+          }))
+          addDebugLog(`📈 État mis à jour: ${runsData.length} courses chargées`, 'success')
+        } else {
+          throw new Error('Structure de réponse inattendue')
+        }
+      } catch (apiError) {
+        addDebugLog('⚠️ Endpoint /api/runs indisponible, utilisation des données simulées', 'warning')
+        const mockData = generateMockRuns()
+        setRuns(mockData)
+        addDebugLog(`🎭 ${mockData.length} courses simulées générées`, 'info')
+        setError('Mode simulation - Endpoint /api/runs non disponible')
+      }
+    } catch (err) {
+      const responseTime = Date.now() - startTime
+      addDebugLog(`❌ Erreur après ${responseTime}ms: ${err.message}`, 'error')
+      
+      const mockData = generateMockRuns()
+      setRuns(mockData)
+      addDebugLog(`🎭 Fallback vers données simulées: ${mockData.length} courses`, 'warning')
+      
+      console.error('Erreur chargement courses:', err)
+      setError('Impossible de charger l\'historique (mode simulation)')
+    } finally {
+      setLoading(false)
+      addDebugLog('🏁 Fin de la récupération')
+    }
+  }
+
+  const generateMockRuns = () => {
+    const users = [
+      { id: 5, username: 'alex', first_name: 'Alexandre', last_name: 'Dupont' },
+      { id: 6, username: 'sophie', first_name: 'Sophie', last_name: 'Martin' },
+      { id: 7, username: 'thomas', first_name: 'Thomas', last_name: 'Bernard' },
+      { id: 8, username: 'julie', first_name: 'Julie', last_name: 'Leclerc' }
+    ]
+
+    const routes = [
+      { id: 1, name: 'Parcours du Parc' },
+      { id: 2, name: 'Tour du Lac' },
+      { id: 3, name: 'Sentier de la Forêt' },
+      { id: 4, name: 'Circuit Urbain' }
+    ]
+
+    return Array.from({ length: 15 }, (_, i) => {
+      const user = users[Math.floor(Math.random() * users.length)]
+      const route = routes[Math.floor(Math.random() * routes.length)]
+      const distance = Math.random() * 15 + 2
+      const duration = Math.floor(distance * (300 + Math.random() * 120))
+      const startTime = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000)
+      
+      return {
+        id: i + 1,
+        user_id: user.id,
+        user: user,
+        title: `Course ${route.name}`,
+        distance: Math.round(distance * 100) / 100,
+        duration: duration,
+        start_time: startTime.toISOString(),
+        end_time: new Date(startTime.getTime() + duration * 1000).toISOString(),
+        avg_pace: `${Math.floor(duration / distance / 60)}:${Math.floor((duration / distance) % 60).toString().padStart(2, '0')}`,
+        avg_heart_rate: Math.floor(Math.random() * 40 + 140),
+        max_heart_rate: Math.floor(Math.random() * 20 + 170),
+        elevation_gain: Math.floor(Math.random() * 300),
+        calories: Math.floor(distance * 65),
+        route: route,
+        created_at: startTime.toISOString(),
+        updated_at: startTime.toISOString()
+      }
+    }).sort((a, b) => new Date(b.start_time) - new Date(a.start_time))
+  }
+
+  const applyFilters = () => {
+    addDebugLog('🔍 Application des filtres')
+    let filtered = [...runs]
+
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase()
+      const originalCount = filtered.length
+      filtered = filtered.filter(run => 
+        run.user?.username?.toLowerCase().includes(search) ||
+        run.user?.first_name?.toLowerCase().includes(search) ||
+        run.user?.last_name?.toLowerCase().includes(search) ||
+        run.title?.toLowerCase().includes(search) ||
+        run.route?.name?.toLowerCase().includes(search)
+      )
+      addDebugLog(`🔎 Filtrage recherche "${searchTerm}": ${originalCount} → ${filtered.length} courses`)
+    }
+
+    if (filters.period !== 'all') {
+      const now = new Date()
+      let startDate = new Date()
+      
+      switch (filters.period) {
+        case 'week':
+          startDate.setDate(now.getDate() - 7)
+          break
+        case 'month':
+          startDate.setMonth(now.getMonth() - 1)
+          break
+        case 'year':
+          startDate.setFullYear(now.getFullYear() - 1)
+          break
+      }
+      
+      const originalCount = filtered.length
+      filtered = filtered.filter(run => new Date(run.start_time) >= startDate)
+      addDebugLog(`📅 Filtrage période "${filters.period}": ${originalCount} → ${filtered.length} courses`)
+    }
+
+    if (filters.minDistance) {
+      const originalCount = filtered.length
+      filtered = filtered.filter(run => run.distance >= parseFloat(filters.minDistance))
+      addDebugLog(`📏 Filtrage distance min ${filters.minDistance}km: ${originalCount} → ${filtered.length} courses`)
+    }
+    if (filters.maxDistance) {
+      const originalCount = filtered.length
+      filtered = filtered.filter(run => run.distance <= parseFloat(filters.maxDistance))
+      addDebugLog(`📏 Filtrage distance max ${filters.maxDistance}km: ${originalCount} → ${filtered.length} courses`)
+    }
+
+    filtered.sort((a, b) => {
+      let aVal, bVal
+      
+      switch (filters.sortBy) {
+        case 'distance':
+          aVal = a.distance || 0
+          bVal = b.distance || 0
+          break
+        case 'duration':
+          aVal = a.duration || 0
+          bVal = b.duration || 0
+          break
+        default:
+          aVal = new Date(a.start_time)
+          bVal = new Date(b.start_time)
+      }
+      
+      if (filters.sortOrder === 'asc') {
+        return aVal > bVal ? 1 : -1
+      } else {
+        return aVal < bVal ? 1 : -1
+      }
+    })
+
+    addDebugLog(`📊 Tri par ${filters.sortBy} (${filters.sortOrder}): ${filtered.length} courses`)
+    setFilteredRuns(filtered)
+  }
+
   const formatDuration = (seconds) => {
+    if (!seconds) return '0:00'
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     const secs = seconds % 60
@@ -155,414 +305,682 @@ const RunningHistory = () => {
     if (hours > 0) {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
     }
-    
     return `${minutes}:${secs.toString().padStart(2, '0')}`
   }
-  
-  // Formatage de la date
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('fr-FR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
     })
   }
-  
-  // Réinitialiser les filtres
+
+  const formatTime = (dateString) => {
+    return new Date(dateString).toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const handleRunDetail = (run) => {
+    setSelectedRun(run)
+    setShowDetailModal(true)
+    addDebugLog(`👁️ Affichage détails course: ${run.title} (${run.id})`)
+  }
+
+  const handleDeleteRun = async (runId) => {
+    addDebugLog(`🗑️ Suppression course: ${runId}`)
+    
+    try {
+      if (api.runs?.delete) {
+        await api.runs.delete(runId)
+        addDebugLog(`✅ Course ${runId} supprimée avec succès`, 'success')
+        fetchRuns()
+      } else {
+        setRuns(prev => prev.filter(run => run.id !== runId))
+        addDebugLog(`🎭 Course ${runId} supprimée (simulation)`, 'info')
+      }
+      setShowDeleteModal(false)
+      setSelectedRun(null)
+    } catch (err) {
+      addDebugLog(`❌ Erreur suppression course ${runId}: ${err.message}`, 'error')
+      setError('Impossible de supprimer la course')
+    }
+  }
+
   const resetFilters = () => {
     setFilters({
-      startDate: '',
-      endDate: '',
+      period: 'all',
       minDistance: '',
       maxDistance: '',
-      userId: ''
+      userId: '',
+      sortBy: 'start_time',
+      sortOrder: 'desc'
     })
+    setSearchTerm('')
+    addDebugLog('🔄 Réinitialisation des filtres')
   }
-  
-  // Calculer les courses pour la page en cours
-  const paginatedRuns = filteredRuns.slice(
-    (currentPage - 1) * runsPerPage,
-    currentPage * runsPerPage
-  )
-  
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    )
+
+  const stats = {
+    totalRuns: filteredRuns.length,
+    totalDistance: filteredRuns.reduce((acc, run) => acc + (run.distance || 0), 0),
+    totalDuration: filteredRuns.reduce((acc, run) => acc + (run.duration || 0), 0),
+    avgDistance: filteredRuns.length > 0 ? filteredRuns.reduce((acc, run) => acc + (run.distance || 0), 0) / filteredRuns.length : 0
   }
-  
-  if (error) {
+
+  if (!isConfigured) {
     return (
-      <div className="bg-red-50 p-4 rounded-md">
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">{error}</h3>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="glass-green rounded-3xl shadow-2xl p-12 text-center animate-fade-in">
+            <ExclamationTriangleIcon className="mx-auto h-16 w-16 text-emerald-500 mb-6 animate-pulse" />
+            <h3 className="text-2xl font-bold text-emerald-800 mb-4">API non configurée</h3>
+            <p className="text-emerald-600 max-w-md mx-auto">
+              Veuillez configurer une API pour afficher l'historique des courses.
+            </p>
           </div>
         </div>
       </div>
     )
   }
-  
+
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Historique des courses</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Liste complète des activités enregistrées par les utilisateurs
-        </p>
-      </div>
-      
-      {/* Barre de recherche et filtres */}
-      <div className="flex flex-col md:flex-row justify-between mb-6 gap-4">
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
-          </div>
-          <input
-            type="text"
-            placeholder="Rechercher une course..."
-            className="form-input pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         
-        <div className="flex gap-2">
-          <button 
-            className="btn btn-secondary"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <FunnelIcon className="h-5 w-5 mr-2" />
-            Filtres
-          </button>
-          <button className="btn btn-secondary">
-            <ChartBarIcon className="h-5 w-5 mr-2" />
-            Statistiques
-          </button>
-          <button className="btn btn-secondary">
-            <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-            Exporter
-          </button>
+        <div className="text-center animate-fade-in">
+          <h1 className="text-4xl font-bold text-emerald-800 mb-4 text-shadow-lg">
+            Historique des Courses
+          </h1>
+          <p className="text-lg text-emerald-600 max-w-2xl mx-auto">
+            Toutes les courses effectuées par les utilisateurs de la plateforme
+          </p>
         </div>
-      </div>
-      
-      {/* Filtres avancés */}
-      {showFilters && (
-        <div className="bg-white p-4 rounded-md shadow mb-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Filtres avancés</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label htmlFor="startDate" className="form-label">Date de début</label>
+
+        <div className="glass-green rounded-2xl shadow-xl p-6 animate-slide-in-left">
+          <div className="flex flex-col lg:flex-row gap-4 mb-4">
+            <div className="flex-1 relative group">
+              <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-emerald-400 transition-colors group-focus-within:text-emerald-600" />
               <input
-                type="date"
-                id="startDate"
-                className="form-input"
-                value={filters.startDate}
-                onChange={(e) => setFilters({...filters, startDate: e.target.value})}
+                type="text"
+                placeholder="Rechercher par utilisateur, titre ou parcours..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 placeholder-gray-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
               />
             </div>
-            
-            <div>
-              <label htmlFor="endDate" className="form-label">Date de fin</label>
-              <input
-                type="date"
-                id="endDate"
-                className="form-input"
-                value={filters.endDate}
-                onChange={(e) => setFilters({...filters, endDate: e.target.value})}
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="userId" className="form-label">Utilisateur</label>
-              <select
-                id="userId"
-                className="form-input"
-                value={filters.userId}
-                onChange={(e) => setFilters({...filters, userId: e.target.value})}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`btn transition-all duration-300 ${
+                  showFilters 
+                    ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg' 
+                    : 'bg-white/80 text-emerald-700 hover:bg-emerald-50'
+                }`}
               >
-                <option value="">Tous les utilisateurs</option>
-                {/* Options générées dynamiquement - en réalité, vous feriez un appel API pour obtenir la liste des utilisateurs */}
-                {Array.from(new Set(runs.map(run => run.user.id))).map(userId => {
-                  const user = runs.find(run => run.user.id === userId).user
-                  return (
-                    <option key={userId} value={userId}>{user.name}</option>
-                  )
-                })}
-              </select>
-            </div>
-            
-            <div>
-              <label htmlFor="minDistance" className="form-label">Distance minimum (km)</label>
-              <input
-                type="number"
-                id="minDistance"
-                className="form-input"
-                value={filters.minDistance}
-                onChange={(e) => setFilters({...filters, minDistance: e.target.value})}
-                min="0"
-                step="0.1"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="maxDistance" className="form-label">Distance maximum (km)</label>
-              <input
-                type="number"
-                id="maxDistance"
-                className="form-input"
-                value={filters.maxDistance}
-                onChange={(e) => setFilters({...filters, maxDistance: e.target.value})}
-                min="0"
-                step="0.1"
-              />
+                <FunnelIcon className="h-5 w-5" />
+                Filtres
+              </button>
+              <button
+                onClick={() => fetchRuns()}
+                disabled={loading}
+                className="btn bg-white/80 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 transition-all duration-300"
+              >
+                <ArrowPathIcon className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+                Actualiser
+              </button>
             </div>
           </div>
-          
-          <div className="mt-4 flex justify-end">
-            <button
-              onClick={resetFilters}
-              className="btn btn-secondary mr-2"
-            >
-              Réinitialiser
-            </button>
-            <button
-              onClick={() => setShowFilters(false)}
-              className="btn btn-primary"
-            >
-              Appliquer
-            </button>
-          </div>
+
+          {showFilters && (
+            <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 border border-emerald-200 animate-scale-in">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-emerald-800">Période</label>
+                  <select
+                    value={filters.period}
+                    onChange={(e) => setFilters(prev => ({ ...prev, period: e.target.value }))}
+                    className="w-full p-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
+                  >
+                    <option value="all">Toutes les périodes</option>
+                    <option value="week">7 derniers jours</option>
+                    <option value="month">30 derniers jours</option>
+                    <option value="year">12 derniers mois</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-emerald-800">Distance min (km)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={filters.minDistance}
+                    onChange={(e) => setFilters(prev => ({ ...prev, minDistance: e.target.value }))}
+                    className="w-full p-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-emerald-800">Distance max (km)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={filters.maxDistance}
+                    onChange={(e) => setFilters(prev => ({ ...prev, maxDistance: e.target.value }))}
+                    className="w-full p-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
+                    placeholder="∞"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-emerald-800">Trier par</label>
+                  <select
+                    value={filters.sortBy}
+                    onChange={(e) => setFilters(prev => ({ ...prev, sortBy: e.target.value }))}
+                    className="w-full p-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
+                  >
+                    <option value="start_time">Date</option>
+                    <option value="distance">Distance</option>
+                    <option value="duration">Durée</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="sortOrder"
+                      value="desc"
+                      checked={filters.sortOrder === 'desc'}
+                      onChange={(e) => setFilters(prev => ({ ...prev, sortOrder: e.target.value }))}
+                      className="sr-only"
+                    />
+                    <div className={`w-4 h-4 rounded-full border-2 mr-3 transition-all duration-300 ${
+                      filters.sortOrder === 'desc' 
+                        ? 'border-emerald-500 bg-emerald-500' 
+                        : 'border-emerald-300 group-hover:border-emerald-400'
+                    }`}>
+                      {filters.sortOrder === 'desc' && (
+                        <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>
+                      )}
+                    </div>
+                    <span className="text-emerald-800 font-medium">Décroissant</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="sortOrder"
+                      value="asc"
+                      checked={filters.sortOrder === 'asc'}
+                      onChange={(e) => setFilters(prev => ({ ...prev, sortOrder: e.target.value }))}
+                      className="sr-only"
+                    />
+                    <div className={`w-4 h-4 rounded-full border-2 mr-3 transition-all duration-300 ${
+                      filters.sortOrder === 'asc' 
+                        ? 'border-emerald-500 bg-emerald-500' 
+                        : 'border-emerald-300 group-hover:border-emerald-400'
+                    }`}>
+                      {filters.sortOrder === 'asc' && (
+                        <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>
+                      )}
+                    </div>
+                    <span className="text-emerald-800 font-medium">Croissant</span>
+                  </label>
+                </div>
+                
+                <button
+                  onClick={resetFilters}
+                  className="btn bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  Réinitialiser
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
-      
-      {/* Tableau des courses */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('user')}
+
+        {error && (
+          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-2xl p-6 animate-scale-in">
+            <div className="flex items-center">
+              <ExclamationTriangleIcon className="h-6 w-6 text-yellow-500 mr-4" />
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-800">Information</h3>
+                <p className="text-yellow-700 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {filteredRuns.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-in-right">
+            <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
+              <div className="flex items-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white group-hover:scale-110 transition-transform duration-300">
+                  <PlayIcon className="h-8 w-8" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-semibold text-emerald-600">Total Courses</p>
+                  <p className="text-3xl font-bold text-emerald-800">{stats.totalRuns}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
+              <div className="flex items-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white group-hover:scale-110 transition-transform duration-300">
+                  <MapPinIcon className="h-8 w-8" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-semibold text-emerald-600">Distance Totale</p>
+                  <p className="text-3xl font-bold text-emerald-800">{stats.totalDistance.toFixed(1)} km</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
+              <div className="flex items-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white group-hover:scale-110 transition-transform duration-300">
+                  <ClockIcon className="h-8 w-8" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-semibold text-emerald-600">Temps Total</p>
+                  <p className="text-3xl font-bold text-emerald-800">{formatDuration(stats.totalDuration)}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
+              <div className="flex items-center">
+                <div className="p-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white group-hover:scale-110 transition-transform duration-300">
+                  <ChartBarIcon className="h-8 w-8" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-semibold text-emerald-600">Distance Moyenne</p>
+                  <p className="text-3xl font-bold text-emerald-800">{stats.avgDistance.toFixed(1)} km</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="glass rounded-3xl shadow-2xl overflow-hidden animate-fade-in">
+          {loading ? (
+            <div className="p-20 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-emerald-400 to-green-500 mb-6 animate-spin">
+                <ArrowPathIcon className="h-8 w-8 text-white" />
+              </div>
+              <p className="text-lg text-emerald-700 font-medium">Chargement des courses...</p>
+            </div>
+          ) : filteredRuns.length === 0 ? (
+            <div className="p-20 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-gray-400 to-gray-500 mb-6">
+                <PlayIcon className="h-8 w-8 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-700 mb-4">Aucune course</h3>
+              <p className="text-gray-500 max-w-md mx-auto">
+                {searchTerm || filters.period !== 'all' || filters.minDistance || filters.maxDistance
+                  ? 'Aucune course ne correspond aux critères de recherche.'
+                  : 'Aucune course enregistrée pour le moment.'
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-200">
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                      Utilisateur
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                      Course
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                      Date/Heure
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                      Distance
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                      Durée
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                      Allure
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                      Cardio
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-emerald-100">
+                  {filteredRuns.map((run, index) => (
+                    <tr 
+                      key={run.id} 
+                      className="hover:bg-gradient-to-r hover:from-emerald-50 hover:to-green-50 transition-all duration-300 group"
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-12 w-12">
+                            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                              <span className="text-sm font-bold text-white">
+                                {run.user?.first_name?.[0] || run.user?.username?.[0] || '?'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-semibold text-gray-900">
+                              {run.user?.first_name && run.user?.last_name 
+                                ? `${run.user.first_name} ${run.user.last_name}`
+                                : run.user?.username || 'Utilisateur inconnu'
+                              }
+                            </div>
+                            <div className="text-sm text-emerald-600">
+                              @{run.user?.username || 'inconnu'}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-semibold text-gray-900">
+                          {run.title || 'Course sans titre'}
+                        </div>
+                        <div className="text-sm text-emerald-600">
+                          {run.route?.name || 'Parcours libre'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatDate(run.start_time)}
+                        </div>
+                        <div className="text-sm text-emerald-600">
+                          {formatTime(run.start_time)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-semibold text-gray-900">
+                          {(run.distance || 0).toFixed(2)} km
+                        </div>
+                        {run.elevation_gain > 0 && (
+                          <div className="text-sm text-emerald-600 flex items-center">
+                            <span className="mr-1">↗</span>
+                            {run.elevation_gain}m
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatDuration(run.duration || 0)}
+                        </div>
+                        {run.calories && (
+                          <div className="text-sm text-orange-600 flex items-center">
+                            <FireIcon className="h-3 w-3 mr-1" />
+                            {run.calories} cal
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {run.avg_pace || 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900 flex items-center">
+                          <HeartIcon className="h-4 w-4 mr-1 text-red-500" />
+                          {run.avg_heart_rate ? `${run.avg_heart_rate} bpm` : 'N/A'}
+                        </div>
+                        {run.max_heart_rate && (
+                          <div className="text-sm text-red-500">
+                            Max: {run.max_heart_rate}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end space-x-3">
+                          <button
+                            onClick={() => handleRunDetail(run)}
+                            className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 hover:scale-110 transition-all duration-300"
+                            title="Voir les détails"
+                          >
+                            <EyeIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedRun(run)
+                              setShowDeleteModal(true)
+                            }}
+                            className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 hover:scale-110 transition-all duration-300"
+                            title="Supprimer"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {pagination.pages > 1 && (
+          <div className="glass-green rounded-2xl p-6 shadow-xl animate-slide-in-right">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-sm text-emerald-700 font-medium">
+                Affichage de {((pagination.page - 1) * pagination.per_page) + 1} à{' '}
+                {Math.min(pagination.page * pagination.per_page, pagination.total)} sur{' '}
+                {pagination.total} courses
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                  disabled={pagination.page === 1}
+                  className="px-4 py-2 bg-white/80 text-emerald-700 rounded-xl font-medium hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 >
-                  <div className="flex items-center">
-                    Utilisateur
-                    {sortField === 'user' && (
-                      <span className="ml-1">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('date')}
+                  Précédent
+                </button>
+                <span className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-xl font-bold shadow-lg">
+                  {pagination.page} / {pagination.pages}
+                </span>
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                  disabled={pagination.page === pagination.pages}
+                  className="px-4 py-2 bg-white/80 text-emerald-700 rounded-xl font-medium hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 >
-                  <div className="flex items-center">
-                    Date
-                    {sortField === 'date' && (
-                      <span className="ml-1">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('distance')}
-                >
-                  <div className="flex items-center">
-                    Distance
-                    {sortField === 'distance' && (
-                      <span className="ml-1">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('duration')}
-                >
-                  <div className="flex items-center">
-                    Durée
-                    {sortField === 'duration' && (
-                      <span className="ml-1">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('avg_pace')}
-                >
-                  <div className="flex items-center">
-                    Allure
-                    {sortField === 'avg_pace' && (
-                      <span className="ml-1">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('avg_heart_rate')}
-                >
-                  <div className="flex items-center">
-                    FC Moy.
-                    {sortField === 'avg_heart_rate' && (
-                      <span className="ml-1">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('elevation_gain')}
-                >
-                  <div className="flex items-center">
-                    Dénivelé
-                    {sortField === 'elevation_gain' && (
-                      <span className="ml-1">
-                        {sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedRuns.map((run) => (
-                <tr key={run.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-semibold">
-                        {run.user.name.charAt(0)}
+                  Suivant
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showDetailModal && selectedRun && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto animate-scale-in">
+              <div className="bg-gradient-to-r from-emerald-500 to-green-500 px-8 py-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-2xl font-bold text-white">Détails de la Course</h3>
+                  <button
+                    onClick={() => setShowDetailModal(false)}
+                    className="p-2 rounded-full bg-white/20 text-white hover:bg-white/30 transition-all duration-300"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-8 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
+                      Informations générales
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Titre:</span>
+                        <span className="text-gray-900">{selectedRun.title}</span>
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{run.user.name}</div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Utilisateur:</span>
+                        <span className="text-gray-900">{selectedRun.user?.first_name} {selectedRun.user?.last_name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Parcours:</span>
+                        <span className="text-gray-900">{selectedRun.route?.name || 'Parcours libre'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Date:</span>
+                        <span className="text-gray-900">{formatDate(selectedRun.start_time)} à {formatTime(selectedRun.start_time)}</span>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(run.date)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {run.distance} km
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDuration(run.duration)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {run.avg_pace} min/km
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {run.avg_heart_rate} bpm
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {run.elevation_gain} m
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-primary-600 hover:text-primary-900 mr-4">
-                      Détails
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Affichage de <span className="font-medium">{(currentPage - 1) * runsPerPage + 1}</span> à{' '}
-                  <span className="font-medium">
-                    {Math.min(currentPage * runsPerPage, filteredRuns.length)}
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
+                      Performance
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Distance:</span>
+                        <span className="text-gray-900 font-semibold">{selectedRun.distance?.toFixed(2)} km</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Durée:</span>
+                        <span className="text-gray-900 font-semibold">{formatDuration(selectedRun.duration)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Allure moyenne:</span>
+                        <span className="text-gray-900 font-semibold">{selectedRun.avg_pace}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Dénivelé:</span>
+                        <span className="text-gray-900 font-semibold">{selectedRun.elevation_gain}m</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
+                    Données cardio
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-red-50 rounded-xl p-4 text-center">
+                      <HeartIcon className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                      <div className="font-semibold text-gray-900">{selectedRun.avg_heart_rate} bpm</div>
+                      <div className="text-sm text-gray-600">FC moyenne</div>
+                    </div>
+                    <div className="bg-red-50 rounded-xl p-4 text-center">
+                      <HeartIcon className="h-8 w-8 text-red-600 mx-auto mb-2" />
+                      <div className="font-semibold text-gray-900">{selectedRun.max_heart_rate} bpm</div>
+                      <div className="text-sm text-gray-600">FC max</div>
+                    </div>
+                    <div className="bg-orange-50 rounded-xl p-4 text-center">
+                      <FireIcon className="h-8 w-8 text-orange-500 mx-auto mb-2" />
+                      <div className="font-semibold text-gray-900">{selectedRun.calories} cal</div>
+                      <div className="text-sm text-gray-600">Calories</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
+                    Horaires
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-emerald-50 rounded-xl p-4">
+                      <div className="font-medium text-emerald-800">Début</div>
+                      <div className="text-emerald-900 font-semibold">{new Date(selectedRun.start_time).toLocaleString('fr-FR')}</div>
+                    </div>
+                    <div className="bg-emerald-50 rounded-xl p-4">
+                      <div className="font-medium text-emerald-800">Fin</div>
+                      <div className="text-emerald-900 font-semibold">{new Date(selectedRun.end_time).toLocaleString('fr-FR')}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 px-8 py-6 rounded-b-3xl flex justify-end space-x-4">
+                <button
+                  onClick={() => setShowDetailModal(false)}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-all duration-300"
+                >
+                  Fermer
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDetailModal(false)
+                    setSelectedRun(selectedRun)
+                    setShowDeleteModal(true)
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-medium hover:from-red-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showDeleteModal && selectedRun && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-scale-in">
+              <div className="bg-gradient-to-r from-red-500 to-pink-500 px-6 py-4 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-bold text-white">Confirmer la suppression</h3>
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="p-2 rounded-full bg-white/20 text-white hover:bg-white/30 transition-all duration-300"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                <p className="text-gray-700 mb-6 leading-relaxed">
+                  Êtes-vous sûr de vouloir supprimer la course{' '}
+                  <span className="font-semibold text-gray-900">
+                    "{selectedRun.title}" de{' '}
+                    {selectedRun.user?.first_name && selectedRun.user?.last_name
+                      ? `${selectedRun.user.first_name} ${selectedRun.user.last_name}`
+                      : selectedRun.user?.username || 'Utilisateur inconnu'
+                    }
                   </span>{' '}
-                  sur <span className="font-medium">{filteredRuns.length}</span> courses
+                  ({(selectedRun.distance || 0).toFixed(2)} km) ?
+                </p>
+                <p className="text-sm text-red-600 font-medium">
+                  Cette action est irréversible.
                 </p>
               </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${
-                      currentPage === 1 
-                        ? 'text-gray-300 cursor-not-allowed' 
-                        : 'text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span className="sr-only">Précédent</span>
-                    &lt;
-                  </button>
-                  
-                  {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                    // Afficher 5 pages maximum, centrées autour de la page courante
-                    let pageNum
-                    if (totalPages <= 5) {
-                      pageNum = i + 1
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i
-                    } else {
-                      pageNum = currentPage - 2 + i
-                    }
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                          currentPage === pageNum
-                            ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    )
-                  })}
-                  
-                  <button
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${
-                      currentPage === totalPages 
-                        ? 'text-gray-300 cursor-not-allowed' 
-                        : 'text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span className="sr-only">Suivant</span>
-                    &gt;
-                  </button>
-                </nav>
+              
+              <div className="bg-gray-50 px-6 py-4 rounded-b-3xl flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setSelectedRun(null)
+                  }}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-all duration-300"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => handleDeleteRun(selectedRun.id)}
+                  className="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-medium hover:from-red-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  Supprimer
+                </button>
               </div>
             </div>
           </div>
