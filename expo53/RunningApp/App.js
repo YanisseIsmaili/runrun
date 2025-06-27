@@ -1,4 +1,3 @@
-// App.js - Version avec centrage GPS automatique
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -8,13 +7,10 @@ import {
   Alert,
   StatusBar,
   SafeAreaView,
-  ScrollView,
   Dimensions,
   Animated,
-  ActivityIndicator,
+  ScrollView,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import MapView, { Polyline, Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -23,15 +19,117 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
+// Import des screens
+import SplashScreen from './screens/SplashScreen';
+import LoginScreen from './screens/LoginScreen';
+import RunHistoryScreen from './screens/RunHistoryScreen';
+
 // Services
 import AuthService from './services/AuthService';
 import RunService from './services/RunService';
 
-// Screens
-import RunHistoryScreen from './screens/RunHistoryScreen';
-
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
+
+// GeoDebugJoystick simplifié
+function GeoDebugJoystick({ onLocationUpdate, children, isRunning = false }) {
+  return <View style={{ flex: 1 }}>{children}</View>;
+}
+
+// AI Trainer
+const AITrainer = ({ isRunning, runData, onMessage }) => {
+  const [visible, setVisible] = useState(false);
+  const [messages, setMessages] = useState([]);
+  
+  useEffect(() => {
+    if (isRunning && runData) {
+      const interval = setInterval(() => {
+        const motivationalMessages = [
+          "💪 Excellent rythme ! Continue comme ça !",
+          "🎯 Tu es dans ta zone optimale !",
+          "🔥 Superbe performance !",
+          "⚡ Tu peux accélérer maintenant !",
+          "🏃‍♂️ Garde ce rythme parfait !",
+          "🌟 Tu dépasses tes limites !",
+          "💧 N'oublie pas de t'hydrater !",
+          "🏆 Champion en action !"
+        ];
+        
+        const randomMessage = motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)];
+        
+        setMessages(prev => [
+          { id: Date.now(), text: randomMessage, time: new Date().toLocaleTimeString() },
+          ...prev.slice(0, 4)
+        ]);
+        
+        onMessage && onMessage(randomMessage);
+      }, 45000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isRunning, runData]);
+
+  return (
+    <>
+      <TouchableOpacity
+        style={styles.trainerButton}
+        onPress={() => setVisible(!visible)}
+      >
+        <LinearGradient
+          colors={visible ? ['#8B5CF6', '#EC4899'] : ['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.5)']}
+          style={styles.trainerButtonGradient}
+        >
+          <Ionicons name="fitness" size={16} color="white" />
+          <Text style={styles.trainerText}>
+            {visible ? 'COACH ON' : 'COACH'}
+          </Text>
+        </LinearGradient>
+      </TouchableOpacity>
+
+      {visible && (
+        <View style={styles.trainerPanel}>
+          <LinearGradient
+            colors={['rgba(0,0,0,0.9)', 'rgba(139,92,246,0.2)']}
+            style={styles.trainerPanelGradient}
+          >
+            <View style={styles.trainerHeader}>
+              <Text style={styles.trainerTitle}>🤖 AI Coach</Text>
+              <TouchableOpacity onPress={() => setVisible(false)}>
+                <Ionicons name="close" size={20} color="white" />
+              </TouchableOpacity>
+            </View>
+            
+            {isRunning && runData && (
+              <View style={styles.statsSection}>
+                <Text style={styles.sectionTitle}>📊 Analyse temps réel</Text>
+                <View style={styles.statRow}>
+                  <Text style={styles.statText}>
+                    Distance: {(runData.distance / 1000).toFixed(2)}km
+                  </Text>
+                  <Text style={styles.statText}>
+                    Vitesse: {runData.speed.toFixed(1)} km/h
+                  </Text>
+                </View>
+              </View>
+            )}
+            
+            {messages.length > 0 && (
+              <View style={styles.messagesSection}>
+                <Text style={styles.sectionTitle}>💬 Messages du coach</Text>
+                {messages.slice(0, 3).map(message => (
+                  <View key={message.id} style={styles.messageItem}>
+                    <Text style={styles.messageText}>{message.text}</Text>
+                    <Text style={styles.messageTime}>{message.time}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </LinearGradient>
+        </View>
+      )}
+    </>
+  );
+};
 
 // Écran principal de course
 function MainRunScreen({ navigation }) {
@@ -45,124 +143,49 @@ function MainRunScreen({ navigation }) {
   const [locationPermission, setLocationPermission] = useState(false);
   const [previousLocation, setPreviousLocation] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [segments, setSegments] = useState([]);
-  const [currentSegment, setCurrentSegment] = useState(null);
   const [speed, setSpeed] = useState(0);
   const [maxSpeed, setMaxSpeed] = useState(0);
-
-  // États traîner
-  const [trail, setTrail] = useState([]);
-  const [showTrail, setShowTrail] = useState(true);
-  const [trailDensity, setTrailDensity] = useState('normal');
-
-  // 🔧 NOUVEAU: État pour le centrage automatique
   const [followUser, setFollowUser] = useState(true);
   const [mapInitialized, setMapInitialized] = useState(false);
+  const [trainerMessage, setTrainerMessage] = useState('');
 
   const intervalRef = useRef(null);
   const locationSubscription = useRef(null);
   const mapRef = useRef(null);
-  const segmentStartTime = useRef(null);
-  const segmentStartDistance = useRef(0);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
-
-  const SEGMENT_DISTANCE = 500;
-  const TRAIL_CONFIG = {
-    dense: { interval: 1000, maxPoints: 200, radius: 3 },
-    normal: { interval: 2000, maxPoints: 150, radius: 4 },
-    sparse: { interval: 5000, maxPoints: 100, radius: 5 }
-  };
 
   useEffect(() => {
+    checkAuth();
     requestLocationPermission();
-    loadUser();
   }, []);
-
-  // 🔧 NOUVEAU: Centrage automatique de la carte
-  useEffect(() => {
-    if (location && mapRef.current && followUser && mapInitialized) {
-      const region = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.005, // Zoom plus serré
-        longitudeDelta: 0.005,
-      };
-      
-      mapRef.current.animateToRegion(region, 500);
-    }
-  }, [location, followUser, mapInitialized]);
-
-  // 🔧 NOUVEAU: Activer le suivi automatique pendant la course
-  useEffect(() => {
-    if (isRunning && !isPaused) {
-      setFollowUser(true);
-    }
-  }, [isRunning, isPaused]);
-
-  useEffect(() => {
-    if (isRunning && !isPaused) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.1, duration: 1000, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
-        ])
-      );
-      pulse.start();
-      return () => pulse.stop();
-    }
-  }, [isRunning, isPaused]);
-
-  useEffect(() => {
-    Animated.timing(slideAnim, {
-      toValue: isRunning ? 1 : 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, [isRunning]);
 
   useEffect(() => {
     if (isRunning && !isPaused) {
       intervalRef.current = setInterval(() => {
-        setElapsedTime(Date.now() - startTime);
-      }, 100);
+        const now = Date.now();
+        const elapsed = now - startTime;
+        setElapsedTime(elapsed);
+      }, 1000);
     } else {
-      clearInterval(intervalRef.current);
-    }
-    return () => clearInterval(intervalRef.current);
-  }, [isRunning, isPaused, startTime]);
-
-  useEffect(() => {
-    let trailInterval;
-    if (isRunning && !isPaused && location && showTrail) {
-      const config = TRAIL_CONFIG[trailDensity];
-      trailInterval = setInterval(() => {
-        addTrailPoint();
-      }, config.interval);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
     return () => {
-      if (trailInterval) clearInterval(trailInterval);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
-  }, [isRunning, isPaused, location, showTrail, trailDensity]);
+  }, [isRunning, isPaused, startTime]);
 
-  const loadUser = async () => {
+  const checkAuth = async () => {
+    const isAuthenticated = await AuthService.isAuthenticated();
+    if (!isAuthenticated) {
+      navigation.replace('Login');
+      return;
+    }
     const userData = await AuthService.getUser();
     setUser(userData);
-  };
-
-  const handleLogout = async () => {
-    Alert.alert('Déconnexion', 'Êtes-vous sûr ?', [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Déconnexion',
-        style: 'destructive',
-        onPress: async () => {
-          await AuthService.logout();
-          resetRun();
-          navigation.replace('Auth');
-        }
-      }
-    ]);
   };
 
   const requestLocationPermission = async () => {
@@ -172,7 +195,7 @@ function MainRunScreen({ navigation }) {
         setLocationPermission(true);
         getCurrentLocation();
       } else {
-        Alert.alert('Permission refusée', 'Géolocalisation requise');
+        Alert.alert('Permission refusée', 'Géolocalisation requise pour utiliser l\'app');
       }
     } catch (error) {
       console.error('Erreur permission:', error);
@@ -185,10 +208,27 @@ function MainRunScreen({ navigation }) {
         accuracy: Location.Accuracy.High,
       });
       setLocation(currentLocation);
-      setMapInitialized(true); // 🔧 NOUVEAU: Marquer la carte comme initialisée
+      setMapInitialized(true);
     } catch (error) {
       console.error('Erreur géolocalisation:', error);
     }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Déconnexion',
+      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Déconnecter',
+          onPress: async () => {
+            await AuthService.logout();
+            navigation.replace('Splash');
+          }
+        }
+      ]
+    );
   };
 
   const startLocationTracking = async () => {
@@ -197,35 +237,32 @@ function MainRunScreen({ navigation }) {
         {
           accuracy: Location.Accuracy.High,
           timeInterval: 1000,
-          distanceInterval: 2, // 🔧 AMÉLIORATION: Distance plus petite pour un suivi plus précis
+          distanceInterval: 2,
         },
         (newLocation) => {
           setLocation(newLocation);
           
-          const currentSpeed = (newLocation.coords.speed && newLocation.coords.speed > 0) ? 
-            newLocation.coords.speed * 3.6 : 0;
-          setSpeed(currentSpeed);
-          
-          if (currentSpeed > maxSpeed) {
-            setMaxSpeed(currentSpeed);
-          }
-          
-          if (previousLocation && isRunning && !isPaused) {
+          if (isRunning && !isPaused && previousLocation) {
+            const currentSpeed = (newLocation.coords.speed && newLocation.coords.speed > 0) ? 
+              newLocation.coords.speed * 3.6 : 0;
+            setSpeed(currentSpeed);
+            
+            if (currentSpeed > maxSpeed) {
+              setMaxSpeed(currentSpeed);
+            }
+            
             const newDistance = calculateDistance(
               previousLocation.coords,
               newLocation.coords
             );
             
-            const newTotalDistance = distance + newDistance;
-            setDistance(newTotalDistance);
+            setDistance(prev => prev + newDistance);
             
             const newCoordinate = {
               latitude: newLocation.coords.latitude,
               longitude: newLocation.coords.longitude,
             };
             setRouteCoordinates(prev => [...prev, newCoordinate]);
-            
-            checkForNewSegment(newTotalDistance);
           }
           
           setPreviousLocation(newLocation);
@@ -234,80 +271,6 @@ function MainRunScreen({ navigation }) {
     } catch (error) {
       console.error('Erreur tracking:', error);
     }
-  };
-
-  const stopLocationTracking = () => {
-    if (locationSubscription.current) {
-      locationSubscription.current.remove();
-      locationSubscription.current = null;
-    }
-  };
-
-  // 🔧 NOUVEAU: Fonction pour basculer le suivi
-  const toggleFollowUser = () => {
-    setFollowUser(!followUser);
-  };
-
-  // 🔧 NOUVEAU: Fonction pour centrer manuellement
-  const centerOnUser = () => {
-    if (location && mapRef.current) {
-      const region = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      };
-      mapRef.current.animateToRegion(region, 1000);
-      setFollowUser(true);
-    }
-  };
-
-  // 🔧 NOUVEAU: Détecter quand l'utilisateur bouge la carte manuellement
-  const handleMapPanDrag = () => {
-    if (followUser) {
-      setFollowUser(false);
-    }
-  };
-
-  const addTrailPoint = () => {
-    if (!location || !isRunning || isPaused) return;
-
-    const config = TRAIL_CONFIG[trailDensity];
-    const newPoint = {
-      id: Date.now() + Math.random(),
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      timestamp: Date.now(),
-      speed: speed,
-      opacity: 1.0
-    };
-
-    setTrail(prev => {
-      let newTrail = [...prev, newPoint];
-      if (newTrail.length > config.maxPoints) {
-        newTrail = newTrail.slice(-config.maxPoints);
-      }
-      return newTrail.map((point, index) => ({
-        ...point,
-        opacity: Math.max(0.1, (index + 1) / newTrail.length)
-      }));
-    });
-  };
-
-  const clearTrail = () => setTrail([]);
-  const toggleTrail = () => setShowTrail(!showTrail);
-
-  const changeTrailDensity = () => {
-    const densities = ['dense', 'normal', 'sparse'];
-    const currentIndex = densities.indexOf(trailDensity);
-    const nextIndex = (currentIndex + 1) % densities.length;
-    setTrailDensity(densities[nextIndex]);
-  };
-
-  const getTrailColor = (point) => {
-    if (point.speed < 6) return `rgba(255, 107, 107, ${point.opacity})`;
-    if (point.speed < 12) return `rgba(78, 205, 196, ${point.opacity})`;
-    return `rgba(69, 183, 209, ${point.opacity})`;
   };
 
   const calculateDistance = (coords1, coords2) => {
@@ -323,797 +286,487 @@ function MainRunScreen({ navigation }) {
     return R * c;
   };
 
-  const checkForNewSegment = (totalDistance) => {
-    const segmentNumber = Math.floor(totalDistance / SEGMENT_DISTANCE);
-    
-    if (currentSegment === null || segmentNumber > currentSegment.number) {
-      if (currentSegment !== null) {
-        const segmentTime = Date.now() - segmentStartTime.current;
-        const segmentDistance = totalDistance - segmentStartDistance.current;
-        const segmentSpeed = segmentDistance > 0 ? 
-          (segmentDistance / 1000) / (segmentTime / (1000 * 60 * 60)) : 0;
-        
-        const completedSegment = {
-          ...currentSegment,
-          endTime: Date.now(),
-          distance: segmentDistance,
-          duration: segmentTime,
-          averageSpeed: segmentSpeed,
-        };
-        
-        setSegments(prev => [...prev, completedSegment]);
-      }
-      
-      const newSegment = {
-        number: segmentNumber,
-        startTime: Date.now(),
-        startDistance: totalDistance,
-      };
-      
-      setCurrentSegment(newSegment);
-      segmentStartTime.current = Date.now();
-      segmentStartDistance.current = totalDistance;
-    }
-  };
-
-  const calculateAverageSpeed = () => {
-    const timeInHours = elapsedTime / (1000 * 60 * 60);
-    const distanceInKm = distance / 1000;
-    return timeInHours > 0 ? (distanceInKm / timeInHours).toFixed(1) : '0.0';
-  };
-
   const startRun = () => {
-    if (!locationPermission) {
-      Alert.alert('Erreur', 'Permissions GPS requises');
-      return;
-    }
-
     setIsRunning(true);
     setIsPaused(false);
     setStartTime(Date.now());
-    setElapsedTime(0);
     setDistance(0);
+    setRouteCoordinates([]);
     setSpeed(0);
     setMaxSpeed(0);
-    setRouteCoordinates([]);
-    setSegments([]);
-    setCurrentSegment(null);
-    setTrail([]);
-    setFollowUser(true); // 🔧 NOUVEAU: Activer le suivi au démarrage
-    setPreviousLocation(location);
-    segmentStartTime.current = Date.now();
-    segmentStartDistance.current = 0;
+    setFollowUser(true);
     
     if (location) {
       setRouteCoordinates([{
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       }]);
+      setPreviousLocation(location);
     }
     
     startLocationTracking();
+    setTrainerMessage("🚀 C'est parti ! Commence par un échauffement en douceur.");
   };
 
   const pauseRun = () => {
-    setIsPaused(!isPaused);
+    setIsPaused(true);
+    if (locationSubscription.current) {
+      locationSubscription.current.remove();
+      locationSubscription.current = null;
+    }
+    setTrainerMessage("⏸️ Pause bien méritée ! Hydrate-toi et reprends quand tu es prêt.");
+  };
+
+  const resumeRun = () => {
+    setIsPaused(false);
+    startLocationTracking();
+    setTrainerMessage("▶️ C'est reparti ! Retrouve ton rythme progressivement.");
   };
 
   const stopRun = async () => {
-    if (currentSegment !== null) {
-      const segmentTime = Date.now() - segmentStartTime.current;
-      const segmentDistance = distance - segmentStartDistance.current;
-      const segmentSpeed = segmentDistance > 0 ? 
-        (segmentDistance / 1000) / (segmentTime / (1000 * 60 * 60)) : 0;
-      
-      const completedSegment = {
-        ...currentSegment,
-        endTime: Date.now(),
-        distance: segmentDistance,
-        duration: segmentTime,
-        averageSpeed: segmentSpeed,
-      };
-      
-      setSegments(prev => [...prev, completedSegment]);
-    }
-    
-    setIsRunning(false);
-    setIsPaused(false);
-    setCurrentSegment(null);
-    setFollowUser(false); // 🔧 NOUVEAU: Désactiver le suivi à l'arrêt
-    stopLocationTracking();
-
-    await saveRunToAPI();
-    
     Alert.alert(
-      '🏁 Course terminée !',
-      `⏱️ Temps: ${formatTime(elapsedTime)}\n📏 Distance: ${(distance / 1000).toFixed(2)} km\n📊 Vitesse moyenne: ${calculateAverageSpeed()} km/h\n⚡ Vitesse max: ${maxSpeed.toFixed(1)} km/h\n🎯 Segments: ${segments.length + 1}\n👣 Points de traîner: ${trail.length}`,
-      [{ text: 'Super !', style: 'default' }]
+      'Arrêter la course',
+      'Voulez-vous vraiment arrêter la course ?',
+      [
+        { text: 'Continuer', style: 'cancel' },
+        {
+          text: 'Arrêter',
+          style: 'destructive',
+          onPress: async () => {
+            setIsRunning(false);
+            setIsPaused(false);
+            
+            if (locationSubscription.current) {
+              locationSubscription.current.remove();
+              locationSubscription.current = null;
+            }
+            
+            try {
+              await RunService.saveRun({
+                distance,
+                duration: elapsedTime,
+                route: routeCoordinates,
+                maxSpeed,
+                avgSpeed: distance > 0 ? (distance / (elapsedTime / 1000)) * 3.6 : 0,
+                date: new Date().toISOString()
+              });
+              
+              Alert.alert('Course sauvegardée !');
+            } catch (error) {
+              console.error('Erreur sauvegarde:', error);
+            }
+          }
+        }
+      ]
     );
   };
 
-  const saveRunToAPI = async () => {
-    try {
-      const runData = {
-        startTime: startTime,
-        endTime: Date.now(),
-        elapsedTime: elapsedTime,
-        distance: distance,
-        routeCoordinates: routeCoordinates,
-        speed: speed,
-        maxSpeed: maxSpeed,
-        segments: segments,
-        trail: trail
-      };
-
-      const formattedData = RunService.formatRunDataForAPI(runData);
-      const result = await RunService.createRun(formattedData);
-
-      if (result.success) {
-        console.log('Course sauvegardée:', result.data);
-      } else {
-        console.error('Erreur sauvegarde:', result.message);
-        Alert.alert('Avertissement', 'Course terminée mais non sauvegardée');
-      }
-    } catch (error) {
-      console.error('Erreur sauvegarde:', error);
-      Alert.alert('Avertissement', 'Course terminée mais non sauvegardée');
-    }
+  const handleTrainerMessage = (message) => {
+    setTrainerMessage(message);
+    setTimeout(() => setTrainerMessage(''), 5000);
   };
 
-  const resetRun = () => {
-    setIsRunning(false);
-    setIsPaused(false);
-    setElapsedTime(0);
-    setDistance(0);
-    setSpeed(0);
-    setMaxSpeed(0);
-    setStartTime(null);
-    setPreviousLocation(null);
-    setRouteCoordinates([]);
-    setSegments([]);
-    setCurrentSegment(null);
-    setTrail([]);
-    setFollowUser(true); // 🔧 NOUVEAU: Réactiver le suivi après reset
-    stopLocationTracking();
+  const formatTime = (time) => {
+    const seconds = Math.floor(time / 1000) % 60;
+    const minutes = Math.floor(time / (1000 * 60)) % 60;
+    const hours = Math.floor(time / (1000 * 60 * 60));
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const formatTime = (milliseconds) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    
-    if (hours > 0) {
-      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
+  // Écran de permission géolocalisation si pas accordée
+  if (!locationPermission) {
+    return (
+      <View style={styles.permissionContainer}>
+        <LinearGradient
+          colors={['#0f0f23', '#1a1a2e', '#16213e']}
+          style={styles.permissionGradient}
+        >
+          <StatusBar barStyle="light-content" />
+          <Ionicons name="location-outline" size={80} color="#FF6B6B" />
+          <Text style={styles.permissionTitle}>Géolocalisation requise</Text>
+          <Text style={styles.permissionText}>
+            RunTracker a besoin d'accéder à votre position pour tracker vos courses.
+          </Text>
+          <TouchableOpacity style={styles.permissionButton} onPress={requestLocationPermission}>
+            <Text style={styles.permissionButtonText}>Autoriser la géolocalisation</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+      </View>
+    );
+  }
 
-  const formatDistance = (meters) => {
-    if (meters < 1000) return `${meters.toFixed(0)}m`;
-    return `${(meters / 1000).toFixed(2)}km`;
-  };
+  // Écran de chargement géolocalisation si pas de position
+  if (!location) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" />
+        <Ionicons name="location" size={40} color="#4CAF50" />
+        <Text style={styles.loadingText}>Recherche de votre position...</Text>
+      </View>
+    );
+  }
 
-  const getMapRegion = () => {
-    if (!location) return null;
-    return {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      latitudeDelta: 0.005, // 🔧 AMÉLIORATION: Zoom plus serré
-      longitudeDelta: 0.005,
-    };
-  };
-
-  const getPaceColor = (speed) => {
-    if (speed < 6) return '#FF6B6B';
-    if (speed < 12) return '#4ECDC4';
-    return '#45B7D1';
+  const runData = {
+    distance,
+    speed,
+    formattedTime: formatTime(elapsedTime),
+    elapsedTime
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F0F23" />
-      
-      <LinearGradient
-        colors={['#6366F1', '#8B5CF6', '#EC4899']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>RunTracker</Text>
-            <Text style={styles.headerSubtitle}>Pro</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Text style={styles.userWelcome}>Salut, {user?.first_name || user?.username} !</Text>
-            <TouchableOpacity 
-              onPress={() => navigation.navigate('RunHistory')}
-              style={styles.historyButton}
-            >
-              <Ionicons name="list-outline" size={20} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-              <Ionicons name="log-out-outline" size={20} color="white" />
-            </TouchableOpacity>
-          </View>
+    <GeoDebugJoystick>
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        
+        {/* Header avec info user */}
+        <View style={styles.userHeader}>
+          <Text style={styles.welcomeText}>
+            Salut {user?.username || 'Coureur'} ! 👋
+          </Text>
+          <TouchableOpacity onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={24} color="white" />
+          </TouchableOpacity>
         </View>
         
-        <View style={styles.trailControlsContainer}>
-          <View style={styles.gpsIndicator}>
-            <View style={[styles.gpsDot, { backgroundColor: locationPermission ? '#10B981' : '#EF4444' }]} />
-            <Text style={styles.gpsText}>
-              {locationPermission ? 'GPS' : 'NO GPS'}
-            </Text>
+        <AITrainer
+          isRunning={isRunning}
+          runData={runData}
+          onMessage={handleTrainerMessage}
+        />
+        
+        {trainerMessage ? (
+          <View style={styles.floatingMessage}>
+            <LinearGradient
+              colors={['#8B5CF6', '#EC4899']}
+              style={styles.floatingMessageGradient}
+            >
+              <Ionicons name="chatbubble" size={16} color="white" />
+              <Text style={styles.floatingMessageText}>{trainerMessage}</Text>
+            </LinearGradient>
+          </View>
+        ) : null}
+        
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={{
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }}
+          showsUserLocation={false}
+          showsMyLocationButton={false}
+          onPanDrag={() => setFollowUser(false)}
+        >
+          <Marker
+            coordinate={{
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            }}
+            title="Ma position"
+          >
+            <View style={styles.userMarker}>
+              <View style={styles.userMarkerInner} />
+            </View>
+          </Marker>
+          
+          {routeCoordinates.length > 1 && (
+            <Polyline
+              coordinates={routeCoordinates}
+              strokeColor="#4CAF50"
+              strokeWidth={4}
+            />
+          )}
+          
+          <Circle
+            center={{
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            }}
+            radius={location.coords.accuracy || 10}
+            fillColor="rgba(76, 175, 80, 0.1)"
+            strokeColor="rgba(76, 175, 80, 0.3)"
+            strokeWidth={1}
+          />
+        </MapView>
+        
+        <View style={styles.runInterface}>
+          <View style={styles.statsContainer}>
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Temps</Text>
+              <Text style={styles.statValue}>{formatTime(elapsedTime)}</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Distance</Text>
+              <Text style={styles.statValue}>{(distance / 1000).toFixed(2)} km</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Vitesse</Text>
+              <Text style={styles.statValue}>{speed.toFixed(1)} km/h</Text>
+            </View>
           </View>
           
-          <View style={styles.trailControls}>
-            {/* 🔧 NOUVEAU: Bouton de suivi GPS */}
-            <TouchableOpacity onPress={toggleFollowUser} style={styles.trailButton}>
-              <Ionicons 
-                name={followUser ? "navigate" : "navigate-outline"} 
-                size={16} 
-                color={followUser ? "#10B981" : "rgba(255, 255, 255, 0.6)"} 
-              />
-              <Text style={[styles.trailButtonText, { color: followUser ? "#10B981" : "rgba(255, 255, 255, 0.6)" }]}>
-                Auto
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity onPress={toggleTrail} style={styles.trailButton}>
-              <Ionicons 
-                name={showTrail ? "footsteps" : "footsteps-outline"} 
-                size={16} 
-                color={showTrail ? "#10B981" : "rgba(255, 255, 255, 0.6)"} 
-              />
-              <Text style={[styles.trailButtonText, { color: showTrail ? "#10B981" : "rgba(255, 255, 255, 0.6)" }]}>
-                Traîner
-              </Text>
-            </TouchableOpacity>
-            
-            {showTrail && (
-              <TouchableOpacity onPress={changeTrailDensity} style={styles.trailButton}>
-                <Ionicons name="options-outline" size={16} color="rgba(255, 255, 255, 0.8)" />
-                <Text style={styles.trailButtonText}>
-                  {trailDensity === 'dense' ? 'Dense' : trailDensity === 'normal' ? 'Normal' : 'Léger'}
-                </Text>
+          <View style={styles.controlsContainer}>
+            {!isRunning ? (
+              <TouchableOpacity style={styles.startButton} onPress={startRun}>
+                <Ionicons name="play" size={30} color="white" />
+                <Text style={styles.buttonText}>Démarrer</Text>
               </TouchableOpacity>
-            )}
-            
-            {trail.length > 0 && (
-              <TouchableOpacity onPress={clearTrail} style={styles.trailButton}>
-                <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                <Text style={[styles.trailButtonText, { color: "#EF4444" }]}>
-                  Effacer
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </LinearGradient>
-
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {location && (
-          <View style={styles.mapContainer}>
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              initialRegion={getMapRegion()}
-              showsUserLocation={true}
-              followsUserLocation={false} // 🔧 CHANGEMENT: Désactivé pour contrôle manuel
-              showsMyLocationButton={false}
-              mapType="standard"
-              onPanDrag={handleMapPanDrag} // 🔧 NOUVEAU: Détecter le mouvement manuel
-            >
-              {showTrail && trail.map((point, index) => (
-                <Circle
-                  key={point.id}
-                  center={{
-                    latitude: point.latitude,
-                    longitude: point.longitude,
-                  }}
-                  radius={TRAIL_CONFIG[trailDensity].radius}
-                  fillColor={getTrailColor(point)}
-                  strokeColor={getTrailColor(point)}
-                  strokeWidth={1}
-                />
-              ))}
-              
-              {routeCoordinates.length > 1 && (
-                <Polyline
-                  coordinates={routeCoordinates}
-                  strokeColor="#6366F1"
-                  strokeWidth={4}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-              )}
-              
-              {routeCoordinates.length > 0 && (
-                <Marker
-                  coordinate={routeCoordinates[0]}
-                  title="Départ"
+            ) : (
+              <View style={styles.runningControls}>
+                <TouchableOpacity 
+                  style={[styles.controlButton, styles.pauseButton]} 
+                  onPress={isPaused ? resumeRun : pauseRun}
                 >
-                  <View style={styles.startMarker}>
-                    <Ionicons name="play" size={16} color="white" />
-                  </View>
-                </Marker>
-              )}
-              
-              {!isRunning && routeCoordinates.length > 1 && (
-                <Marker
-                  coordinate={routeCoordinates[routeCoordinates.length - 1]}
-                  title="Arrivée"
+                  <Ionicons name={isPaused ? "play" : "pause"} size={24} color="white" />
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.controlButton, styles.stopButton]} 
+                  onPress={stopRun}
                 >
-                  <View style={styles.finishMarker}>
-                    <Ionicons name="flag" size={16} color="white" />
-                  </View>
-                </Marker>
-              )}
-            </MapView>
-            
-            {/* 🔧 NOUVEAU: Bouton de centrage flottant */}
-            {!followUser && location && (
-              <TouchableOpacity 
-                style={styles.centerButton} 
-                onPress={centerOnUser}
-              >
-                <LinearGradient
-                  colors={['rgba(99, 102, 241, 0.9)', 'rgba(139, 92, 246, 0.9)']}
-                  style={styles.centerButtonGradient}
-                >
-                  <Ionicons name="locate" size={20} color="white" />
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-            
-            <Animated.View style={[
-              styles.speedOverlay,
-              {
-                transform: [{
-                  translateY: slideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-100, 0],
-                  }),
-                }],
-              }
-            ]}>
-              <LinearGradient
-                colors={['rgba(99, 102, 241, 0.9)', 'rgba(139, 92, 246, 0.9)']}
-                style={styles.speedOverlayGradient}
-              >
-                <Text style={styles.speedOverlayLabel}>VITESSE</Text>
-                <Text style={[styles.speedOverlayValue, { color: getPaceColor(speed) }]}>
-                  {speed.toFixed(1)}
-                </Text>
-                <Text style={styles.speedOverlayUnit}>km/h</Text>
-              </LinearGradient>
-            </Animated.View>
-
-            {showTrail && isRunning && (
-              <View style={styles.trailIndicator}>
-                <LinearGradient
-                  colors={['rgba(16, 185, 129, 0.9)', 'rgba(5, 150, 105, 0.9)']}
-                  style={styles.trailIndicatorGradient}
-                >
-                  <Ionicons name="footsteps" size={16} color="white" />
-                  <Text style={styles.trailIndicatorText}>{trail.length}</Text>
-                </LinearGradient>
+                  <Ionicons name="stop" size={24} color="white" />
+                </TouchableOpacity>
               </View>
             )}
           </View>
-        )}
-
-        {/* Reste du code inchangé... */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-              style={styles.statCardGradient}
-            >
-              <Ionicons name="time-outline" size={24} color="#6366F1" />
-              <Text style={styles.statLabel}>TEMPS</Text>
-              <Text style={styles.statValue}>{formatTime(elapsedTime)}</Text>
-            </LinearGradient>
-          </View>
           
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-              style={styles.statCardGradient}
-            >
-              <Ionicons name="walk-outline" size={24} color="#8B5CF6" />
-              <Text style={styles.statLabel}>DISTANCE</Text>
-              <Text style={styles.statValue}>{formatDistance(distance)}</Text>
-            </LinearGradient>
-          </View>
-          
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-              style={styles.statCardGradient}
-            >
-              <Ionicons name="speedometer-outline" size={24} color="#EC4899" />
-              <Text style={styles.statLabel}>MOYENNE</Text>
-              <Text style={styles.statValue}>{calculateAverageSpeed()}</Text>
-              <Text style={styles.statUnit}>km/h</Text>
-            </LinearGradient>
-          </View>
-          
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-              style={styles.statCardGradient}
-            >
-              <Ionicons name="flash-outline" size={24} color="#10B981" />
-              <Text style={styles.statLabel}>MAX</Text>
-              <Text style={styles.statValue}>{maxSpeed.toFixed(1)}</Text>
-              <Text style={styles.statUnit}>km/h</Text>
-            </LinearGradient>
-          </View>
+          <TouchableOpacity 
+            style={styles.historyButton}
+            onPress={() => navigation.navigate('RunHistory')}
+          >
+            <Ionicons name="list" size={20} color="white" />
+            <Text style={styles.historyButtonText}>Historique</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.controlsContainer}>
-          {!isRunning ? (
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <TouchableOpacity 
-                style={styles.startButton} 
-                onPress={startRun}
-                disabled={!locationPermission}
-              >
-                <LinearGradient
-                  colors={['#10B981', '#059669']}
-                  style={styles.startButtonGradient}
-                >
-                  <Ionicons name="play" size={32} color="white" />
-                  <Text style={styles.startButtonText}>DÉMARRER</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </Animated.View>
-          ) : (
-            <View style={styles.runningControls}>
-              <TouchableOpacity style={styles.controlButton} onPress={pauseRun}>
-                <LinearGradient
-                  colors={isPaused ? ['#10B981', '#059669'] : ['#F59E0B', '#D97706']}
-                  style={styles.controlButtonGradient}
-                >
-                  <Ionicons name={isPaused ? "play" : "pause"} size={24} color="white" />
-                </LinearGradient>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.controlButton} onPress={stopRun}>
-                <LinearGradient
-                  colors={['#EF4444', '#DC2626']}
-                  style={styles.controlButtonGradient}
-                >
-                  <Ionicons name="stop" size={24} color="white" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {!isRunning && (elapsedTime > 0 || distance > 0) && (
-            <TouchableOpacity style={styles.resetButton} onPress={resetRun}>
-              <LinearGradient
-                colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-                style={styles.resetButtonGradient}
-              >
-                <Ionicons name="refresh" size={20} color="#9CA3AF" />
-                <Text style={styles.resetButtonText}>RESET</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.statusContainer}>
-          <Text style={styles.statusText}>
-            {isRunning ? (isPaused ? "⏸️ En pause" : "🏃‍♂️ Course en cours") : "🎯 Prêt à courir"}
-          </Text>
-          {user && (
-            <Text style={styles.userStatusText}>
-              Connecté : {user.username}
-              {showTrail && trail.length > 0 && ` • ${trail.length} points`}
-              {followUser && " • Suivi GPS actif"}
-            </Text>
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        
+        <TouchableOpacity 
+          style={styles.centerButton}
+          onPress={() => {
+            setFollowUser(true);
+            if (location && mapRef.current) {
+              mapRef.current.animateToRegion({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              }, 1000);
+            }
+          }}
+        >
+          <Ionicons name="locate" size={24} color={followUser ? "#4CAF50" : "#666"} />
+        </TouchableOpacity>
+      </View>
+    </GeoDebugJoystick>
   );
 }
 
-// Écran d'authentification
-function AuthScreen({ navigation }) {
-  const [isLogin, setIsLogin] = useState(true);
-  const [authLoading, setAuthLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    username: '',
-    first_name: '',
-    last_name: '',
-    confirm_password: ''
-  });
+// Écran d'inscription
+function RegisterScreen({ navigation }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const validateForm = () => {
-    if (isLogin) {
-      if (!formData.email || !formData.password) {
-        Alert.alert('Erreur', 'Veuillez remplir tous les champs');
-        return false;
-      }
-    } else {
-      if (!formData.email || !formData.password || !formData.username || !formData.first_name) {
-        Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires');
-        return false;
-      }
-      if (formData.password !== formData.confirm_password) {
-        Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
-        return false;
-      }
-      if (formData.password.length < 6) {
-        Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
-        return false;
-      }
+  const handleRegister = async () => {
+    if (!email || !password || !username || !firstName || !lastName) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
     }
-    return true;
-  };
 
-  const handleSubmit = async () => {
-    if (!validateForm()) return;
+    if (password !== confirmPassword) {
+      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
+      return;
+    }
 
-    setAuthLoading(true);
+    if (password.length < 6) {
+      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
+
+    setIsLoading(true);
     
     try {
-      let result;
+      const result = await AuthService.register({
+        email,
+        password,
+        username,
+        first_name: firstName,
+        last_name: lastName
+      });
       
-      if (isLogin) {
-        result = await AuthService.login(formData.email, formData.password);
-      } else {
-        result = await AuthService.register({
-          email: formData.email,
-          password: formData.password,
-          username: formData.username,
-          first_name: formData.first_name,
-          last_name: formData.last_name
-        });
-      }
-
       if (result.success) {
-        resetForm();
-        navigation.replace('Main');
+        Alert.alert('Succès', 'Inscription réussie !', [
+          {
+            text: 'OK',
+            onPress: () => navigation.replace('Main')
+          }
+        ]);
       } else {
-        Alert.alert('Erreur', result.message || 'Une erreur est survenue');
+        Alert.alert('Erreur', result.message || 'Échec de l\'inscription');
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de se connecter au serveur');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      email: '',
-      password: '',
-      username: '',
-      first_name: '',
-      last_name: '',
-      confirm_password: ''
-    });
-  };
-
-  const switchMode = () => {
-    setIsLogin(!isLogin);
-    resetForm();
-  };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={styles.container}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <LinearGradient
-            colors={['#6366F1', '#8B5CF6', '#EC4899']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.header}
-          >
-            <Ionicons name="fitness" size={48} color="white" />
-            <Text style={styles.headerTitle}>RunTracker Pro</Text>
-            <Text style={styles.headerSubtitle}>
-              {isLogin ? 'Connectez-vous pour continuer' : 'Créez votre compte'}
-            </Text>
-          </LinearGradient>
-
-          <View style={styles.formContainer}>
-            <View style={styles.formCard}>
-              <LinearGradient
-                colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-                style={styles.formGradient}
-              >
-                <Text style={styles.formTitle}>
-                  {isLogin ? 'Connexion' : 'Inscription'}
-                </Text>
-
-                {!isLogin && (
-                  <>
-                    <View style={styles.inputContainer}>
-                      <Ionicons name="person-outline" size={20} color="#6366F1" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Nom d'utilisateur"
-                        placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                        value={formData.username}
-                        onChangeText={(value) => handleInputChange('username', value)}
-                        autoCapitalize="none"
-                      />
-                    </View>
-
-                    <View style={styles.inputRow}>
-                      <View style={[styles.inputContainer, styles.halfInput]}>
-                        <Ionicons name="person-outline" size={20} color="#6366F1" style={styles.inputIcon} />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Prénom"
-                          placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                          value={formData.first_name}
-                          onChangeText={(value) => handleInputChange('first_name', value)}
-                        />
-                      </View>
-
-                      <View style={[styles.inputContainer, styles.halfInput]}>
-                        <Ionicons name="person-outline" size={20} color="#6366F1" style={styles.inputIcon} />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Nom"
-                          placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                          value={formData.last_name}
-                          onChangeText={(value) => handleInputChange('last_name', value)}
-                        />
-                      </View>
-                    </View>
-                  </>
-                )}
-
-                <View style={styles.inputContainer}>
-                  <Ionicons name="mail-outline" size={20} color="#6366F1" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={formData.email}
-                    onChangeText={(value) => handleInputChange('email', value)}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#6366F1" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Mot de passe"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={formData.password}
-                    onChangeText={(value) => handleInputChange('password', value)}
-                    secureTextEntry={!showPassword}
-                  />
-                  <TouchableOpacity 
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={styles.passwordToggle}
-                  >
-                    <Ionicons 
-                      name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                      size={20} 
-                      color="rgba(255, 255, 255, 0.6)" 
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {!isLogin && (
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#6366F1" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Confirmer le mot de passe"
-                      placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                      value={formData.confirm_password}
-                      onChangeText={(value) => handleInputChange('confirm_password', value)}
-                      secureTextEntry={true}
-                    />
-                  </View>
-                )}
-
-                <TouchableOpacity 
-                  style={styles.submitButton} 
-                  onPress={handleSubmit}
-                  disabled={authLoading}
-                >
-                  <LinearGradient
-                    colors={['#10B981', '#059669']}
-                    style={styles.submitButtonGradient}
-                  >
-                    {authLoading ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <>
-                        <Ionicons name={isLogin ? "log-in" : "person-add"} size={20} color="white" />
-                        <Text style={styles.submitButtonText}>
-                          {isLogin ? 'SE CONNECTER' : 'S\'INSCRIRE'}
-                        </Text>
-                      </>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.switchButton} onPress={switchMode}>
-                  <Text style={styles.switchButtonText}>
-                    {isLogin 
-                      ? "Pas encore de compte ? S'inscrire" 
-                      : "Déjà un compte ? Se connecter"}
-                  </Text>
-                </TouchableOpacity>
-              </LinearGradient>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
-// Navigation principale
-export default function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      const authenticated = await AuthService.isAuthenticated();
-      setIsAuthenticated(authenticated);
-    } catch (error) {
-      console.error('Erreur auth check:', error);
-      setIsAuthenticated(false);
+      Alert.alert('Erreur', 'Erreur de connexion au serveur');
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isLoading) {
-    return (
+  return (
+    <LinearGradient
+      colors={['#1a1a2e', '#16213e', '#0f3460']}
+      style={styles.container}
+    >
+      <StatusBar barStyle="light-content" />
+      
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <LinearGradient
-            colors={['#6366F1', '#8B5CF6', '#EC4899']}
-            style={styles.loadingGradient}
+        <View style={styles.header}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
           >
-            <Ionicons name="fitness" size={48} color="white" />
-            <Text style={styles.loadingText}>RunTracker Pro</Text>
-            <ActivityIndicator size="large" color="white" style={{ marginTop: 20 }} />
-          </LinearGradient>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Inscription</Text>
         </View>
-      </SafeAreaView>
-    );
-  }
 
+        <ScrollView style={styles.registerForm} showsVerticalScrollIndicator={false}>
+          <View style={styles.inputContainer}>
+            <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Prénom"
+              placeholderTextColor="#666"
+              value={firstName}
+              onChangeText={setFirstName}
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Nom"
+              placeholderTextColor="#666"
+              value={lastName}
+              onChangeText={setLastName}
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="at-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Nom d'utilisateur"
+              placeholderTextColor="#666"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#666"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Mot de passe"
+              placeholderTextColor="#666"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeIcon}
+            >
+              <Ionicons
+                name={showPassword ? "eye-outline" : "eye-off-outline"}
+                size={20}
+                color="#666"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirmer mot de passe"
+              placeholderTextColor="#666"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.registerSubmitButton, isLoading && styles.buttonDisabled]}
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
+            <LinearGradient
+              colors={isLoading ? ['#666', '#555'] : ['#4CAF50', '#45a049']}
+              style={styles.buttonGradient}
+            >
+              {isLoading ? (
+                <Text style={styles.buttonText}>Inscription...</Text>
+              ) : (
+                <>
+                  <Ionicons name="person-add-outline" size={20} color="white" />
+                  <Text style={styles.buttonText}>S'inscrire</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.loginLink}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.loginLinkText}>
+              Déjà un compte ? 
+              <Text style={styles.linkHighlight}> Se connecter</Text>
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
+
+// Navigation Stack complet avec SplashScreen
+export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator 
+        initialRouteName="Splash"
         screenOptions={{ headerShown: false }}
-        initialRouteName={isAuthenticated ? "Main" : "Auth"}
       >
-        <Stack.Screen name="Auth" component={AuthScreen} />
+        <Stack.Screen name="Splash" component={SplashScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="Main" component={MainRunScreen} />
         <Stack.Screen name="RunHistory" component={RunHistoryScreen} />
       </Stack.Navigator>
@@ -1124,416 +777,377 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F0F23',
   },
+  
+  // Permission géolocalisation
+  permissionContainer: {
+    flex: 1,
+  },
+  permissionGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  permissionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    marginTop: 30,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  permissionText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 40,
+  },
+  permissionButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+    elevation: 5,
+  },
+  permissionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
+  // Chargement géolocalisation
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingGradient: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-    borderRadius: 20,
+    backgroundColor: '#1a1a2e',
   },
   loadingText: {
-    fontSize: 24,
-    fontWeight: '700',
     color: 'white',
-    marginTop: 16,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  header: {
-    paddingTop: 10,
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: 'white',
-    letterSpacing: -0.5,
-    marginTop: 16,
-  },
-  headerSubtitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 8,
+    marginTop: 20,
     textAlign: 'center',
   },
-  userWelcome: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginRight: 12,
-  },
-  historyButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 8,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 8,
-    borderRadius: 12,
-  },
-  trailControlsContainer: {
+  
+  // Header utilisateur
+  userHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: 50,
     paddingBottom: 10,
-  },
-  gpsIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  gpsDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  gpsText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'white',
-  },
-  trailControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  trailButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 15,
-    marginLeft: 8,
-  },
-  trailButtonText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginLeft: 4,
-  },
-  // 🔧 NOUVEAU: Styles pour le bouton de centrage
-  centerButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     position: 'absolute',
-    bottom: 20,
-    right: 20,
-    borderRadius: 25,
-    overflow: 'hidden',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+  },
+  welcomeText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
+  // Carte
+  map: {
+    flex: 1,
+  },
+  userMarker: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#4CAF50',
+    borderWidth: 3,
+    borderColor: 'white',
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
-  centerButtonGradient: {
+  userMarkerInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'white',
+    position: 'absolute',
+    top: 3,
+    left: 3,
+  },
+  
+  // AI Trainer
+  trainerButton: {
+    position: 'absolute',
+    top: 110,
+    left: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    zIndex: 1000,
+    elevation: 5,
+  },
+  trainerButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  trainerText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 11,
+    marginLeft: 4,
+  },
+  trainerPanel: {
+    position: 'absolute',
+    top: 150,
+    left: 20,
+    right: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    zIndex: 999,
+    elevation: 10,
+  },
+  trainerPanelGradient: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  trainerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  trainerTitle: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  statsSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  statText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+  },
+  messagesSection: {
+    marginBottom: 16,
+  },
+  messageItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  messageText: {
+    color: 'white',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  messageTime: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10,
+  },
+  floatingMessage: {
+    position: 'absolute',
+    top: height * 0.25,
+    left: 20,
+    right: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    zIndex: 998,
+  },
+  floatingMessageGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  floatingMessageText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
+  
+  // Interface course
+  runInterface: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingTop: 20,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  stat: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12,
+    marginBottom: 5,
+  },
+  statValue: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  controlsContainer: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  startButton: {
+    backgroundColor: '#4CAF50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 30,
+    elevation: 5,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  runningControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+  },
+  controlButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+  },
+  pauseButton: {
+    backgroundColor: '#FF9800',
+  },
+  stopButton: {
+    backgroundColor: '#f44336',
+  },
+  historyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  historyButtonText: {
+    color: 'white',
+    fontSize: 14,
+    marginLeft: 5,
+  },
+  centerButton: {
+    position: 'absolute',
+    top: 160,
+    right: 20,
     width: 50,
     height: 50,
     borderRadius: 25,
-    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
   },
-  formContainer: {
-    flex: 1,
+  
+  // Styles Register
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
   },
-  formCard: {
-    borderRadius: 20,
-    overflow: 'hidden',
+  backButton: {
+    padding: 5,
   },
-  formGradient: {
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+  headerTitle: {
     color: 'white',
-    textAlign: 'center',
-    marginBottom: 32,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginLeft: 20,
+  },
+  registerForm: {
+    flex: 1,
+    paddingHorizontal: 30,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,
     marginBottom: 16,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  halfInput: {
-    flex: 0.48,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   inputIcon: {
     marginRight: 12,
   },
   input: {
     flex: 1,
+    height: 50,
     color: 'white',
     fontSize: 16,
-    paddingVertical: 16,
   },
-  passwordToggle: {
-    padding: 4,
+  eyeIcon: {
+    padding: 5,
   },
-  submitButton: {
+  registerSubmitButton: {
     borderRadius: 12,
     overflow: 'hidden',
-    marginTop: 8,
+    elevation: 3,
+    marginTop: 20,
+    marginBottom: 20,
   },
-  submitButtonGradient: {
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 15,
+    paddingHorizontal: 30,
   },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: 'white',
-    marginLeft: 8,
-    letterSpacing: 0.5,
-  },
-  switchButton: {
-    marginTop: 24,
+  loginLink: {
+    padding: 15,
     alignItems: 'center',
   },
-  switchButtonText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-  },
-  mapContainer: {
-    height: height * 0.35,
-    margin: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  map: {
-    flex: 1,
-  },
-  speedOverlay: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  speedOverlayGradient: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  speedOverlayLabel: {
-    fontSize: 10,
-    fontWeight: '600',
+  loginLinkText: {
     color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 2,
-  },
-  speedOverlayValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: 'white',
-  },
-  speedOverlayUnit: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  trailIndicator: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  trailIndicatorGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  trailIndicatorText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: 'white',
-    marginLeft: 6,
   },
-  startMarker: {
-    backgroundColor: '#10B981',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'white',
-  },
-  finishMarker: {
-    backgroundColor: '#EF4444',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'white',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    marginTop: 8,
-  },
-  statCard: {
-    width: (width - 48) / 2,
-    height: 120,
-    margin: 4,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  statCardGradient: {
-    flex: 1,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 8,
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: 'white',
-    textAlign: 'center',
-  },
-  statUnit: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 2,
-  },
-  controlsContainer: {
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 24,
-  },
-  startButton: {
-    borderRadius: 40,
-    overflow: 'hidden',
-  },
-  startButtonGradient: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  startButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: 'white',
-    marginTop: 8,
-    letterSpacing: 0.5,
-  },
-  runningControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '70%',
-  },
-  controlButton: {
-    borderRadius: 30,
-    overflow: 'hidden',
-    margin: 8,
-  },
-  controlButtonGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resetButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    marginTop: 16,
-  },
-  resetButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  resetButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9CA3AF',
-    marginLeft: 8,
-    letterSpacing: 0.5,
-  },
-  statusContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingBottom: 40,
-  },
-  statusText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-  },
-  userStatusText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.5)',
-    textAlign: 'center',
-    marginTop: 4,
+  linkHighlight: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
   },
 });
