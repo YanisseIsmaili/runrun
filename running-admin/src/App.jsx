@@ -1,4 +1,4 @@
-// running-admin/src/App.jsx
+// running-admin/src/App.jsx - AVEC INTÉGRATION API SELECTORS
 import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
@@ -12,7 +12,7 @@ import Settings from './pages/Settings'
 import NotFound from './pages/NotFound'
 import ErrorBoundary from './components/ErrorBoundary'
 import Stats from './pages/Stats'
-import Parcours from './pages/Parcours'
+import ParcoursPage from './pages/Parcours'
 import AdminRoute from './components/AdminRoute'
 import DebugPanel from './components/DebugPanel'
   
@@ -78,7 +78,7 @@ function App() {
             path="routes" 
             element={
               <AdminRoute>
-                <Parcours />
+                <ParcoursPage />
               </AdminRoute>
             } 
           />
