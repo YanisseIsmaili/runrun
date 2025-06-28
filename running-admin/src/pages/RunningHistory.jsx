@@ -41,6 +41,94 @@ const useDebugIntegration = () => {
   return { addDebugLog }
 }
 
+// Composant de squelette pour les éléments de la page
+const SkeletonLoader = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* En-tête skeleton */}
+        <div className="text-center animate-fade-in">
+          <div className="skeleton h-10 w-96 mx-auto mb-4"></div>
+          <div className="skeleton h-6 w-128 mx-auto"></div>
+        </div>
+
+        {/* Barre de recherche skeleton */}
+        <div className="glass-green rounded-2xl shadow-xl p-6 animate-slide-in-left">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="skeleton h-12 flex-1"></div>
+            <div className="flex gap-3">
+              <div className="skeleton h-12 w-24"></div>
+              <div className="skeleton h-12 w-32"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Statistiques skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-in-right">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="glass-green rounded-2xl p-6 shadow-xl">
+              <div className="flex items-center">
+                <div className="skeleton h-14 w-14 rounded-xl mr-4"></div>
+                <div className="flex-1">
+                  <div className="skeleton h-4 w-20 mb-2"></div>
+                  <div className="skeleton h-8 w-16"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tableau skeleton */}
+        <div className="glass rounded-3xl shadow-2xl overflow-hidden animate-fade-in">
+          <div className="p-6">
+            {/* Header du tableau */}
+            <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl p-4 mb-4">
+              <div className="grid grid-cols-8 gap-4">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="skeleton h-4"></div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Lignes du tableau */}
+            {[...Array(8)].map((_, rowIndex) => (
+              <div 
+                key={rowIndex} 
+                className="grid grid-cols-8 gap-4 p-4 border-b border-emerald-100 animate-fade-in"
+                style={{ animationDelay: `${rowIndex * 100}ms` }}
+              >
+                {/* Utilisateur */}
+                <div className="flex items-center">
+                  <div className="skeleton h-12 w-12 rounded-full mr-3"></div>
+                  <div>
+                    <div className="skeleton h-4 w-24 mb-1"></div>
+                    <div className="skeleton h-3 w-16"></div>
+                  </div>
+                </div>
+                
+                {/* Autres colonnes */}
+                {[...Array(6)].map((_, colIndex) => (
+                  <div key={colIndex}>
+                    <div className="skeleton h-4 w-full mb-1"></div>
+                    <div className="skeleton h-3 w-3/4"></div>
+                  </div>
+                ))}
+                
+                {/* Actions */}
+                <div className="flex justify-end space-x-2">
+                  <div className="skeleton h-6 w-6 rounded"></div>
+                  <div className="skeleton h-6 w-6 rounded"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const RunningHistory = () => {
   const { isConfigured, selectedApi } = useApiConfig()
   const { addDebugLog } = useDebugIntegration()
@@ -49,6 +137,9 @@ const RunningHistory = () => {
   const [filteredRuns, setFilteredRuns] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  
+  // État pour le préchargement
+  const [isPreloading, setIsPreloading] = useState(true)
   
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState({
@@ -72,19 +163,34 @@ const RunningHistory = () => {
     total: 0
   })
 
-  useEffect(() => {
-    addDebugLog('🚀 Initialisation RunningHistory')
-    if (isConfigured) {
-      addDebugLog(`✅ API configurée: ${selectedApi?.name || 'Inconnue'} (${selectedApi?.url || 'URL manquante'})`)
-      fetchRuns()
-    } else {
-      addDebugLog('❌ API non configurée - impossible de charger l\'historique', 'error')
-    }
-  }, [isConfigured, pagination.page])
+  // Simulation du préchargement
+  const simulatePreloading = async () => {
+    addDebugLog('🎬 Début du préchargement')
+    
+    // Délai pour montrer le skeleton
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    setIsPreloading(false)
+    addDebugLog('✨ Préchargement terminé')
+  }
 
   useEffect(() => {
-    applyFilters()
-  }, [runs, searchTerm, filters])
+    addDebugLog('🚀 Initialisation RunningHistory avec préchargement')
+    simulatePreloading()
+  }, [])
+
+  useEffect(() => {
+    if (!isPreloading && isConfigured) {
+      addDebugLog(`✅ API configurée: ${selectedApi?.name || 'Inconnue'} (${selectedApi?.url || 'URL manquante'})`)
+      fetchRuns()
+    }
+  }, [isPreloading, isConfigured, pagination.page])
+
+  useEffect(() => {
+    if (!isPreloading) {
+      applyFilters()
+    }
+  }, [runs, searchTerm, filters, isPreloading])
 
   const fetchRuns = async () => {
     if (!isConfigured) {
@@ -260,12 +366,12 @@ const RunningHistory = () => {
     if (filters.minDistance) {
       const originalCount = filtered.length
       filtered = filtered.filter(run => run.distance >= parseFloat(filters.minDistance))
-      addDebugLog(`📏 Filtrage distance min ${filters.minDistance}km: ${originalCount} → ${filtered.length} courses`)
+      addDebugLog(`📏 Filtrage distance min ${filters.minDistance}m: ${originalCount} → ${filtered.length} courses`)
     }
     if (filters.maxDistance) {
       const originalCount = filtered.length
       filtered = filtered.filter(run => run.distance <= parseFloat(filters.maxDistance))
-      addDebugLog(`📏 Filtrage distance max ${filters.maxDistance}km: ${originalCount} → ${filtered.length} courses`)
+      addDebugLog(`📏 Filtrage distance max ${filters.maxDistance}m: ${originalCount} → ${filtered.length} courses`)
     }
 
     filtered.sort((a, b) => {
@@ -369,6 +475,11 @@ const RunningHistory = () => {
     avgDistance: filteredRuns.length > 0 ? filteredRuns.reduce((acc, run) => acc + (run.distance || 0), 0) / filteredRuns.length : 0
   }
 
+  // Affichage du skeleton pendant le préchargement
+  if (isPreloading) {
+    return <SkeletonLoader />
+  }
+
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
@@ -389,6 +500,7 @@ const RunningHistory = () => {
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         
+        {/* En-tête */}
         <div className="text-center animate-fade-in">
           <h1 className="text-4xl font-bold text-emerald-800 mb-4 text-shadow-lg">
             Historique des Courses
@@ -398,6 +510,7 @@ const RunningHistory = () => {
           </p>
         </div>
 
+        {/* Barre de recherche et filtres */}
         <div className="glass-green rounded-2xl shadow-xl p-6 animate-slide-in-left">
           <div className="flex flex-col lg:flex-row gap-4 mb-4">
             <div className="flex-1 relative group">
@@ -414,26 +527,23 @@ const RunningHistory = () => {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`btn transition-all duration-300 ${
-                  showFilters 
-                    ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg' 
-                    : 'bg-white/80 text-emerald-700 hover:bg-emerald-50'
-                }`}
+                className={`btn ${showFilters ? 'btn-primary' : 'btn-secondary'}`}
               >
-                <FunnelIcon className="h-5 w-5" />
+                <FunnelIcon className="h-5 w-5 mr-2" />
                 Filtres
               </button>
               <button
                 onClick={() => fetchRuns()}
                 disabled={loading}
-                className="btn bg-white/80 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 transition-all duration-300"
+                className="btn btn-secondary"
               >
-                <ArrowPathIcon className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+                <ArrowPathIcon className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Actualiser
               </button>
             </div>
           </div>
 
+          {/* Panneau de filtres */}
           {showFilters && (
             <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 border border-emerald-200 animate-scale-in">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -452,7 +562,7 @@ const RunningHistory = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-emerald-800">Distance min (km)</label>
+                  <label className="block text-sm font-semibold text-emerald-800">Distance min (m)</label>
                   <input
                     type="number"
                     step="0.1"
@@ -465,7 +575,7 @@ const RunningHistory = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-emerald-800">Distance max (km)</label>
+                  <label className="block text-sm font-semibold text-emerald-800">Distance max (m)</label>
                   <input
                     type="number"
                     step="0.1"
@@ -537,7 +647,7 @@ const RunningHistory = () => {
                 
                 <button
                   onClick={resetFilters}
-                  className="btn bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="btn btn-secondary"
                 >
                   Réinitialiser
                 </button>
@@ -546,6 +656,7 @@ const RunningHistory = () => {
           )}
         </div>
 
+        {/* Messages d'erreur */}
         {error && (
           <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-2xl p-6 animate-scale-in">
             <div className="flex items-center">
@@ -558,6 +669,7 @@ const RunningHistory = () => {
           </div>
         )}
 
+        {/* Statistiques globales */}
         {filteredRuns.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-in-right">
             <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
@@ -579,7 +691,7 @@ const RunningHistory = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-semibold text-emerald-600">Distance Totale</p>
-                  <p className="text-3xl font-bold text-emerald-800">{stats.totalDistance.toFixed(1)} km</p>
+                  <p className="text-3xl font-bold text-emerald-800">{stats.totalDistance.toFixed(1)} m</p>
                 </div>
               </div>
             </div>
@@ -603,13 +715,14 @@ const RunningHistory = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-semibold text-emerald-600">Distance Moyenne</p>
-                  <p className="text-3xl font-bold text-emerald-800">{stats.avgDistance.toFixed(1)} km</p>
+                  <p className="text-3xl font-bold text-emerald-800">{stats.avgDistance.toFixed(1)} m</p>
                 </div>
               </div>
             </div>
           </div>
         )}
 
+        {/* Tableau des courses */}
         <div className="glass rounded-3xl shadow-2xl overflow-hidden animate-fade-in">
           {loading ? (
             <div className="p-20 text-center">
@@ -666,7 +779,7 @@ const RunningHistory = () => {
                   {filteredRuns.map((run, index) => (
                     <tr 
                       key={run.id} 
-                      className="hover:bg-gradient-to-r hover:from-emerald-50 hover:to-green-50 transition-all duration-300 group"
+                      className="hover:bg-gradient-to-r hover:from-emerald-50 hover:to-green-50 transition-all duration-300 group animate-fade-in"
                       style={{ animationDelay: `${index * 50}ms` }}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -709,7 +822,7 @@ const RunningHistory = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-semibold text-gray-900">
-                          {(run.distance || 0).toFixed(2)} km
+                          {(run.distance || 0).toFixed(2)} m
                         </div>
                         {run.elevation_gain > 0 && (
                           <div className="text-sm text-emerald-600 flex items-center">
@@ -749,7 +862,7 @@ const RunningHistory = () => {
                         <div className="flex justify-end space-x-3">
                           <button
                             onClick={() => handleRunDetail(run)}
-                            className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 hover:scale-110 transition-all duration-300"
+                            className="text-primary-600 hover:text-primary-900 transition-colors duration-200 hover:scale-110"
                             title="Voir les détails"
                           >
                             <EyeIcon className="h-4 w-4" />
@@ -759,7 +872,7 @@ const RunningHistory = () => {
                               setSelectedRun(run)
                               setShowDeleteModal(true)
                             }}
-                            className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 hover:scale-110 transition-all duration-300"
+                            className="text-red-600 hover:text-red-900 transition-colors duration-200 hover:scale-110"
                             title="Supprimer"
                           >
                             <TrashIcon className="h-4 w-4" />
@@ -774,6 +887,7 @@ const RunningHistory = () => {
           )}
         </div>
 
+        {/* Pagination */}
         {pagination.pages > 1 && (
           <div className="glass-green rounded-2xl p-6 shadow-xl animate-slide-in-right">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -782,29 +896,32 @@ const RunningHistory = () => {
                 {Math.min(pagination.page * pagination.per_page, pagination.total)} sur{' '}
                 {pagination.total} courses
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                  disabled={pagination.page === 1}
-                  className="px-4 py-2 bg-white/80 text-emerald-700 rounded-xl font-medium hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                >
-                  Précédent
-                </button>
-                <span className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-xl font-bold shadow-lg">
-                  {pagination.page} / {pagination.pages}
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-700">
+                  Page {pagination.page} sur {pagination.pages}
                 </span>
-                <button
-                  onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                  disabled={pagination.page === pagination.pages}
-                  className="px-4 py-2 bg-white/80 text-emerald-700 rounded-xl font-medium hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                >
-                  Suivant
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                    disabled={pagination.page === 1}
+                    className="btn btn-sm btn-secondary"
+                  >
+                    Précédent
+                  </button>
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                    disabled={pagination.page === pagination.pages}
+                    className="btn btn-sm btn-secondary"
+                  >
+                    Suivant
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
+        {/* Modal de détails de course */}
         {showDetailModal && selectedRun && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto animate-scale-in">
@@ -853,7 +970,7 @@ const RunningHistory = () => {
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="font-medium text-gray-600">Distance:</span>
-                        <span className="text-gray-900 font-semibold">{selectedRun.distance?.toFixed(2)} km</span>
+                        <span className="text-gray-900 font-semibold">{selectedRun.distance?.toFixed(2)} m</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="font-medium text-gray-600">Durée:</span>
@@ -914,7 +1031,7 @@ const RunningHistory = () => {
               <div className="bg-gray-50 px-8 py-6 rounded-b-3xl flex justify-end space-x-4">
                 <button
                   onClick={() => setShowDetailModal(false)}
-                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-all duration-300"
+                  className="btn btn-secondary"
                 >
                   Fermer
                 </button>
@@ -924,7 +1041,7 @@ const RunningHistory = () => {
                     setSelectedRun(selectedRun)
                     setShowDeleteModal(true)
                   }}
-                  className="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-medium hover:from-red-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="btn btn-danger"
                 >
                   Supprimer
                 </button>
@@ -933,6 +1050,7 @@ const RunningHistory = () => {
           </div>
         )}
 
+        {/* Modal de confirmation de suppression */}
         {showDeleteModal && selectedRun && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-scale-in">
@@ -958,7 +1076,7 @@ const RunningHistory = () => {
                       : selectedRun.user?.username || 'Utilisateur inconnu'
                     }
                   </span>{' '}
-                  ({(selectedRun.distance || 0).toFixed(2)} km) ?
+                  ({(selectedRun.distance || 0).toFixed(2)} m) ?
                 </p>
                 <p className="text-sm text-red-600 font-medium">
                   Cette action est irréversible.
@@ -971,13 +1089,13 @@ const RunningHistory = () => {
                     setShowDeleteModal(false)
                     setSelectedRun(null)
                   }}
-                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-all duration-300"
+                  className="btn btn-secondary"
                 >
                   Annuler
                 </button>
                 <button
                   onClick={() => handleDeleteRun(selectedRun.id)}
-                  className="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-medium hover:from-red-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="btn btn-danger"
                 >
                   Supprimer
                 </button>

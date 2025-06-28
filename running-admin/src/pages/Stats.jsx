@@ -1,4 +1,4 @@
-// running-admin/src/pages/Stats.jsx - Fixed version
+// running-admin/src/pages/Stats.jsx - Avec système de préchargement
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
@@ -10,8 +10,118 @@ import {
   BuildingOfficeIcon,
   ChartBarIcon,
   ArrowPathIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  TrophyIcon,
+  FireIcon,
+  HeartIcon
 } from '@heroicons/react/24/outline'
+
+// Composant de squelette pour la page de statistiques
+const StatsSkeletonLoader = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* En-tête skeleton */}
+        <div className="glass-green rounded-2xl p-6 shadow-xl animate-fade-in">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <div className="skeleton h-8 w-48 mb-2"></div>
+              <div className="skeleton h-5 w-96"></div>
+            </div>
+            <div className="skeleton h-10 w-32"></div>
+          </div>
+        </div>
+
+        {/* Statistiques principales skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <div 
+              key={i} 
+              className="glass-green rounded-2xl p-6 shadow-xl animate-fade-in"
+              style={{ animationDelay: `${i * 150}ms` }}
+            >
+              <div className="flex items-center">
+                <div className="skeleton h-12 w-12 rounded-xl mr-4"></div>
+                <div className="flex-1">
+                  <div className="skeleton h-4 w-24 mb-2"></div>
+                  <div className="skeleton h-8 w-16 mb-1"></div>
+                  <div className="skeleton h-3 w-20"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Graphiques et tendances skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Graphique principal */}
+          <div className="glass rounded-2xl p-6 shadow-xl animate-slide-in-left" style={{ animationDelay: '400ms' }}>
+            <div className="skeleton h-6 w-48 mb-6"></div>
+            <div className="space-y-4">
+              {[...Array(4)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className="flex items-center space-x-4 animate-fade-in"
+                  style={{ animationDelay: `${600 + i * 100}ms` }}
+                >
+                  <div className="skeleton h-4 w-20"></div>
+                  <div className="flex-1">
+                    <div className="skeleton h-3 w-full"></div>
+                  </div>
+                  <div className="skeleton h-4 w-12"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Activité récente skeleton */}
+          <div className="glass rounded-2xl p-6 shadow-xl animate-slide-in-right" style={{ animationDelay: '500ms' }}>
+            <div className="skeleton h-6 w-40 mb-6"></div>
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className="flex items-center space-x-4 p-3 rounded-xl border border-emerald-100 animate-fade-in"
+                  style={{ animationDelay: `${700 + i * 120}ms` }}
+                >
+                  <div className="skeleton h-10 w-10 rounded-full"></div>
+                  <div className="flex-1">
+                    <div className="skeleton h-4 w-32 mb-1"></div>
+                    <div className="skeleton h-3 w-24"></div>
+                  </div>
+                  <div className="skeleton h-6 w-16"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Actions rapides skeleton */}
+        <div className="glass-green rounded-2xl p-6 shadow-xl animate-scale-in" style={{ animationDelay: '800ms' }}>
+          <div className="skeleton h-6 w-32 mb-6"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div 
+                key={i} 
+                className="p-4 border border-emerald-200 rounded-xl animate-fade-in"
+                style={{ animationDelay: `${1000 + i * 150}ms` }}
+              >
+                <div className="flex items-center">
+                  <div className="skeleton h-8 w-8 rounded mr-3"></div>
+                  <div className="flex-1">
+                    <div className="skeleton h-4 w-32 mb-1"></div>
+                    <div className="skeleton h-3 w-24"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const Stats = () => {
   const [stats, setStats] = useState({
@@ -27,37 +137,78 @@ const Stats = () => {
     distance_this_month: 0
   })
   
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  
+  // État pour le préchargement
+  const [isPreloading, setIsPreloading] = useState(true)
+
+  // Simulation du préchargement
+  const simulatePreloading = async () => {
+    console.log('🎬 Début du préchargement Stats')
+    
+    // Délai pour montrer le skeleton
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    setIsPreloading(false)
+    console.log('✨ Préchargement Stats terminé')
+  }
 
   useEffect(() => {
-    fetchStats()
+    console.log('🚀 Initialisation Stats avec préchargement')
+    simulatePreloading()
   }, [])
+
+  useEffect(() => {
+    if (!isPreloading) {
+      fetchStats()
+    }
+  }, [isPreloading])
 
   const fetchStats = async () => {
     setLoading(true)
     setError(null)
     
     try {
-      const response = await api.admin.getStats()
-      
-      if (response.data.success) {
-        const statsData = response.data.data
-        const sanitizedStats = {
-          total_users: Number(statsData.total_users) || 0,
-          active_users: Number(statsData.active_users) || 0,
-          total_runs: Number(statsData.total_runs) || 0,
-          total_distance: Number(statsData.total_distance) || 0,
-          total_routes: Number(statsData.total_routes) || 0,
-          active_routes: Number(statsData.active_routes) || 0,
-          average_pace: Number(statsData.average_pace) || 0,
-          new_users_this_month: Number(statsData.new_users_this_month) || 0,
-          runs_this_month: Number(statsData.runs_this_month) || 0,
-          distance_this_month: Number(statsData.distance_this_month) || 0
+      // Tentative d'appel API réel
+      try {
+        const response = await api.admin.getStats()
+        
+        if (response.data.success) {
+          const statsData = response.data.data
+          const sanitizedStats = {
+            total_users: Number(statsData.total_users) || 0,
+            active_users: Number(statsData.active_users) || 0,
+            total_runs: Number(statsData.total_runs) || 0,
+            total_distance: Number(statsData.total_distance) || 0,
+            total_routes: Number(statsData.total_routes) || 0,
+            active_routes: Number(statsData.active_routes) || 0,
+            average_pace: Number(statsData.average_pace) || 0,
+            new_users_this_month: Number(statsData.new_users_this_month) || 0,
+            runs_this_month: Number(statsData.runs_this_month) || 0,
+            distance_this_month: Number(statsData.distance_this_month) || 0
+          }
+          setStats(sanitizedStats)
+        } else {
+          throw new Error(response.data.message || 'Erreur API')
         }
-        setStats(sanitizedStats)
-      } else {
-        throw new Error(response.data.message || 'Erreur API')
+      } catch (apiError) {
+        console.warn('⚠️ API indisponible, utilisation de données simulées')
+        // Fallback vers des données simulées
+        const mockStats = {
+          total_users: 247,
+          active_users: 183,
+          total_runs: 1456,
+          total_distance: 18750.5,
+          total_routes: 28,
+          active_routes: 22,
+          average_pace: 5.25,
+          new_users_this_month: 34,
+          runs_this_month: 298,
+          distance_this_month: 3890.2
+        }
+        setStats(mockStats)
+        setError('Mode simulation - API indisponible')
       }
       
     } catch (err) {
@@ -71,7 +222,7 @@ const Stats = () => {
   const formatDistance = (distance) => {
     const numDistance = Number(distance) || 0
     if (numDistance >= 1000) {
-      return `${(numDistance / 1000).toFixed(1)}k km`
+      return `${(numDistance / 1000).toFixed(1)} km`
     }
     return `${Math.round(numDistance)} km`
   }
@@ -92,65 +243,56 @@ const Stats = () => {
     return Math.min(100, Math.max(0, (numValue / numTotal) * 100))
   }
 
-  const StatCard = ({ title, value, subValue, icon: Icon, iconColor, trend }) => (
-    <div className="bg-white rounded-lg shadow border border-gray-200">
-      <div className="p-6">
-        <div className="flex items-center">
-          <div className={`flex-shrink-0 p-3 rounded-lg ${iconColor}`}>
-            <Icon className="h-6 w-6" />
-          </div>
-          <div className="ml-4 flex-1 min-w-0">
-            <h3 className="text-sm font-medium text-gray-500 truncate">{title}</h3>
-            <div className="flex items-baseline">
-              <p className="text-2xl font-semibold text-gray-900">{value}</p>
-              {trend && (
-                <span className="ml-2 text-sm font-medium text-green-600 flex-shrink-0">
-                  {trend}
-                </span>
-              )}
-            </div>
-            {subValue && (
-              <p className="text-sm text-gray-600 truncate">{subValue}</p>
+  const StatCard = ({ title, value, subValue, icon: Icon, bgGradient, trend, delay = "0ms" }) => (
+    <div 
+      className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group animate-fade-in"
+      style={{ animationDelay: delay }}
+    >
+      <div className="flex items-center">
+        <div className={`p-3 rounded-xl ${bgGradient} text-white group-hover:scale-110 transition-transform duration-300`}>
+          <Icon className="h-8 w-8" />
+        </div>
+        <div className="ml-4 flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-semibold text-emerald-600 truncate">{title}</h3>
+            {trend && (
+              <span className="text-xs font-medium text-green-600 flex-shrink-0">
+                {trend}
+              </span>
             )}
           </div>
+          <p className="text-2xl font-bold text-emerald-800">{value}</p>
+          {subValue && (
+            <p className="text-sm text-emerald-600 truncate">{subValue}</p>
+          )}
         </div>
       </div>
     </div>
   )
 
-  if (loading) {
-    return (
-      <div className="p-6">
-        <div className="flex justify-center items-center h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Chargement des statistiques...</p>
-          </div>
-        </div>
-      </div>
-    )
+  // Affichage du skeleton pendant le préchargement
+  if (isPreloading) {
+    return <StatsSkeletonLoader />
   }
 
-  if (error) {
+  if (error && !stats.total_users) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-start">
-            <ExclamationTriangleIcon className="h-5 w-5 text-red-400 mt-0.5 mr-3 flex-shrink-0" />
-            <div className="flex-1">
-              <h3 className="text-sm font-medium text-red-800 mb-2">
-                Erreur de chargement des statistiques
-              </h3>
-              <p className="text-sm text-red-700 mb-3">{error}</p>
-              <button 
-                onClick={fetchStats}
-                disabled={loading}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-              >
-                <ArrowPathIcon className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-                Réessayer
-              </button>
-            </div>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="glass rounded-2xl p-8 shadow-xl text-center">
+            <ExclamationTriangleIcon className="h-16 w-16 text-red-500 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
+              Erreur de chargement des statistiques
+            </h3>
+            <p className="text-gray-700 mb-6">{error}</p>
+            <button 
+              onClick={fetchStats}
+              disabled={loading}
+              className="btn btn-primary"
+            >
+              <ArrowPathIcon className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Réessayer
+            </button>
           </div>
         </div>
       </div>
@@ -158,189 +300,238 @@ const Stats = () => {
   }
 
   return (
-    <div className="p-6 space-y-8">
-      {/* En-tête */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Statistiques</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Données en temps réel de l'application
-          </p>
-        </div>
-        <button 
-          onClick={fetchStats}
-          disabled={loading}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          <ArrowPathIcon className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Actualiser
-        </button>
-      </div>
-
-      {/* Statistiques principales */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard 
-          title="Utilisateurs totaux" 
-          value={stats.total_users.toLocaleString()} 
-          subValue={`${stats.active_users} actifs`}
-          icon={UsersIcon} 
-          iconColor="bg-blue-50 text-blue-600"
-          trend={stats.new_users_this_month > 0 ? `+${stats.new_users_this_month}` : null}
-        />
-        <StatCard 
-          title="Courses totales" 
-          value={stats.total_runs.toLocaleString()} 
-          subValue={`${stats.runs_this_month} ce mois-ci`}
-          icon={ClockIcon} 
-          iconColor="bg-green-50 text-green-600"
-        />
-        <StatCard 
-          title="Distance totale" 
-          value={formatDistance(stats.total_distance)} 
-          subValue={`${formatDistance(stats.distance_this_month)} ce mois-ci`}
-          icon={MapPinIcon} 
-          iconColor="bg-purple-50 text-purple-600"
-        />
-        <StatCard 
-          title="Routes actives" 
-          value={stats.active_routes.toLocaleString()} 
-          subValue={`${stats.total_routes} au total`}
-          icon={BuildingOfficeIcon} 
-          iconColor="bg-orange-50 text-orange-600"
-        />
-      </div>
-
-      {/* Métriques calculées */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Performance</h3>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Allure moyenne</span>
-                <span className="font-semibold">{formatPace(stats.average_pace)} min/km</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Distance par course</span>
-                <span className="font-semibold">
-                  {stats.total_runs > 0 ? (stats.total_distance / stats.total_runs).toFixed(1) : '0.0'} km
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Courses par utilisateur</span>
-                <span className="font-semibold">
-                  {stats.total_users > 0 ? (stats.total_runs / stats.total_users).toFixed(1) : '0.0'}
-                </span>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* En-tête */}
+        <div className="glass-green rounded-2xl p-6 shadow-xl animate-fade-in">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-emerald-800 text-shadow-lg">Statistiques</h1>
+              <p className="text-emerald-600 mt-2">
+                Données en temps réel de l'application Running
+              </p>
             </div>
+            <button 
+              onClick={fetchStats}
+              disabled={loading}
+              className="btn btn-secondary"
+            >
+              <ArrowPathIcon className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Actualiser
+            </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Activité mensuelle</h3>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Nouvelles courses</span>
-                <span className="font-semibold text-green-600">+{stats.runs_this_month}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Distance parcourue</span>
-                <span className="font-semibold text-green-600">+{formatDistance(stats.distance_this_month)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Nouveaux utilisateurs</span>
-                <span className="font-semibold text-green-600">+{stats.new_users_this_month}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Taux d'activité</h3>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
+        {/* Message d'erreur */}
+        {error && (
+          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-2xl p-6 animate-scale-in">
+            <div className="flex items-center">
+              <ExclamationTriangleIcon className="h-6 w-6 text-yellow-500 mr-4" />
               <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-gray-600">Utilisateurs actifs</span>
-                  <span className="text-sm font-medium">
-                    {calculatePercentage(stats.active_users, stats.total_users).toFixed(1)}%
-                  </span>
+                <h3 className="text-lg font-semibold text-yellow-800">Information</h3>
+                <p className="text-yellow-700 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Statistiques principales */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            title="Utilisateurs totaux"
+            value={stats.total_users.toLocaleString()}
+            subValue={`${stats.active_users} actifs`}
+            icon={UsersIcon}
+            bgGradient="bg-gradient-to-r from-blue-500 to-cyan-500"
+            trend={stats.new_users_this_month > 0 ? `+${stats.new_users_this_month} ce mois` : null}
+            delay="0ms"
+          />
+          
+          <StatCard
+            title="Courses totales"
+            value={stats.total_runs.toLocaleString()}
+            subValue={`${stats.runs_this_month} ce mois`}
+            icon={TrophyIcon}
+            bgGradient="bg-gradient-to-r from-green-500 to-emerald-500"
+            trend={stats.runs_this_month > 0 ? `+${stats.runs_this_month}` : null}
+            delay="150ms"
+          />
+          
+          <StatCard
+            title="Distance totale"
+            value={formatDistance(stats.total_distance)}
+            subValue={`${formatDistance(stats.distance_this_month)} ce mois`}
+            icon={MapPinIcon}
+            bgGradient="bg-gradient-to-r from-purple-500 to-indigo-500"
+            delay="300ms"
+          />
+          
+          <StatCard
+            title="Allure moyenne"
+            value={`${formatPace(stats.average_pace)}/km`}
+            subValue="Toutes courses"
+            icon={ClockIcon}
+            bgGradient="bg-gradient-to-r from-orange-500 to-red-500"
+            delay="450ms"
+          />
+          
+          <StatCard
+            title="Parcours totaux"
+            value={stats.total_routes.toLocaleString()}
+            subValue={`${stats.active_routes} actifs`}
+            icon={BuildingOfficeIcon}
+            bgGradient="bg-gradient-to-r from-pink-500 to-rose-500"
+            delay="600ms"
+          />
+          
+          <StatCard
+            title="Taux d'activité"
+            value={`${Math.round(calculatePercentage(stats.active_users, stats.total_users))}%`}
+            subValue="Utilisateurs actifs"
+            icon={ArrowTrendingUpIcon}
+            bgGradient="bg-gradient-to-r from-emerald-500 to-teal-500"
+            delay="750ms"
+          />
+          
+          <StatCard
+            title="Distance moyenne"
+            value={formatDistance(stats.total_distance / (stats.total_runs || 1))}
+            subValue="Par course"
+            icon={FireIcon}
+            bgGradient="bg-gradient-to-r from-yellow-500 to-orange-500"
+            delay="900ms"
+          />
+          
+          <StatCard
+            title="Performance"
+            value={`${Math.round(stats.total_runs / (stats.active_users || 1))}`}
+            subValue="Courses/utilisateur"
+            icon={HeartIcon}
+            bgGradient="bg-gradient-to-r from-red-500 to-pink-500"
+            delay="1050ms"
+          />
+        </div>
+
+        {/* Graphiques et tendances */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Progression mensuelle */}
+          <div className="glass rounded-2xl p-6 shadow-xl animate-slide-in-left" style={{ animationDelay: '400ms' }}>
+            <h3 className="text-xl font-bold text-emerald-800 mb-6">Progression ce mois</h3>
+            <div className="space-y-4">
+              <div 
+                className="flex items-center justify-between p-4 bg-blue-50 rounded-xl animate-fade-in"
+                style={{ animationDelay: '600ms' }}
+              >
+                <div className="flex items-center">
+                  <UsersIcon className="h-6 w-6 text-blue-600 mr-3" />
+                  <span className="font-semibold text-gray-800">Nouveaux utilisateurs</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-green-500 h-2 rounded-full transition-all duration-300" 
-                    style={{ 
-                      width: `${calculatePercentage(stats.active_users, stats.total_users)}%` 
-                    }}
-                  ></div>
-                </div>
+                <span className="text-2xl font-bold text-blue-600">{stats.new_users_this_month}</span>
               </div>
               
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-gray-600">Routes utilisées</span>
-                  <span className="text-sm font-medium">
-                    {calculatePercentage(stats.active_routes, stats.total_routes).toFixed(1)}%
-                  </span>
+              <div 
+                className="flex items-center justify-between p-4 bg-green-50 rounded-xl animate-fade-in"
+                style={{ animationDelay: '750ms' }}
+              >
+                <div className="flex items-center">
+                  <TrophyIcon className="h-6 w-6 text-green-600 mr-3" />
+                  <span className="font-semibold text-gray-800">Courses effectuées</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <span className="text-2xl font-bold text-green-600">{stats.runs_this_month}</span>
+              </div>
+              
+              <div 
+                className="flex items-center justify-between p-4 bg-purple-50 rounded-xl animate-fade-in"
+                style={{ animationDelay: '900ms' }}
+              >
+                <div className="flex items-center">
+                  <MapPinIcon className="h-6 w-6 text-purple-600 mr-3" />
+                  <span className="font-semibold text-gray-800">Distance parcourue</span>
+                </div>
+                <span className="text-2xl font-bold text-purple-600">{formatDistance(stats.distance_this_month)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Répartition des utilisateurs */}
+          <div className="glass rounded-2xl p-6 shadow-xl animate-slide-in-right" style={{ animationDelay: '500ms' }}>
+            <h3 className="text-xl font-bold text-emerald-800 mb-6">Répartition des utilisateurs</h3>
+            <div className="space-y-4">
+              <div className="relative animate-fade-in" style={{ animationDelay: '700ms' }}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700">Utilisateurs actifs</span>
+                  <span className="text-sm text-gray-500">{stats.active_users}/{stats.total_users}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
                   <div 
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all duration-500"
                     style={{ 
-                      width: `${calculatePercentage(stats.active_routes, stats.total_routes)}%` 
+                      width: `${calculatePercentage(stats.active_users, stats.total_users)}%`,
+                      animationDelay: '1000ms'
                     }}
                   ></div>
                 </div>
+                <span className="text-xs text-gray-500">{Math.round(calculatePercentage(stats.active_users, stats.total_users))}%</span>
+              </div>
+              
+              <div className="relative animate-fade-in" style={{ animationDelay: '850ms' }}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700">Parcours actifs</span>
+                  <span className="text-sm text-gray-500">{stats.active_routes}/{stats.total_routes}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-cyan-500 h-3 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${calculatePercentage(stats.active_routes, stats.total_routes)}%`,
+                      animationDelay: '1150ms'
+                    }}
+                  ></div>
+                </div>
+                <span className="text-xs text-gray-500">{Math.round(calculatePercentage(stats.active_routes, stats.total_routes))}%</span>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Actions rapides */}
-      <div className="bg-white rounded-lg shadow border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Actions rapides</h3>
-        </div>
-        <div className="p-6">
+        {/* Actions rapides */}
+        <div className="glass-green rounded-2xl p-6 shadow-xl animate-scale-in" style={{ animationDelay: '800ms' }}>
+          <h3 className="text-xl font-bold text-emerald-800 mb-6">Actions rapides</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link 
               to="/users" 
-              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="flex items-center p-4 border-2 border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-400 transition-all duration-300 hover:scale-105 group focus:outline-none focus:ring-4 focus:ring-emerald-200 animate-fade-in"
+              style={{ animationDelay: '1000ms' }}
             >
-              <UsersIcon className="h-8 w-8 text-blue-600 mr-3 flex-shrink-0" />
+              <UsersIcon className="h-8 w-8 text-blue-600 mr-3 flex-shrink-0 group-hover:scale-110 transition-transform duration-300" />
               <div className="min-w-0">
-                <h4 className="font-medium text-gray-900">Gérer les utilisateurs</h4>
-                <p className="text-sm text-gray-500 truncate">{stats.total_users} utilisateurs</p>
+                <h4 className="font-semibold text-gray-900">Gérer les utilisateurs</h4>
+                <p className="text-sm text-gray-600 truncate">{stats.total_users} utilisateurs</p>
               </div>
             </Link>
             
             <Link 
-              to="/routes" 
-              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              to="/parcours" 
+              className="flex items-center p-4 border-2 border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-400 transition-all duration-300 hover:scale-105 group focus:outline-none focus:ring-4 focus:ring-emerald-200 animate-fade-in"
+              style={{ animationDelay: '1150ms' }}
             >
-              <MapPinIcon className="h-8 w-8 text-purple-600 mr-3 flex-shrink-0" />
+              <MapPinIcon className="h-8 w-8 text-purple-600 mr-3 flex-shrink-0 group-hover:scale-110 transition-transform duration-300" />
               <div className="min-w-0">
-                <h4 className="font-medium text-gray-900">Gérer les parcours</h4>
-                <p className="text-sm text-gray-500 truncate">{stats.total_routes} parcours</p>
+                <h4 className="font-semibold text-gray-900">Gérer les parcours</h4>
+                <p className="text-sm text-gray-600 truncate">{stats.total_routes} parcours</p>
               </div>
             </Link>
             
             <Link 
               to="/history" 
-              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="flex items-center p-4 border-2 border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-400 transition-all duration-300 hover:scale-105 group focus:outline-none focus:ring-4 focus:ring-emerald-200 animate-fade-in"
+              style={{ animationDelay: '1300ms' }}
             >
-              <ChartBarIcon className="h-8 w-8 text-green-600 mr-3 flex-shrink-0" />
+              <ChartBarIcon className="h-8 w-8 text-green-600 mr-3 flex-shrink-0 group-hover:scale-110 transition-transform duration-300" />
               <div className="min-w-0">
-                <h4 className="font-medium text-gray-900">Historique des courses</h4>
-                <p className="text-sm text-gray-500 truncate">{stats.total_runs} courses</p>
+                <h4 className="font-semibold text-gray-900">Historique des courses</h4>
+                <p className="text-sm text-gray-600 truncate">{stats.total_runs} courses</p>
               </div>
             </Link>
           </div>
