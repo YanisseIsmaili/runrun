@@ -1,10 +1,10 @@
-import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
 import * as apiService from '../services/api';
 
-export const RunContext = createContext();
+const RunContext = createContext();
 
 export const useRun = () => {
   const context = useContext(RunContext);
@@ -15,6 +15,7 @@ export const useRun = () => {
 };
 
 export const RunProvider = ({ children }) => {
+  // États principaux
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentRun, setCurrentRun] = useState(null);
@@ -29,170 +30,70 @@ export const RunProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const locationSubscription = useRef(null);
+  // Références pour les timers et subscriptions
   const timerInterval = useRef(null);
-  const statsUpdateInterval = useRef(null);
+  const locationSubscription = useRef(null);
 
-  // Initialiser les permissions et historique
   useEffect(() => {
-    fetchRunHistory();
-    requestLocationPermissions();
-  }, []);
-
-  // Timer pour mettre à jour les statistiques périodiquement
-  const updateRealTimeStats = useCallback(() => {
-    if (isRunning && !isPaused && distance > 0 && duration > 0) {
-      // Calcul de la vitesse en km/h
-      const distanceKm = distance / 1000;
-      const durationHours = duration / 3600;
-      const speedKmh = distanceKm / durationHours;
-      
-      // Validation et mise à jour de la vitesse
-      const validSpeed = speedKmh > 0 && speedKmh < 50 ? speedKmh : 0;
-      setCurrentSpeed(validSpeed);
-      setAverageSpeed(validSpeed);
-      
-      // Calcul de l'allure (minutes par kilomètre)
-      if (distanceKm > 0) {
-        const paceMinPerKm = duration / 60 / distanceKm;
-        const paceMin = Math.floor(paceMinPerKm);
-        const paceSec = Math.floor((paceMinPerKm - paceMin) * 60);
-        
-        // Validation de l'allure (entre 2:00 et 20:00 min/km)
-        if (paceMinPerKm >= 2 && paceMinPerKm <= 20) {
-          setPace(`${paceMin}:${paceSec.toString().padStart(2, '0')}`);
-        }
-      }
-      
-      // Calcul des calories (estimation: 70 cal/km)
-      setCalories(Math.floor(distanceKm * 70));
-      
-      console.log('🔄 Stats temps réel:', {
-        distance: `${distanceKm.toFixed(3)} km`,
-        duration: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`,
-        speed: `${validSpeed.toFixed(1)} km/h`,
-        pace: pace,
-        calories: Math.floor(distanceKm * 70)
-      });
-    }
-  }, [isRunning, isPaused, distance, duration, pace]);
-
-  // Démarrer/arrêter la mise à jour des statistiques
-  useEffect(() => {
-    if (isRunning && !isPaused) {
-      // Mettre à jour les stats toutes les 2 secondes
-      statsUpdateInterval.current = setInterval(updateRealTimeStats, 2000);
-    } else {
-      if (statsUpdateInterval.current) {
-        clearInterval(statsUpdateInterval.current);
-        statsUpdateInterval.current = null;
-      }
-    }
-
+    loadLocalHistory();
     return () => {
-      if (statsUpdateInterval.current) {
-        clearInterval(statsUpdateInterval.current);
-      }
-    };
-  }, [isRunning, isPaused, updateRealTimeStats]);
-
-  // Nettoyer les intervalles au démontage
-  useEffect(() => {
-    return () => {
-      if (locationSubscription.current) {
-        locationSubscription.current.remove();
-      }
+      // Nettoyage lors du démontage
       if (timerInterval.current) {
         clearInterval(timerInterval.current);
       }
-      if (statsUpdateInterval.current) {
-        clearInterval(statsUpdateInterval.current);
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
       }
     };
   }, []);
+
+  // Calculer les statistiques en temps réel
+  useEffect(() => {
+    if (isRunning && !isPaused) {
+      // Calcul de la vitesse moyenne
+      if (duration > 0 && distance > 0) {
+        const avgSpeedKmh = (distance / 1000) / (duration / 3600);
+        setAverageSpeed(avgSpeedKmh);
+        
+        // Calcul de l'allure (min/km)
+        const paceMinutes = duration / 60 / (distance / 1000);
+        if (isFinite(paceMinutes) && paceMinutes > 0) {
+          const minutes = Math.floor(paceMinutes);
+          const seconds = Math.floor((paceMinutes - minutes) * 60);
+          setPace(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+        }
+        
+        // Estimation des calories (formule simple)
+        const caloriesEstimate = Math.round((distance / 1000) * 65); // ~65 kcal par km
+        setCalories(caloriesEstimate);
+      }
+    }
+  }, [distance, duration, isRunning, isPaused]);
 
   const requestLocationPermissions = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission requise',
-          'L\'application a besoin de la permission d\'accès à la localisation pour fonctionner.'
-        );
+        setError('Permission de localisation refusée');
         return false;
       }
       return true;
     } catch (error) {
-      console.error('Erreur lors de la demande de permissions:', error);
+      console.error('Erreur permission localisation:', error);
+      setError('Erreur lors de la demande de permission');
       return false;
     }
   };
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371e3;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const R = 6371000; // Rayon de la Terre en mètres
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
-  };
-
-  const calculatePace = (distance, duration) => {
-    if (distance === 0 || duration === 0) return '00:00';
-    const distanceKm = distance / 1000;
-    const paceInSeconds = duration / distanceKm;
-    const minutes = Math.floor(paceInSeconds / 60);
-    const seconds = Math.floor(paceInSeconds % 60);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const fetchRunHistory = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const token = await AsyncStorage.getItem('authToken');
-      
-      if (token) {
-        try {
-          const response = await apiService.getRunHistory();
-          // Vérification que la réponse contient des données valides
-          const historyData = response?.data || response || [];
-          setRunHistory(Array.isArray(historyData) ? historyData : []);
-        } catch (apiError) {
-          console.log('Erreur API, utilisation du stockage local');
-          await loadLocalHistory();
-        }
-      } else {
-        await loadLocalHistory();
-      }
-    } catch (err) {
-      console.error('Erreur lors du chargement:', err);
-      setError('Erreur lors du chargement de l\'historique');
-      setRunHistory([]); // Assure un tableau vide en cas d'erreur
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadLocalHistory = async () => {
-    try {
-      const storedHistory = await AsyncStorage.getItem('runHistory');
-      if (storedHistory) {
-        const parsedHistory = JSON.parse(storedHistory);
-        // Vérification que les données parsées sont un tableau
-        setRunHistory(Array.isArray(parsedHistory) ? parsedHistory : []);
-      } else {
-        setRunHistory([]);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement local:', error);
-      setRunHistory([]);
-    }
   };
 
   const updateLocation = (location) => {
@@ -215,14 +116,10 @@ export const RunProvider = ({ children }) => {
           lastTwo[1].longitude
         );
         
-        // Ajouter la distance même si petite, mais avec un seuil pour éviter le bruit
-        if (dist > 0.5) { // Seuil très bas pour détecter tout mouvement réel
+        if (dist > 0.5) { // Seuil pour éviter le bruit GPS
           setDistance(prevDist => {
             const newDist = prevDist + dist;
-            console.log('📍 Nouvelle position:', {
-              distance: `+${dist.toFixed(1)}m`,
-              total: `${(newDist / 1000).toFixed(3)}km`
-            });
+            console.log('📍 Distance mise à jour:', `+${dist.toFixed(1)}m`, `Total: ${(newDist/1000).toFixed(3)}km`);
             return newDist;
           });
         }
@@ -230,6 +127,11 @@ export const RunProvider = ({ children }) => {
       
       return updated;
     });
+
+    // Mettre à jour la vitesse actuelle
+    if (location.coords.speed && location.coords.speed > 0) {
+      setCurrentSpeed(location.coords.speed * 3.6); // Convertir m/s en km/h
+    }
   };
 
   const startRun = async () => {
@@ -249,6 +151,7 @@ export const RunProvider = ({ children }) => {
       setAverageSpeed(0);
       setPace('00:00');
       setCalories(0);
+      setError(null);
       
       const newRun = {
         id: Date.now(),
@@ -260,64 +163,67 @@ export const RunProvider = ({ children }) => {
       
       setCurrentRun(newRun);
       
-      // Démarrer le timer de durée
+      // Démarrer le timer
       timerInterval.current = setInterval(() => {
-        setDuration(prev => {
-          const newDuration = prev + 1;
-          console.log('⏱️ Durée:', `${Math.floor(newDuration / 60)}:${(newDuration % 60).toString().padStart(2, '0')}`);
-          return newDuration;
-        });
+        setDuration(prev => prev + 1);
       }, 1000);
       
       // Démarrer le suivi GPS
       locationSubscription.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 2000, // Toutes les 2 secondes
-          distanceInterval: 1, // Tous les 1 mètre
+          timeInterval: 2000,
+          distanceInterval: 1,
         },
-        (location) => {
-          console.log('📍 Nouvelle position GPS reçue');
-          updateLocation(location);
-        }
+        updateLocation
       );
       
-      console.log('✅ Course démarrée avec succès');
+      console.log('✅ Course démarrée');
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       
     } catch (err) {
-      console.error('❌ Erreur lors du démarrage:', err);
+      console.error('❌ Erreur démarrage:', err);
       setError('Erreur lors du démarrage de la course');
     }
   };
 
   const pauseRun = () => {
+    console.log('⏸️ Course en pause');
     setIsPaused(true);
+    
     if (timerInterval.current) {
       clearInterval(timerInterval.current);
+      timerInterval.current = null;
     }
     if (locationSubscription.current) {
       locationSubscription.current.remove();
+      locationSubscription.current = null;
     }
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const resumeRun = async () => {
+    console.log('▶️ Reprise de la course');
     setIsPaused(false);
     
-    // Redémarrer le timer
-    timerInterval.current = setInterval(() => {
-      setDuration(prev => prev + 1);
-    }, 1000);
-    
-    // Redémarrer le GPS
     try {
+      // Redémarrer le timer
+      timerInterval.current = setInterval(() => {
+        setDuration(prev => prev + 1);
+      }, 1000);
+      
+      // Redémarrer le GPS
       locationSubscription.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.BestForNavigation,
-          distanceInterval: 5,
-          timeInterval: 1000,
+          timeInterval: 2000,
+          distanceInterval: 1,
         },
         updateLocation
       );
+      
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (err) {
       console.error('Erreur lors de la reprise:', err);
       setError('Impossible de reprendre la course');
@@ -326,6 +232,8 @@ export const RunProvider = ({ children }) => {
 
   const finishRun = async () => {
     try {
+      console.log('🏁 Fin de course...');
+      
       // Arrêter les timers et GPS
       if (timerInterval.current) {
         clearInterval(timerInterval.current);
@@ -339,63 +247,66 @@ export const RunProvider = ({ children }) => {
       setIsRunning(false);
       setIsPaused(false);
       
-      // Créer l'objet course terminée avec les bonnes unités pour le serveur
+      const endTime = new Date().toISOString();
+      
+      // Préparer les données pour la sauvegarde
       const completedRun = {
-        id: currentRun?.id || Date.now(),
-        start_time: currentRun?.startTime || new Date().toISOString(),
-        end_time: new Date().toISOString(),
-        distance: distance / 1000, // Convertir de mètres en kilomètres pour le serveur
-        duration: duration, // En secondes
-        avg_speed: averageSpeed * (1000/3600), // Convertir de km/h en m/s
-        max_speed: averageSpeed * (1000/3600), // Même chose pour max_speed
+        // Données pour l'API (format serveur)
+        start_time: currentRun?.startTime || endTime,
+        end_time: endTime,
+        distance: distance / 1000, // Convertir en kilomètres
+        duration: duration,
+        avg_speed: averageSpeed > 0 ? averageSpeed / 3.6 : 0, // Convertir km/h en m/s
+        max_speed: currentSpeed > 0 ? currentSpeed / 3.6 : 0, // Convertir km/h en m/s
         calories_burned: calories,
-        elevation_gain: 0, // Calculer si vous avez l'altimètre
+        elevation_gain: 0,
         status: 'finished',
-        notes: `Course enregistrée via l'app mobile`,
-        // Données locales pour l'app (conservées pour compatibilité)
-        startTime: currentRun?.startTime || new Date().toISOString(),
-        endTime: new Date().toISOString(),
-        distanceMeters: distance, // Distance en mètres pour l'affichage local
+        weather_conditions: null,
+        notes: 'Course enregistrée via application mobile',
+        
+        // Données locales pour l'affichage
+        id: currentRun?.id || Date.now(),
+        startTime: currentRun?.startTime || endTime,
+        endTime: endTime,
+        distanceMeters: distance,
         locations: locationHistory,
         averageSpeed: averageSpeed,
         pace: pace,
       };
-      
-      // Mettre à jour l'historique
-      const updatedHistory = Array.isArray(runHistory) ? [...runHistory, completedRun] : [completedRun];
-      setRunHistory(updatedHistory);
-      
-      // Sauvegarder localement
-      await AsyncStorage.setItem('runHistory', JSON.stringify(updatedHistory));
-      
-      // Essayer de sauvegarder sur le serveur avec un format adapté
-      const token = await AsyncStorage.getItem('authToken');
-      if (token) {
-        try {
-          // Préparer les données pour l'API serveur (format backend)
-          const serverRunData = {
-            start_time: completedRun.start_time,
-            end_time: completedRun.end_time,
-            distance: completedRun.distance, // Déjà en km
-            duration: completedRun.duration, // En secondes
-            avg_speed: completedRun.avg_speed, // En m/s
-            max_speed: completedRun.max_speed, // En m/s
-            calories_burned: completedRun.calories_burned,
-            elevation_gain: completedRun.elevation_gain,
-            status: completedRun.status,
-            notes: completedRun.notes
-          };
-          
-          console.log('📤 Données envoyées au serveur:', serverRunData);
-          await apiService.saveRun(serverRunData);
-          console.log('✅ Course sauvegardée sur le serveur');
-        } catch (apiError) {
-          console.log('❌ Erreur de sauvegarde serveur:', apiError);
-          console.log('📱 Course sauvée localement uniquement');
-        }
+
+      console.log('📊 Résumé de course:', {
+        distance: `${(distance/1000).toFixed(2)} km`,
+        durée: `${Math.floor(duration/60)}:${(duration%60).toString().padStart(2,'0')}`,
+        vitesse: `${averageSpeed.toFixed(1)} km/h`,
+        allure: pace,
+        calories: calories
+      });
+
+      // Sauvegarder sur le serveur
+      setLoading(true);
+      try {
+        const response = await apiService.saveRun(completedRun);
+        console.log('✅ Course sauvegardée sur le serveur:', response.data);
+        
+        // Ajouter l'ID du serveur pour la course locale
+        completedRun.serverId = response.data?.data?.id;
+        
+        // Récupérer l'historique mis à jour du serveur
+        await fetchRunHistory();
+        
+      } catch (apiError) {
+        console.warn('⚠️ Échec sauvegarde serveur:', apiError.message);
+        
+        // Sauvegarder localement en cas d'échec serveur
+        const updatedHistory = Array.isArray(runHistory) ? 
+          [...runHistory, completedRun] : [completedRun];
+        setRunHistory(updatedHistory);
+        await AsyncStorage.setItem('runHistory', JSON.stringify(updatedHistory));
+        
+        console.log('📱 Course sauvée localement uniquement');
       }
       
-      // Réinitialiser les valeurs
+      // Réinitialiser les états
       setCurrentRun(null);
       setLocationHistory([]);
       setDistance(0);
@@ -405,95 +316,173 @@ export const RunProvider = ({ children }) => {
       setPace('00:00');
       setCalories(0);
       
-      // Afficher un résumé avec les bonnes unités
-      Alert.alert(
-        'Course terminée !',
-        `Distance: ${(distance / 1000).toFixed(2)} km\nDurée: ${formatDuration(duration)}\nAllure: ${pace}/km\nCalories: ${calories} kcal`,
-        [{ text: 'OK' }]
-      );
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       
-    } catch (err) {
-      console.error('Erreur lors de la finalisation:', err);
-      setError('Erreur lors de la finalisation');
+      return completedRun;
+      
+    } catch (error) {
+      console.error('❌ Erreur lors de la finalisation:', error);
+      setError('Erreur lors de la sauvegarde');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRunHistory = async () => {
+    try {
+      setLoading(true);
+      console.log('🔄 Récupération historique courses...');
+      
+      const response = await apiService.getRunHistory();
+      
+      // Debug de la structure
+      console.log('🔍 Response type:', typeof response);
+      console.log('🔍 Response.data type:', typeof response.data);
+      console.log('🔍 Response keys:', Object.keys(response));
+      
+      // Extraire les courses
+      let serverRuns = [];
+      if (response.data && Array.isArray(response.data)) {
+        serverRuns = response.data;
+        console.log('📊 Courses extraites directement de response.data');
+      } else if (response.runs && Array.isArray(response.runs)) {
+        serverRuns = response.runs;
+        console.log('📊 Courses extraites de response.runs');
+      } else {
+        console.warn('⚠️ Structure non reconnue, response:', response);
+      }
+      
+      console.log(`📊 ${serverRuns.length} courses reçues du serveur`);
+      
+      // Transformer les données serveur pour l'affichage local
+      const formattedRuns = serverRuns.map(run => ({
+        id: run.id,
+        serverId: run.id,
+        startTime: run.start_time,
+        endTime: run.end_time,
+        distance: run.distance * 1000, // Convertir km en mètres pour l'affichage
+        distanceKm: run.distance, // Garder en km aussi
+        duration: run.duration,
+        averageSpeed: run.avg_speed ? run.avg_speed * 3.6 : 0, // m/s vers km/h
+        maxSpeed: run.max_speed ? run.max_speed * 3.6 : 0,
+        calories: run.calories_burned || 0,
+        status: run.status,
+        notes: run.notes,
+        locations: [], // Les locations ne sont pas stockées côté serveur pour le moment
+        pace: calculatePace(run.distance, run.duration),
+        user: run.user, // Informations utilisateur pour les admins
+      }));
+      
+      setRunHistory(formattedRuns);
+      console.log(`✅ ${formattedRuns.length} courses récupérées`);
+      
+    } catch (error) {
+      console.warn('⚠️ Erreur récupération serveur, chargement local:', error.message);
+      await loadLocalHistory();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadLocalHistory = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('runHistory');
+      if (stored) {
+        const parsedHistory = JSON.parse(stored);
+        if (Array.isArray(parsedHistory)) {
+          setRunHistory(parsedHistory);
+          console.log(`📱 ${parsedHistory.length} courses chargées localement`);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur chargement local:', error);
+      setRunHistory([]);
     }
   };
 
   const deleteRun = async (runId) => {
     try {
-      // Vérification de sécurité
-      if (!Array.isArray(runHistory)) {
-        console.error('runHistory n\'est pas un tableau');
-        return;
+      console.log('🗑️ Suppression course:', runId);
+      
+      // Trouver la course à supprimer
+      const runToDelete = runHistory.find(run => 
+        run.id === runId || run.serverId === runId
+      );
+      
+      if (!runToDelete) {
+        throw new Error('Course non trouvée');
       }
-
-      const updatedHistory = runHistory.filter(run => run && run.id !== runId);
+      
+      // Supprimer côté serveur si elle a un ID serveur
+      if (runToDelete.serverId) {
+        try {
+          await apiService.deleteRun(runToDelete.serverId);
+          console.log('✅ Course supprimée du serveur');
+        } catch (apiError) {
+          console.warn('⚠️ Échec suppression serveur:', apiError.message);
+        }
+      }
+      
+      // Supprimer localement
+      const updatedHistory = runHistory.filter(run => 
+        run.id !== runId && run.serverId !== runId
+      );
       setRunHistory(updatedHistory);
       await AsyncStorage.setItem('runHistory', JSON.stringify(updatedHistory));
       
-      const token = await AsyncStorage.getItem('authToken');
-      if (token) {
-        try {
-          await apiService.deleteRun(runId);
-        } catch (apiError) {
-          console.log('Erreur lors de la suppression serveur');
-        }
-      }
-    } catch (err) {
-      console.error('Erreur lors de la suppression:', err);
-      setError('Erreur lors de la suppression');
+      console.log('✅ Course supprimée');
+      
+    } catch (error) {
+      console.error('❌ Erreur suppression:', error);
+      throw error;
     }
+  };
+
+  const calculatePace = (distanceKm, durationSeconds) => {
+    if (!distanceKm || !durationSeconds || distanceKm <= 0) return '00:00';
+    
+    const paceMinutes = durationSeconds / 60 / distanceKm;
+    const minutes = Math.floor(paceMinutes);
+    const seconds = Math.floor((paceMinutes - minutes) * 60);
+    
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const formatDuration = (seconds) => {
-    if (typeof seconds !== 'number' || seconds < 0) {
-      return '0:00';
-    }
-
+    if (!seconds || seconds <= 0) return '0:00';
+    
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
+    const secs = seconds % 60;
     
     if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-    } else {
-      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
   const getWeeklyStats = () => {
-    // Vérification de sécurité pour runHistory
-    if (!Array.isArray(runHistory)) {
-      return {
-        runs: 0,
-        distance: 0,
-        duration: 0,
-        calories: 0,
-        averagePace: '00:00'
-      };
-    }
-
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     
-    const weeklyRuns = runHistory.filter(run => 
-      run && run.startTime && new Date(run.startTime) >= oneWeekAgo
+    const weeklyRuns = runHistory.filter(run => {
+      const runDate = new Date(run.startTime);
+      return runDate >= oneWeekAgo;
+    });
+    
+    const totalDistance = weeklyRuns.reduce((acc, run) => 
+      acc + (run.distanceKm || run.distance / 1000), 0
     );
-    
-    // Utiliser distanceMeters si disponible, sinon convertir distance depuis km
-    const totalDistance = weeklyRuns.reduce((sum, run) => {
-      const runDistance = run.distanceMeters || (run.distance * 1000) || 0;
-      return sum + runDistance;
-    }, 0);
-    
-    const totalDuration = weeklyRuns.reduce((sum, run) => sum + (run.duration || 0), 0);
-    const totalCalories = weeklyRuns.reduce((sum, run) => sum + (run.calories || run.calories_burned || 0), 0);
+    const totalDuration = weeklyRuns.reduce((acc, run) => 
+      acc + (run.duration || 0), 0
+    );
     
     return {
       runs: weeklyRuns.length,
-      distance: totalDistance, // En mètres pour l'affichage
+      distance: totalDistance,
       duration: totalDuration,
-      calories: totalCalories,
-      averagePace: weeklyRuns.length > 0 ? calculatePace(totalDistance, totalDuration) : '00:00'
+      pace: weeklyRuns.length > 0 ? calculatePace(totalDistance, totalDuration) : '00:00'
     };
   };
 
@@ -502,6 +491,7 @@ export const RunProvider = ({ children }) => {
   };
 
   const value = {
+    // États
     isRunning,
     isPaused,
     currentRun,
@@ -512,9 +502,11 @@ export const RunProvider = ({ children }) => {
     averageSpeed,
     pace,
     calories,
-    runHistory: Array.isArray(runHistory) ? runHistory : [], // Protection supplémentaire
+    runHistory: Array.isArray(runHistory) ? runHistory : [],
     loading,
     error,
+    
+    // Actions
     startRun,
     pauseRun,
     resumeRun,

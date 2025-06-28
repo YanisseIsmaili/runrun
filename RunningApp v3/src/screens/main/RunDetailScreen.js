@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +19,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { useRun } from '../../context/RunContext';
 import { useSettings } from '../../context/SettingsContext';
 
-// Import conditionnel de MapView pour éviter les erreurs
+// Import conditionnel de MapView
 let MapView, Polyline;
 try {
   const Maps = require('react-native-maps');
@@ -45,6 +46,7 @@ const RunDetailScreen = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [mapRegion, setMapRegion] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (run && run.locations && run.locations.length > 0) {
@@ -61,7 +63,7 @@ const RunDetailScreen = () => {
         
         const centerLat = (minLat + maxLat) / 2;
         const centerLng = (minLng + maxLng) / 2;
-        const deltaLat = (maxLat - minLat) * 1.2; // Ajouter du padding
+        const deltaLat = (maxLat - minLat) * 1.2; // Padding
         const deltaLng = (maxLng - minLng) * 1.2;
         
         setMapRegion({
@@ -83,7 +85,7 @@ const RunDetailScreen = () => {
           <Text style={styles.errorMessage}>
             Les détails de cette course ne sont pas disponibles.
           </Text>
-          <TouchableOpacity
+          <TouchableOpacity 
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
@@ -94,68 +96,46 @@ const RunDetailScreen = () => {
     );
   }
 
-  // Traitement sécurisé des données de la course
-  const getDistanceInMeters = (run) => {
-    // Si distanceMeters existe, l'utiliser directement
-    if (run.distanceMeters && typeof run.distanceMeters === 'number') {
-      return run.distanceMeters;
-    }
-    
-    // Si distance existe et semble être en km (< 100), convertir en mètres
-    if (run.distance && typeof run.distance === 'number') {
-      if (run.distance < 100) {
-        return run.distance * 1000; // Conversion km -> mètres
-      } else {
-        return run.distance; // Déjà en mètres
-      }
-    }
-    
-    return 0;
-  };
-
+  // Données formatées pour l'affichage
   const runData = {
-    id: run.id,
-    date: run.startTime || run.start_time || run.date,
-    distance: getDistanceInMeters(run),
+    id: run.id || run.serverId,
+    date: run.startTime || run.start_time,
+    endDate: run.endTime || run.end_time,
+    distance: run.distanceMeters || (run.distance * 1000) || 0, // en mètres pour l'affichage
+    distanceKm: run.distanceKm || run.distance || 0, // en km
     duration: run.duration || 0,
-    calories: run.calories_burned || run.calories || 0,
+    averageSpeed: run.averageSpeed || (run.avg_speed ? run.avg_speed * 3.6 : 0), // km/h
+    maxSpeed: run.maxSpeed || (run.max_speed ? run.max_speed * 3.6 : 0), // km/h
     pace: run.pace || '00:00',
-    averageSpeed: run.avg_speed || run.averageSpeed || 0,
-    maxSpeed: run.max_speed || run.maxSpeed || 0,
-    elevationGain: run.elevation_gain || 0,
-    heartRate: run.avg_heart_rate || 0,
-    maxHeartRate: run.max_heart_rate || 0,
-    locations: run.locations || [],
+    calories: run.calories || run.calories_burned || 0,
     notes: run.notes || '',
+    locations: run.locations || [],
+    status: run.status || 'finished',
   };
 
-  const formatDate = (dateString) => {
-    try {
-      const date = new Date(dateString);
-      return {
-        date: date.toLocaleDateString('fr-FR', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }),
-        time: date.toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      };
-    } catch (error) {
-      return { date: 'Date inconnue', time: '' };
-    }
+  const formatRunDate = () => {
+    const date = new Date(runData.date);
+    return {
+      date: date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      }),
+      time: date.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
   };
 
   const formatPace = () => {
     if (runData.pace && runData.pace !== '00:00') {
       return runData.pace;
     }
-    if (runData.distance > 0 && runData.duration > 0) {
-      const distanceKm = runData.distance / 1000;
-      const paceSecPerKm = runData.duration / distanceKm;
+    
+    if (runData.distanceKm > 0 && runData.duration > 0) {
+      const paceSecPerKm = runData.duration / runData.distanceKm;
       const minutes = Math.floor(paceSecPerKm / 60);
       const seconds = Math.floor(paceSecPerKm % 60);
       return `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -165,15 +145,7 @@ const RunDetailScreen = () => {
 
   const formatSpeed = (speed) => {
     if (typeof speed === 'number' && speed > 0) {
-      // Si la vitesse semble être en m/s (valeurs généralement < 20), la convertir en km/h
-      if (speed < 20) {
-        return (speed * 3.6).toFixed(1);
-      }
-      // Si déjà en km/h ou valeur aberrante, limiter à des valeurs réalistes
-      if (speed > 50) {
-        return '0.0'; // Vitesse trop élevée, probablement une erreur
-      }
-      return speed.toFixed(1);
+      return Math.min(speed, 50).toFixed(1); // Limiter à 50 km/h max
     }
     return '0.0';
   };
@@ -183,25 +155,20 @@ const RunDetailScreen = () => {
       return '0.00 km';
     }
     
-    // Limiter à des distances réalistes pour une course à pied (max 100km)
-    if (distanceInMeters > 100000) {
-      console.warn('Distance aberrante détectée:', distanceInMeters, 'mètres');
-      return '0.00 km';
-    }
-    
     const km = distanceInMeters / 1000;
     return formatDistance ? formatDistance(km) : `${km.toFixed(2)} km`;
   };
 
   const handleShare = async () => {
     try {
-      const dateFormatted = formatDate(runData.date);
-              const message = `🏃‍♂️ Ma course du ${dateFormatted.date}
+      const dateFormatted = formatRunDate();
+      const message = `🏃‍♂️ Ma course du ${dateFormatted.date}
 
 📊 Statistiques:
 • Distance: ${formatDistanceKm(runData.distance)}
 • Temps: ${formatDuration ? formatDuration(runData.duration) : '0:00'}
 • Allure: ${formatPace()}/km
+• Vitesse moy.: ${formatSpeed(runData.averageSpeed)} km/h
 • Calories: ${runData.calories} kcal
 
 #Running #Course #Fitness`;
@@ -220,15 +187,21 @@ const RunDetailScreen = () => {
   };
 
   const confirmDelete = async () => {
+    if (!deleteRun) {
+      Alert.alert('Erreur', 'Fonction de suppression non disponible');
+      return;
+    }
+
     try {
-      if (deleteRun) {
-        await deleteRun(runData.id);
-        setShowDeleteModal(false);
-        navigation.goBack();
-        Alert.alert('Succès', 'Course supprimée');
-      }
+      setDeleting(true);
+      await deleteRun(runData.id);
+      setShowDeleteModal(false);
+      navigation.goBack();
+      Alert.alert('Succès', 'Course supprimée avec succès');
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de supprimer la course');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -244,19 +217,6 @@ const RunDetailScreen = () => {
       );
     }
 
-    const validCoordinates = runData.locations.filter(loc => 
-      loc && loc.latitude && loc.longitude
-    );
-
-    if (validCoordinates.length === 0) {
-      return (
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="location-outline" size={48} color="#ccc" />
-          <Text style={styles.mapPlaceholderText}>Coordonnées GPS invalides</Text>
-        </View>
-      );
-    }
-
     return (
       <MapView
         style={styles.map}
@@ -264,25 +224,24 @@ const RunDetailScreen = () => {
         scrollEnabled={true}
         zoomEnabled={true}
         showsUserLocation={false}
-        showsMyLocationButton={false}
+        showsCompass={false}
+        showsScale={true}
       >
-        {validCoordinates.length > 1 && Polyline && (
-          <Polyline
-            coordinates={validCoordinates.map(loc => ({
-              latitude: loc.latitude,
-              longitude: loc.longitude,
-            }))}
-            strokeColor="#4CAF50"
-            strokeWidth={4}
-            lineCap="round"
-            lineJoin="round"
-          />
-        )}
+        <Polyline
+          coordinates={runData.locations.map(loc => ({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+          }))}
+          strokeColor="#4CAF50"
+          strokeWidth={4}
+          lineCap="round"
+          lineJoin="round"
+        />
       </MapView>
     );
   };
 
-  const dateFormatted = formatDate(runData.date);
+  const dateFormatted = formatRunDate();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -290,162 +249,107 @@ const RunDetailScreen = () => {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        
-        <View style={styles.headerTitle}>
-          <Text style={styles.headerText}>Détails de la course</Text>
-          <Text style={styles.headerSubtext}>{dateFormatted.date}</Text>
-        </View>
-
+        <Text style={styles.headerTitle}>Détails de la course</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleShare}
-          >
+          <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
             <Ionicons name="share-outline" size={24} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleDelete}
-          >
+          <TouchableOpacity style={styles.headerButton} onPress={handleDelete}>
             <Ionicons name="trash-outline" size={24} color="white" />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Carte/Tracé */}
-        <View style={styles.mapContainer}>
-          {renderMapView()}
+        {/* Informations principales */}
+        <View style={styles.section}>
+          <View style={styles.dateContainer}>
+            <Text style={styles.dateText}>{dateFormatted.date}</Text>
+            <Text style={styles.timeText}>Démarrage à {dateFormatted.time}</Text>
+          </View>
           
-          {/* Overlay avec infos principales */}
-          <View style={styles.mapOverlay}>
-            <View style={styles.mainStats}>
-              <View style={styles.mainStat}>
-                <Text style={styles.mainStatValue}>
-                  {formatDistanceKm(runData.distance)}
-                </Text>
-                <Text style={styles.mainStatLabel}>Distance</Text>
-              </View>
-              <View style={styles.mainStat}>
-                <Text style={styles.mainStatValue}>
-                  {formatDuration ? formatDuration(runData.duration) : '0:00'}
-                </Text>
-                <Text style={styles.mainStatLabel}>Temps</Text>
-              </View>
-              <View style={styles.mainStat}>
-                <Text style={styles.mainStatValue}>{formatPace()}</Text>
-                <Text style={styles.mainStatLabel}>Allure/km</Text>
-              </View>
+          <View style={styles.mainStats}>
+            <View style={styles.mainStatItem}>
+              <Text style={styles.mainStatValue}>
+                {formatDistanceKm(runData.distance)}
+              </Text>
+              <Text style={styles.mainStatLabel}>Distance</Text>
+            </View>
+            
+            <View style={styles.mainStatItem}>
+              <Text style={styles.mainStatValue}>
+                {formatDuration ? formatDuration(runData.duration) : '0:00'}
+              </Text>
+              <Text style={styles.mainStatLabel}>Temps</Text>
+            </View>
+            
+            <View style={styles.mainStatItem}>
+              <Text style={styles.mainStatValue}>{formatPace()}</Text>
+              <Text style={styles.mainStatLabel}>Allure/km</Text>
             </View>
           </View>
         </View>
 
+        {/* Carte */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tracé de la course</Text>
+          <View style={styles.mapContainer}>
+            {renderMapView()}
+          </View>
+        </View>
+
         {/* Statistiques détaillées */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Statistiques</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Statistiques détaillées</Text>
           
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <Ionicons name="speedometer-outline" size={20} color="#4CAF50" />
-                <Text style={styles.statCardTitle}>Vitesse</Text>
-              </View>
-              <Text style={styles.statCardValue}>{formatSpeed(runData.averageSpeed)} km/h</Text>
-              <Text style={styles.statCardLabel}>Moyenne</Text>
-              {runData.maxSpeed > 0 && (
-                <Text style={styles.statCardSecondary}>
-                  Max: {formatSpeed(runData.maxSpeed)} km/h
-                </Text>
-              )}
+              <Ionicons name="speedometer-outline" size={24} color="#2196F3" />
+              <Text style={styles.statValue}>
+                {formatSpeed(runData.averageSpeed)} km/h
+              </Text>
+              <Text style={styles.statLabel}>Vitesse moyenne</Text>
             </View>
-
+            
             <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <Ionicons name="flame-outline" size={20} color="#FF9800" />
-                <Text style={styles.statCardTitle}>Calories</Text>
-              </View>
-              <Text style={styles.statCardValue}>{runData.calories}</Text>
-              <Text style={styles.statCardLabel}>kcal brûlées</Text>
+              <Ionicons name="flash-outline" size={24} color="#FF9800" />
+              <Text style={styles.statValue}>
+                {formatSpeed(runData.maxSpeed)} km/h
+              </Text>
+              <Text style={styles.statLabel}>Vitesse max</Text>
             </View>
-
-            {runData.elevationGain > 0 && (
-              <View style={styles.statCard}>
-                <View style={styles.statCardHeader}>
-                  <Ionicons name="trending-up-outline" size={20} color="#2196F3" />
-                  <Text style={styles.statCardTitle}>Dénivelé</Text>
-                </View>
-                <Text style={styles.statCardValue}>{runData.elevationGain}m</Text>
-                <Text style={styles.statCardLabel}>D+</Text>
-              </View>
-            )}
-
-            {runData.heartRate > 0 && (
-              <View style={styles.statCard}>
-                <View style={styles.statCardHeader}>
-                  <Ionicons name="heart-outline" size={20} color="#f44336" />
-                  <Text style={styles.statCardTitle}>Fréquence cardiaque</Text>
-                </View>
-                <Text style={styles.statCardValue}>{runData.heartRate} bpm</Text>
-                <Text style={styles.statCardLabel}>Moyenne</Text>
-                {runData.maxHeartRate > 0 && (
-                  <Text style={styles.statCardSecondary}>
-                    Max: {runData.maxHeartRate} bpm
-                  </Text>
-                )}
-              </View>
-            )}
-
+            
             <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <Ionicons name="location-outline" size={20} color="#9C27B0" />
-                <Text style={styles.statCardTitle}>Suivi GPS</Text>
-              </View>
-              <Text style={styles.statCardValue}>{runData.locations.length}</Text>
-              <Text style={styles.statCardLabel}>Points GPS</Text>
+              <Ionicons name="flame-outline" size={24} color="#F44336" />
+              <Text style={styles.statValue}>{runData.calories}</Text>
+              <Text style={styles.statLabel}>Calories</Text>
             </View>
-
+            
             <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <Ionicons name="time-outline" size={20} color="#607D8B" />
-                <Text style={styles.statCardTitle}>Heure</Text>
-              </View>
-              <Text style={styles.statCardValue}>{dateFormatted.time}</Text>
-              <Text style={styles.statCardLabel}>Début</Text>
+              <Ionicons name="location-outline" size={24} color="#9C27B0" />
+              <Text style={styles.statValue}>{runData.locations.length}</Text>
+              <Text style={styles.statLabel}>Points GPS</Text>
             </View>
           </View>
         </View>
 
         {/* Notes */}
-        {runData.notes && (
-          <View style={styles.notesSection}>
+        {runData.notes ? (
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Notes</Text>
-            <View style={styles.notesCard}>
+            <View style={styles.notesContainer}>
               <Text style={styles.notesText}>{runData.notes}</Text>
             </View>
           </View>
-        )}
+        ) : null}
 
-        {/* Actions */}
-        <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-            <Ionicons name="share-outline" size={20} color="#4CAF50" />
-            <Text style={styles.actionButtonText}>Partager</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('Run')}>
-            <Ionicons name="play-outline" size={20} color="#4CAF50" />
-            <Text style={styles.actionButtonText}>Refaire ce parcours</Text>
-          </TouchableOpacity>
-        </View>
+        <View style={styles.bottomSpacing} />
       </ScrollView>
 
-      {/* Modal de confirmation de suppression */}
+      {/* Modal de suppression */}
       <Modal
         visible={showDeleteModal}
         transparent={true}
@@ -454,25 +358,38 @@ const RunDetailScreen = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Ionicons name="trash-outline" size={48} color="#ff4444" />
-            <Text style={styles.modalTitle}>Supprimer la course ?</Text>
+            <Ionicons name="warning-outline" size={48} color="#F44336" />
+            <Text style={styles.modalTitle}>Supprimer la course</Text>
             <Text style={styles.modalMessage}>
-              Cette action est irréversible. Toutes les données de cette course seront perdues.
+              Êtes-vous sûr de vouloir supprimer cette course ?{'\n'}
+              Cette action est irréversible.
             </Text>
+            
+            <View style={styles.modalRunInfo}>
+              <Text style={styles.modalRunText}>
+                {dateFormatted.date} • {formatDistanceKm(runData.distance)}
+              </Text>
+            </View>
             
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={styles.modalCancelButton}
+                style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setShowDeleteModal(false)}
+                disabled={deleting}
               >
-                <Text style={styles.modalCancelText}>Annuler</Text>
+                <Text style={styles.cancelButtonText}>Annuler</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={styles.modalConfirmButton}
+                style={[styles.modalButton, styles.deleteButton]}
                 onPress={confirmDelete}
+                disabled={deleting}
               >
-                <Text style={styles.modalConfirmText}>Supprimer</Text>
+                {deleting ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.deleteButtonText}>Supprimer</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -488,215 +405,181 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 10 : 20,
-    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
-  headerButton: {
-    padding: 8,
-  },
   headerTitle: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerText: {
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
-  },
-  headerSubtext: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: 2,
+    flex: 1,
+    textAlign: 'center',
   },
   headerActions: {
     flexDirection: 'row',
   },
+  headerButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
   content: {
     flex: 1,
   },
-  mapContainer: {
-    height: height * 0.3,
-    position: 'relative',
-    backgroundColor: '#e8f5e8',
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  mapPlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e8',
-  },
-  mapPlaceholderText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  mapOverlay: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-  },
-  mainStats: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  mainStat: {
-    alignItems: 'center',
-  },
-  mainStatValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  mainStatLabel: {
-    fontSize: 10,
-    color: '#666',
-    marginTop: 2,
-  },
-  statsSection: {
-    backgroundColor: 'white',
+  section: {
     margin: 16,
-    borderRadius: 12,
-    padding: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 12,
+  },
+  dateContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+  },
+  dateText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    textTransform: 'capitalize',
+  },
+  timeText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 4,
+  },
+  mainStats: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+  },
+  mainStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 20,
+    borderRightWidth: 1,
+    borderRightColor: '#f0f0f0',
+  },
+  mainStatValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  mainStatLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  mapContainer: {
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+  },
+  map: {
+    flex: 1,
+  },
+  mapPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#e0e0e0',
+  },
+  mapPlaceholderText: {
+    marginTop: 8,
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   statCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
-  },
-  statCardHeader: {
-    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    marginBottom: 8,
+    width: (width - 48) / 2,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
   },
-  statCardTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginLeft: 6,
-  },
-  statCardValue: {
-    fontSize: 20,
+  statValue: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 2,
+    marginTop: 8,
   },
-  statCardLabel: {
-    fontSize: 10,
+  statLabel: {
+    fontSize: 12,
     color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
   },
-  statCardSecondary: {
-    fontSize: 10,
-    color: '#999',
-    marginTop: 2,
-  },
-  notesSection: {
+  notesContainer: {
     backgroundColor: 'white',
-    margin: 16,
-    marginTop: 0,
     borderRadius: 12,
     padding: 16,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
-  },
-  notesCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
   },
   notesText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#333',
-    lineHeight: 20,
-  },
-  actionsSection: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'white',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4CAF50',
-    marginLeft: 8,
+    lineHeight: 24,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    padding: 40,
   },
   errorTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#ff4444',
+    color: '#333',
     marginTop: 16,
     marginBottom: 8,
   },
   errorMessage: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 24,
     marginBottom: 24,
   },
   backButton: {
@@ -707,6 +590,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: 'white',
+    fontSize: 16,
     fontWeight: 'bold',
   },
   modalOverlay: {
@@ -717,15 +601,15 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 32,
+    borderRadius: 20,
+    padding: 24,
     alignItems: 'center',
-    marginHorizontal: 32,
-    elevation: 8,
+    width: width * 0.85,
+    elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowRadius: 3.84,
   },
   modalTitle: {
     fontSize: 20,
@@ -735,39 +619,53 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   modalMessage: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
+    marginBottom: 16,
+    lineHeight: 24,
+  },
+  modalRunInfo: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
     marginBottom: 24,
+  },
+  modalRunText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     width: '100%',
   },
-  modalCancelButton: {
-    flex: 0.45,
-    paddingVertical: 12,
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
     alignItems: 'center',
+    marginHorizontal: 8,
   },
-  modalCancelText: {
-    color: '#666',
+  cancelButton: {
+    backgroundColor: '#e0e0e0',
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontSize: 16,
     fontWeight: '600',
   },
-  modalConfirmButton: {
-    flex: 0.45,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#ff4444',
-    alignItems: 'center',
+  deleteButton: {
+    backgroundColor: '#F44336',
   },
-  modalConfirmText: {
+  deleteButtonText: {
     color: 'white',
+    fontSize: 16,
     fontWeight: 'bold',
+  },
+  bottomSpacing: {
+    height: 20,
   },
 });
 

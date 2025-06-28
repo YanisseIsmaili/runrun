@@ -59,6 +59,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const clearError = () => {
+    console.log('🧹 Clearing error state');
+    setError(null);
+  };
+
   const login = async (email, password) => {
     console.log('🔐 Starting login process for:', email);
     try {
@@ -66,7 +71,11 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       
       const response = await apiService.login(email, password);
-      console.log('✅ Login API response:', response);
+      console.log('✅ Login API response:', {
+        hasToken: !!response.token,
+        hasUser: !!response.user,
+        message: response.message
+      });
       
       if (response.token) {
         console.log('💾 Storing tokens...');
@@ -78,11 +87,12 @@ export const AuthProvider = ({ children }) => {
         setUser(response.user);
         setIsAuthenticated(true);
         console.log('✅ Login successful, user authenticated');
+        
+        return response;
       } else {
         console.error('🚨 No token in response:', response);
+        throw new Error('Aucun token reçu du serveur');
       }
-      
-      return response;
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.message || 'Erreur de connexion';
       console.error('🚨 Login failed:', errorMessage);
@@ -100,7 +110,11 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       
       const response = await apiService.register(userData);
-      console.log('✅ Registration API response:', response);
+      console.log('✅ Registration API response:', {
+        hasToken: !!response.token,
+        hasUser: !!response.user,
+        message: response.message
+      });
       
       if (response.token) {
         console.log('💾 Auto-login after registration...');
@@ -130,42 +144,51 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       
+      // Tentative de logout côté serveur (optionnel)
       try {
         await apiService.logout();
         console.log('✅ Server logout successful');
       } catch (apiError) {
-        console.log('⚠️ Server logout failed, continuing with local logout');
+        console.warn('⚠️ Server logout failed (route may not exist), continuing local cleanup:', apiError.message);
       }
       
-      console.log('🧹 Clearing local storage...');
+      // Nettoyage local - toujours effectué
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('refreshToken');
-      await AsyncStorage.removeItem('runHistory');
       
       setUser(null);
       setIsAuthenticated(false);
       setError(null);
-      console.log('✅ Logout completed');
-    } catch (err) {
-      const errorMessage = err.message || 'Erreur de déconnexion';
-      console.error('🚨 Logout error:', errorMessage);
-      setError(errorMessage);
-      throw new Error(errorMessage);
+      
+      console.log('✅ Logout completed - tokens cleared locally');
+    } catch (error) {
+      console.error('🚨 Error during logout:', error);
+      // En cas d'erreur, forcer le nettoyage local
+      try {
+        await AsyncStorage.removeItem('authToken');
+        await AsyncStorage.removeItem('refreshToken');
+      } catch (storageError) {
+        console.error('🚨 Error clearing storage:', storageError);
+      }
+      
+      setUser(null);
+      setIsAuthenticated(false);
+      setError(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const updateUser = async (updatedData) => {
-    console.log('📝 Updating user profile:', updatedData);
+  const updateUser = async (userData) => {
+    console.log('👤 Updating user profile...');
     try {
       setLoading(true);
       setError(null);
       
-      const updatedUser = await apiService.updateProfile(updatedData);
+      const updatedUser = await apiService.updateProfile(userData);
       console.log('✅ Profile updated:', updatedUser);
-      setUser(updatedUser);
       
+      setUser(updatedUser);
       return updatedUser;
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.message || 'Erreur de mise à jour du profil';
@@ -177,16 +200,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const clearError = () => {
-    console.log('🧹 Clearing error state');
-    setError(null);
-  };
-
   const value = {
+    // État
     isAuthenticated,
     user,
     loading,
     error,
+    
+    // Actions
     login,
     register,
     logout,

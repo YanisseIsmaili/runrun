@@ -12,14 +12,16 @@ import {
   StatusBar,
   Platform,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRun } from '../../context/RunContext';
 import { useSettings } from '../../context/SettingsContext';
 
+const { width } = Dimensions.get('window');
+
 const HistoryScreen = ({ navigation }) => {
-  // Contextes
   const runContext = useRun();
   const {
     runHistory = [],
@@ -37,13 +39,13 @@ const HistoryScreen = ({ navigation }) => {
   const [filteredRuns, setFilteredRuns] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [sortBy, setSortBy] = useState('date'); // date, distance, duration
-  const [sortOrder, setSortOrder] = useState('desc'); // asc, desc
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRun, setSelectedRun] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [filters, setFilters] = useState({
-    dateRange: 'all', // all, week, month, year
+    dateRange: 'all',
     minDistance: '',
     maxDistance: '',
     minDuration: '',
@@ -57,6 +59,12 @@ const HistoryScreen = ({ navigation }) => {
   useEffect(() => {
     applyFiltersAndSort();
   }, [runHistory, searchTerm, sortBy, sortOrder, filters]);
+
+  useEffect(() => {
+    if (contextError) {
+      Alert.alert('Erreur', contextError);
+    }
+  }, [contextError]);
 
   const loadHistory = async () => {
     try {
@@ -77,23 +85,15 @@ const HistoryScreen = ({ navigation }) => {
   const applyFiltersAndSort = () => {
     let filtered = Array.isArray(runHistory) ? [...runHistory] : [];
 
-    // Filtre par recherche textuelle
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(run => {
-        const distance = formatSafeDistance(run);
-        const duration = formatSafeDuration(run.duration || 0);
-        const date = formatRunDate(run.startTime || run.start_time);
-        
-        return (
-          distance.toLowerCase().includes(searchLower) ||
-          duration.toLowerCase().includes(searchLower) ||
-          date.toLowerCase().includes(searchLower)
-        );
-      });
+    // Filtrage par terme de recherche
+    if (searchTerm) {
+      filtered = filtered.filter(run =>
+        run.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        new Date(run.startTime || run.start_time).toLocaleDateString('fr-FR').includes(searchTerm)
+      );
     }
 
-    // Filtre par date
+    // Filtrage par plage de dates
     if (filters.dateRange !== 'all') {
       const now = new Date();
       let cutoffDate = new Date();
@@ -109,308 +109,261 @@ const HistoryScreen = ({ navigation }) => {
           cutoffDate.setFullYear(now.getFullYear() - 1);
           break;
       }
-
-      filtered = filtered.filter(run => {
-        const runDate = new Date(run.startTime || run.start_time);
-        return runDate >= cutoffDate;
-      });
+      
+      filtered = filtered.filter(run => 
+        new Date(run.startTime || run.start_time) >= cutoffDate
+      );
     }
 
-    // Filtre par distance
+    // Filtrage par distance
     if (filters.minDistance) {
-      const minDist = parseFloat(filters.minDistance) * 1000; // Convertir en mètres
       filtered = filtered.filter(run => {
-        const runDist = getDistanceInMeters(run);
-        return runDist >= minDist;
+        const distanceKm = run.distanceKm || (run.distance / 1000) || 0;
+        return distanceKm >= parseFloat(filters.minDistance);
       });
     }
-
     if (filters.maxDistance) {
-      const maxDist = parseFloat(filters.maxDistance) * 1000;
       filtered = filtered.filter(run => {
-        const runDist = getDistanceInMeters(run);
-        return runDist <= maxDist;
+        const distanceKm = run.distanceKm || (run.distance / 1000) || 0;
+        return distanceKm <= parseFloat(filters.maxDistance);
       });
     }
 
-    // Filtre par durée
+    // Filtrage par durée
     if (filters.minDuration) {
-      const minDur = parseInt(filters.minDuration) * 60; // Convertir en secondes
-      filtered = filtered.filter(run => (run.duration || 0) >= minDur);
+      filtered = filtered.filter(run => 
+        (run.duration || 0) >= parseInt(filters.minDuration) * 60
+      );
     }
-
     if (filters.maxDuration) {
-      const maxDur = parseInt(filters.maxDuration) * 60;
-      filtered = filtered.filter(run => (run.duration || 0) <= maxDur);
+      filtered = filtered.filter(run => 
+        (run.duration || 0) <= parseInt(filters.maxDuration) * 60
+      );
     }
 
     // Tri
     filtered.sort((a, b) => {
-      let aValue, bValue;
-
+      let aVal, bVal;
+      
       switch (sortBy) {
+        case 'date':
+          aVal = new Date(a.startTime || a.start_time);
+          bVal = new Date(b.startTime || b.start_time);
+          break;
         case 'distance':
-          aValue = getDistanceInMeters(a);
-          bValue = getDistanceInMeters(b);
+          aVal = a.distanceKm || (a.distance / 1000) || 0;
+          bVal = b.distanceKm || (b.distance / 1000) || 0;
           break;
         case 'duration':
-          aValue = a.duration || 0;
-          bValue = b.duration || 0;
+          aVal = a.duration || 0;
+          bVal = b.duration || 0;
           break;
-        case 'date':
         default:
-          aValue = new Date(a.startTime || a.start_time).getTime();
-          bValue = new Date(b.startTime || b.start_time).getTime();
-          break;
+          aVal = new Date(a.startTime || a.start_time);
+          bVal = new Date(b.startTime || b.start_time);
       }
-
+      
       if (sortOrder === 'asc') {
-        return aValue - bValue;
+        return aVal > bVal ? 1 : -1;
       } else {
-        return bValue - aValue;
+        return aVal < bVal ? 1 : -1;
       }
     });
 
     setFilteredRuns(filtered);
   };
 
-  // Fonction pour traiter la distance de manière sécurisée
-  const getDistanceInMeters = (run) => {
-    // Si distanceMeters existe, l'utiliser directement
-    if (run.distanceMeters && typeof run.distanceMeters === 'number') {
-      return run.distanceMeters;
-    }
-    
-    // Si distance existe et semble être en km (< 100), convertir en mètres
-    if (run.distance && typeof run.distance === 'number') {
-      if (run.distance < 100) {
-        return run.distance * 1000; // Conversion km -> mètres
-      } else if (run.distance > 100000) {
-        // Distance aberrante, probablement une erreur
-        console.warn('Distance aberrante détectée:', run.distance);
-        return 0;
-      } else {
-        return run.distance; // Déjà en mètres
-      }
-    }
-    
-    return 0;
-  };
-
-  const formatSafeDistance = (run) => {
-    const distanceInMeters = getDistanceInMeters(run);
-    
-    if (distanceInMeters <= 0 || distanceInMeters > 100000) {
-      return '0.00 km';
-    }
-    
-    const distanceKm = distanceInMeters / 1000;
-    return formatDistance ? formatDistance(distanceKm) : `${distanceKm.toFixed(2)} km`;
-  };
-
-  const formatSafeDuration = (dur) => {
-    if (typeof dur !== 'number' || isNaN(dur)) return '0:00';
-    return formatDuration ? formatDuration(dur) : '0:00';
-  };
-
-  const formatRunDate = (dateString) => {
+  const handleDeleteRun = async (runId) => {
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (error) {
-      return 'Date inconnue';
-    }
-  };
-
-  const formatPace = (run) => {
-    const distance = getDistanceInMeters(run);
-    const duration = run.duration || 0;
-    
-    if (!distance || !duration || distance === 0) return '00:00';
-    const distanceKm = distance / 1000;
-    const paceSecPerKm = duration / distanceKm;
-    const minutes = Math.floor(paceSecPerKm / 60);
-    const seconds = Math.floor(paceSecPerKm % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const handleRunPress = (run) => {
-    navigation.navigate('RunDetail', { run });
-  };
-
-  const handleDeleteRun = (run) => {
-    setSelectedRun(run);
-    setShowDeleteModal(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!selectedRun || !deleteRun) return;
-
-    try {
-      await deleteRun(selectedRun.id);
+      await deleteRun(runId);
       setShowDeleteModal(false);
       setSelectedRun(null);
-      Alert.alert('Succès', 'Course supprimée');
+      Alert.alert('Succès', 'Course supprimée avec succès');
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de supprimer la course');
     }
   };
 
-  const resetFilters = () => {
-    setFilters({
-      dateRange: 'all',
-      minDistance: '',
-      maxDistance: '',
-      minDuration: '',
-      maxDuration: '',
+  const formatRunDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
     });
-    setSearchTerm('');
   };
 
-  const getSortIcon = (field) => {
-    if (sortBy !== field) return 'swap-vertical-outline';
-    return sortOrder === 'asc' ? 'chevron-up' : 'chevron-down';
+  const formatRunTime = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
-  const toggleSort = (field) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(field);
-      setSortOrder('desc');
-    }
+  const formatSafeDistance = (run) => {
+    const distanceKm = run.distanceKm || (run.distance / 1000) || 0;
+    return formatDistance ? formatDistance(distanceKm) : `${distanceKm.toFixed(2)} km`;
   };
 
-  const renderRunItem = ({ item: run }) => {
-    const pace = formatPace(run);
+  const formatSafeDuration = (duration) => {
+    return formatDuration ? formatDuration(duration) : '0:00';
+  };
+
+  const renderRunItem = ({ item }) => {
+    const runDate = item.startTime || item.start_time;
+    const pace = item.pace || '00:00';
+    const calories = item.calories || item.calories_burned || 0;
 
     return (
       <TouchableOpacity
         style={styles.runItem}
-        onPress={() => handleRunPress(run)}
-        activeOpacity={0.7}
+        onPress={() => navigation.navigate('RunDetail', { run: item })}
       >
         <View style={styles.runHeader}>
           <View style={styles.runIcon}>
             <Ionicons name="footsteps" size={20} color="#4CAF50" />
           </View>
+          
           <View style={styles.runInfo}>
-            <Text style={styles.runDistance}>{formatSafeDistance(run)}</Text>
-            <Text style={styles.runDate}>{formatRunDate(run.startTime || run.start_time)}</Text>
+            <Text style={styles.runDate}>
+              {formatRunDate(runDate)} • {formatRunTime(runDate)}
+            </Text>
+            <Text style={styles.runNotes} numberOfLines={1}>
+              {item.notes || 'Course sans notes'}
+            </Text>
           </View>
+          
           <TouchableOpacity
             style={styles.deleteButton}
-            onPress={() => handleDeleteRun(run)}
+            onPress={() => {
+              setSelectedRun(item);
+              setShowDeleteModal(true);
+            }}
           >
-            <Ionicons name="trash-outline" size={16} color="#ff4444" />
+            <Ionicons name="trash-outline" size={20} color="#F44336" />
           </TouchableOpacity>
         </View>
-
+        
         <View style={styles.runStats}>
           <View style={styles.statItem}>
-            <Ionicons name="time-outline" size={14} color="#666" />
-            <Text style={styles.statText}>{formatSafeDuration(run.duration || 0)}</Text>
+            <Ionicons name="speedometer-outline" size={16} color="#666" />
+            <Text style={styles.statText}>{formatSafeDistance(item)}</Text>
           </View>
+          
           <View style={styles.statItem}>
-            <Ionicons name="speedometer-outline" size={14} color="#666" />
+            <Ionicons name="time-outline" size={16} color="#666" />
+            <Text style={styles.statText}>{formatSafeDuration(item.duration)}</Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Ionicons name="flash-outline" size={16} color="#666" />
             <Text style={styles.statText}>{pace}/km</Text>
           </View>
-          {run.calories_burned || run.calories ? (
+          
+          {calories > 0 && (
             <View style={styles.statItem}>
-              <Ionicons name="flame-outline" size={14} color="#666" />
-              <Text style={styles.statText}>{run.calories_burned || run.calories} cal</Text>
+              <Ionicons name="flame-outline" size={16} color="#666" />
+              <Text style={styles.statText}>{calories} kcal</Text>
             </View>
-          ) : null}
+          )}
         </View>
       </TouchableOpacity>
     );
   };
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="footsteps-outline" size={64} color="#ccc" />
-      <Text style={styles.emptyTitle}>Aucune course trouvée</Text>
-      <Text style={styles.emptySubtitle}>
-        {searchTerm || Object.values(filters).some(f => f && f !== 'all')
-          ? 'Essayez de modifier vos filtres'
-          : 'Commencez votre première course !'}
-      </Text>
-      {!searchTerm && !Object.values(filters).some(f => f && f !== 'all') && (
-        <TouchableOpacity
-          style={styles.startRunButton}
-          onPress={() => navigation.navigate('Run')}
-        >
-          <Text style={styles.startRunButtonText}>Nouvelle course</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
   const renderHeader = () => (
-    <View style={styles.listHeader}>
+    <View style={styles.headerContainer}>
       {/* Barre de recherche */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+        <Ionicons name="search" size={20} color="#666" />
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher une course..."
           value={searchTerm}
           onChangeText={setSearchTerm}
-          placeholderTextColor="#999"
         />
         {searchTerm ? (
           <TouchableOpacity onPress={() => setSearchTerm('')}>
-            <Ionicons name="close" size={20} color="#666" />
+            <Ionicons name="close-circle" size={20} color="#666" />
           </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* Boutons de tri et filtres */}
-      <View style={styles.controlsRow}>
-        <TouchableOpacity
-          style={styles.sortButton}
-          onPress={() => toggleSort('date')}
-        >
-          <Ionicons name={getSortIcon('date')} size={16} color="#666" />
-          <Text style={styles.sortText}>Date</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.sortButton}
-          onPress={() => toggleSort('distance')}
-        >
-          <Ionicons name={getSortIcon('distance')} size={16} color="#666" />
-          <Text style={styles.sortText}>Distance</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.sortButton}
-          onPress={() => toggleSort('duration')}
-        >
-          <Ionicons name={getSortIcon('duration')} size={16} color="#666" />
-          <Text style={styles.sortText}>Durée</Text>
-        </TouchableOpacity>
-
+      {/* Filtres et tri */}
+      <View style={styles.controlsContainer}>
         <TouchableOpacity
           style={styles.filterButton}
-          onPress={() => setShowFilters(true)}
+          onPress={() => setShowFilters(!showFilters)}
         >
-          <Ionicons name="filter" size={16} color="#4CAF50" />
-          <Text style={styles.filterText}>Filtres</Text>
+          <Ionicons name="filter" size={20} color="#4CAF50" />
+          <Text style={styles.filterButtonText}>Filtres</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.sortButton}
+          onPress={() => {
+            if (sortBy === 'date') {
+              setSortBy('distance');
+            } else if (sortBy === 'distance') {
+              setSortBy('duration');
+            } else {
+              setSortBy('date');
+            }
+          }}
+        >
+          <Ionicons 
+            name={sortOrder === 'desc' ? "arrow-down" : "arrow-up"} 
+            size={16} 
+            color="#4CAF50" 
+          />
+          <Text style={styles.sortButtonText}>
+            {sortBy === 'date' ? 'Date' : sortBy === 'distance' ? 'Distance' : 'Durée'}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.orderButton}
+          onPress={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+        >
+          <Ionicons 
+            name={sortOrder === 'desc' ? "chevron-down" : "chevron-up"} 
+            size={20} 
+            color="#4CAF50" 
+          />
         </TouchableOpacity>
       </View>
 
-      {/* Compteur de résultats */}
-      <Text style={styles.resultsCount}>
-        {filteredRuns.length} course{filteredRuns.length !== 1 ? 's' : ''}
-        {searchTerm || Object.values(filters).some(f => f && f !== 'all') ? ' trouvée(s)' : ' au total'}
+      {/* Statistiques */}
+      <View style={styles.statsContainer}>
+        <Text style={styles.statsText}>
+          {filteredRuns.length} course{filteredRuns.length > 1 ? 's' : ''}
+          {searchTerm || Object.values(filters).some(f => f && f !== 'all') ? ' trouvée(s)' : ' au total'}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="footsteps-outline" size={64} color="#ccc" />
+      <Text style={styles.emptyTitle}>Aucune course trouvée</Text>
+      <Text style={styles.emptyMessage}>
+        {runHistory.length === 0 
+          ? "Commencez votre première course pour voir votre historique ici."
+          : "Aucune course ne correspond à vos critères de recherche."
+        }
       </Text>
+      
+      {runHistory.length === 0 && (
+        <TouchableOpacity
+          style={styles.startRunButton}
+          onPress={() => navigation.navigate('Run')}
+        >
+          <Ionicons name="play" size={20} color="white" />
+          <Text style={styles.startRunButtonText}>Commencer une course</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -439,127 +392,18 @@ const HistoryScreen = ({ navigation }) => {
         <FlatList
           data={filteredRuns}
           renderItem={renderRunItem}
-          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+          keyExtractor={(item) => item.id?.toString() || item.serverId?.toString() || Math.random().toString()}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={renderEmptyState}
-          contentContainerStyle={filteredRuns.length === 0 ? styles.emptyContainer : null}
+          contentContainerStyle={filteredRuns.length === 0 ? styles.emptyList : styles.list}
           showsVerticalScrollIndicator={false}
         />
       )}
 
-      {/* Modal de filtres */}
-      <Modal
-        visible={showFilters}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowFilters(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.filtersModal}>
-            <View style={styles.filtersHeader}>
-              <Text style={styles.filtersTitle}>Filtres</Text>
-              <TouchableOpacity onPress={() => setShowFilters(false)}>
-                <Ionicons name="close" size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.filtersContent}>
-              {/* Filtre par période */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Période</Text>
-                <View style={styles.filterOptions}>
-                  {[
-                    { value: 'all', label: 'Toutes' },
-                    { value: 'week', label: '7 derniers jours' },
-                    { value: 'month', label: '30 derniers jours' },
-                    { value: 'year', label: '12 derniers mois' },
-                  ].map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.filterOption,
-                        filters.dateRange === option.value && styles.filterOptionActive
-                      ]}
-                      onPress={() => setFilters(prev => ({...prev, dateRange: option.value}))}
-                    >
-                      <Text style={[
-                        styles.filterOptionText,
-                        filters.dateRange === option.value && styles.filterOptionTextActive
-                      ]}>
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Filtre par distance */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Distance (km)</Text>
-                <View style={styles.rangeInputs}>
-                  <TextInput
-                    style={styles.rangeInput}
-                    placeholder="Min"
-                    value={filters.minDistance}
-                    onChangeText={(text) => setFilters(prev => ({...prev, minDistance: text}))}
-                    keyboardType="numeric"
-                  />
-                  <Text style={styles.rangeSeparator}>-</Text>
-                  <TextInput
-                    style={styles.rangeInput}
-                    placeholder="Max"
-                    value={filters.maxDistance}
-                    onChangeText={(text) => setFilters(prev => ({...prev, maxDistance: text}))}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              {/* Filtre par durée */}
-              <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Durée (minutes)</Text>
-                <View style={styles.rangeInputs}>
-                  <TextInput
-                    style={styles.rangeInput}
-                    placeholder="Min"
-                    value={filters.minDuration}
-                    onChangeText={(text) => setFilters(prev => ({...prev, minDuration: text}))}
-                    keyboardType="numeric"
-                  />
-                  <Text style={styles.rangeSeparator}>-</Text>
-                  <TextInput
-                    style={styles.rangeInput}
-                    placeholder="Max"
-                    value={filters.maxDuration}
-                    onChangeText={(text) => setFilters(prev => ({...prev, maxDuration: text}))}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.filtersFooter}>
-              <TouchableOpacity
-                style={styles.resetButton}
-                onPress={resetFilters}
-              >
-                <Text style={styles.resetButtonText}>Réinitialiser</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.applyButton}
-                onPress={() => setShowFilters(false)}
-              >
-                <Text style={styles.applyButtonText}>Appliquer</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal de confirmation de suppression */}
+      {/* Modal de suppression */}
       <Modal
         visible={showDeleteModal}
         transparent={true}
@@ -567,26 +411,34 @@ const HistoryScreen = ({ navigation }) => {
         onRequestClose={() => setShowDeleteModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.deleteModalContent}>
-            <Ionicons name="trash-outline" size={48} color="#ff4444" />
-            <Text style={styles.deleteModalTitle}>Supprimer la course ?</Text>
-            <Text style={styles.deleteModalMessage}>
-              Cette action est irréversible. La course sera définitivement supprimée.
+          <View style={styles.modalContent}>
+            <Ionicons name="warning-outline" size={48} color="#F44336" />
+            <Text style={styles.modalTitle}>Supprimer la course</Text>
+            <Text style={styles.modalMessage}>
+              Êtes-vous sûr de vouloir supprimer cette course ? Cette action est irréversible.
             </Text>
             
-            <View style={styles.deleteModalButtons}>
+            {selectedRun && (
+              <View style={styles.modalRunInfo}>
+                <Text style={styles.modalRunText}>
+                  {formatRunDate(selectedRun.startTime || selectedRun.start_time)} • {formatSafeDistance(selectedRun)}
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setShowDeleteModal(false)}
               >
                 <Text style={styles.cancelButtonText}>Annuler</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={styles.confirmDeleteButton}
-                onPress={confirmDelete}
+                style={[styles.modalButton, styles.deleteButtonModal]}
+                onPress={() => handleDeleteRun(selectedRun?.id || selectedRun?.serverId)}
               >
-                <Text style={styles.confirmDeleteText}>Supprimer</Text>
+                <Text style={styles.deleteButtonText}>Supprimer</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -602,13 +454,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 10 : 20,
-    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -621,86 +472,115 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   headerButton: {
+    padding: 4,
+  },
+  headerContainer: {
+    padding: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#333',
+  },
+  controlsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+  },
+  filterButtonText: {
+    marginLeft: 4,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+  },
+  sortButtonText: {
+    marginLeft: 4,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  orderButton: {
+    backgroundColor: 'white',
     padding: 8,
+    borderRadius: 20,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+  },
+  statsContainer: {
+    alignItems: 'center',
+  },
+  statsText: {
+    fontSize: 14,
+    color: '#666',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 12,
     fontSize: 16,
     color: '#666',
   },
-  listHeader: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+  list: {
+    paddingBottom: 20,
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#f8f9fa',
-  },
-  sortText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#e8f5e8',
-  },
-  filterText: {
-    fontSize: 12,
-    color: '#4CAF50',
-    marginLeft: 4,
-    fontWeight: '600',
-  },
-  resultsCount: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
+  emptyList: {
+    flexGrow: 1,
   },
   runItem: {
     backgroundColor: 'white',
     marginHorizontal: 16,
-    marginVertical: 4,
+    marginBottom: 12,
     borderRadius: 12,
     padding: 16,
-    elevation: 1,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.18,
@@ -715,7 +595,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e8f5e8',
+    backgroundColor: '#f0f8f0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -723,15 +603,15 @@ const styles = StyleSheet.create({
   runInfo: {
     flex: 1,
   },
-  runDistance: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
   runDate: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  runNotes: {
     fontSize: 14,
     color: '#666',
-    marginTop: 2,
   },
   deleteButton: {
     padding: 8,
@@ -739,212 +619,126 @@ const styles = StyleSheet.create({
   runStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    flexWrap: 'wrap',
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 4,
   },
   statText: {
-    fontSize: 12,
-    color: '#666',
     marginLeft: 4,
+    fontSize: 14,
+    color: '#666',
   },
   emptyContainer: {
-    flexGrow: 1,
-  },
-  emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    padding: 40,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#333',
     marginTop: 16,
     marginBottom: 8,
   },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#999',
+  emptyMessage: {
+    fontSize: 16,
+    color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 24,
     marginBottom: 24,
   },
   startRunButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#4CAF50',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   startRunButtonText: {
     color: 'white',
+    fontSize: 16,
     fontWeight: 'bold',
-    fontSize: 14,
+    marginLeft: 8,
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  filtersModal: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-  },
-  filtersHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
-  filtersTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  filtersContent: {
-    padding: 16,
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  filterOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  filterOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  modalContent: {
+    backgroundColor: 'white',
     borderRadius: 20,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  filterOptionActive: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
-  },
-  filterOptionText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  filterOptionTextActive: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  rangeInputs: {
-    flexDirection: 'row',
+    padding: 24,
     alignItems: 'center',
-    gap: 12,
-  },
-  rangeInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    backgroundColor: '#fafafa',
-  },
-  rangeSeparator: {
-    fontSize: 16,
-    color: '#666',
-  },
-  filtersFooter: {
-    flexDirection: 'row',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    gap: 12,
-  },
-  resetButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    alignItems: 'center',
-  },
-  resetButtonText: {
-    color: '#666',
-    fontWeight: '600',
-  },
-  applyButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#4CAF50',
-    alignItems: 'center',
-  },
-  applyButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  deleteModalContent: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 32,
-    alignItems: 'center',
-    marginHorizontal: 32,
-    elevation: 8,
+    width: width * 0.85,
+    elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowRadius: 3.84,
   },
-  deleteModalTitle: {
+  modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
     marginTop: 16,
     marginBottom: 8,
   },
-  deleteModalMessage: {
-    fontSize: 14,
+  modalMessage: {
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
+    marginBottom: 16,
+    lineHeight: 24,
+  },
+  modalRunInfo: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
     marginBottom: 24,
   },
-  deleteModalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  cancelButton: {
-    flex: 0.45,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#666',
+  modalRunText: {
+    fontSize: 14,
+    color: '#333',
     fontWeight: '600',
   },
-  confirmDeleteButton: {
-    flex: 0.45,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#ff4444',
-    alignItems: 'center',
+  modalButtons: {
+    flexDirection: 'row',
+    width: '100%',
   },
-  confirmDeleteText: {
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  cancelButton: {
+    backgroundColor: '#e0e0e0',
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteButtonModal: {
+    backgroundColor: '#F44336',
+  },
+  deleteButtonText: {
     color: 'white',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

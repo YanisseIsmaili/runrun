@@ -83,12 +83,20 @@ export const login = async (email, password) => {
     });
     console.log('✅ Login successful:', response);
     
-    // L'API retourne {data: {access_token, user}, message, status}
-    return {
-      token: response.data.access_token,
-      user: response.data.user,
-      message: response.message
-    };
+    // CORRECTION : L'API retourne {data: {access_token, user}, message, status}
+    // Structure complète: response.data.data.access_token
+    const responseData = response.data;
+    
+    if (responseData && responseData.data && responseData.data.access_token) {
+      return {
+        token: responseData.data.access_token,
+        user: responseData.data.user,
+        message: responseData.message
+      };
+    } else {
+      console.error('🚨 Structure de réponse inattendue:', responseData);
+      throw new Error('Format de réponse inattendu du serveur');
+    }
   } catch (error) {
     console.error('🚨 Login failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de connexion');
@@ -97,30 +105,37 @@ export const login = async (email, password) => {
 
 export const register = async (userData) => {
   console.log('📝 Register attempt for:', userData.email);
+  
   try {
-    const response = await api.post('/api/auth/register', userData);
-    console.log('✅ Registration successful:', response);
-    return {
-      token: response.data.access_token,
-      user: response.data.user,
-      message: response.message
-    };
+    // Étape 1: D'abord se connecter comme utilisateur normal
+    console.log('🔄 Tentative de connexion pour vérifier si l\'utilisateur existe...');
+    try {
+      await login(userData.email, userData.password);
+      throw new Error('Un compte avec cet email existe déjà');
+    } catch (loginError) {
+      // Si login échoue, l'utilisateur n'existe pas - on continue
+      console.log('✅ Utilisateur n\'existe pas, on peut créer le compte');
+    }
+
+    // Étape 2: Message temporaire - demander à l'admin de créer le compte
+    throw new Error(`Inscription temporairement indisponible.\n\nContactez un administrateur avec ces infos :\n• Email: ${userData.email}\n• Username: ${userData.username}\n• Nom: ${userData.first_name} ${userData.last_name}`);
+
   } catch (error) {
-    console.error('🚨 Registration failed:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Erreur d\'inscription');
+    console.error('🚨 Registration process failed:', error.message);
+    throw error;
   }
 };
 
 export const logout = async () => {
-  console.log('👋 Logout attempt');
+  console.log('👋 Logout process started');
   try {
-    const refreshToken = await AsyncStorage.getItem('refreshToken');
-    if (refreshToken) {
-      await api.post('/api/auth/logout', { refreshToken });
-      console.log('✅ Logout successful');
-    }
+    // Tentative de logout côté serveur (optionnel)
+    await api.post('/api/auth/logout');
+    console.log('✅ Server logout successful');
   } catch (error) {
-    console.error('🚨 Logout error:', error);
+    // Si la route n'existe pas (404) ou autre erreur, on continue le logout local
+    console.warn('⚠️ Server logout failed (route may not exist):', error.response?.data?.message || error.message);
+    // Ne pas throw ici car on veut quand même nettoyer les tokens locaux
   }
 };
 
@@ -128,33 +143,56 @@ export const getCurrentUser = async () => {
   console.log('👤 Getting current user');
   try {
     const response = await api.get('/api/auth/validate');
-    console.log('✅ User data retrieved:', response);
-    return response.data.user;
+    console.log('✅ Current user retrieved:', response);
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else if (responseData && responseData.user) {
+      return responseData.user;
+    } else {
+      return responseData;
+    }
   } catch (error) {
-    console.error('🚨 Get user failed:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Erreur de récupération du profil');
+    console.error('🚨 Get current user failed:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.message || 'Erreur de récupération du profil utilisateur');
   }
 };
 
-export const updateProfile = async (userData) => {
-  console.log('📝 Updating profile for:', userData);
+export const updateProfile = async (profileData) => {
+  console.log('👤 Updating profile');
   try {
-    const response = await api.put('/api/auth/profile', userData);
+    const response = await api.put('/api/auth/profile', profileData);
     console.log('✅ Profile updated:', response);
-    return response;
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else {
+      return responseData;
+    }
   } catch (error) {
-    console.error('🚨 Profile update failed:', error.response?.data || error.message);
+    console.error('🚨 Update profile failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de mise à jour du profil');
   }
 };
 
 // Services de courses
-export const getRunHistory = async (page = 1, limit = 50) => {
-  console.log('🏃 Getting run history - page:', page, 'limit:', limit);
+export const getRunHistory = async (limit = 20, offset = 0) => {
+  console.log('🏃 Getting run history');
   try {
-    const response = await api.get(`/api/runs?page=${page}&limit=${limit}`);
+    const response = await api.get(`/api/runs?limit=${limit}&offset=${offset}`);
     console.log('✅ Run history retrieved:', response);
-    return response;
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else {
+      return responseData;
+    }
   } catch (error) {
     console.error('🚨 Get run history failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération de l\'historique');
@@ -162,11 +200,18 @@ export const getRunHistory = async (page = 1, limit = 50) => {
 };
 
 export const saveRun = async (runData) => {
-  console.log('💾 Saving run:', runData);
+  console.log('💾 Saving run');
   try {
     const response = await api.post('/api/runs', runData);
     console.log('✅ Run saved:', response);
-    return response;
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else {
+      return responseData;
+    }
   } catch (error) {
     console.error('🚨 Save run failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de sauvegarde de la course');
@@ -178,7 +223,7 @@ export const deleteRun = async (runId) => {
   try {
     const response = await api.delete(`/api/runs/${runId}`);
     console.log('✅ Run deleted:', response);
-    return response;
+    return response.data;
   } catch (error) {
     console.error('🚨 Delete run failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de suppression de la course');
@@ -190,30 +235,37 @@ export const getRunDetails = async (runId) => {
   try {
     const response = await api.get(`/api/runs/${runId}`);
     console.log('✅ Run details retrieved:', response);
-    return response;
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else {
+      return responseData;
+    }
   } catch (error) {
     console.error('🚨 Get run details failed:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Erreur de récupération des détails');
+    throw new Error(error.response?.data?.message || 'Erreur de récupération des détails de la course');
   }
 };
 
-// Services de parcours proposés (NOUVELLES FONCTIONS)
+// Services de parcours/routes
 export const getRoutes = async (params = {}) => {
-  console.log('🗺️ Getting routes with params:', params);
+  console.log('🗺️ Getting routes');
   try {
-    const queryParams = new URLSearchParams();
-    
-    // Ajouter les paramètres de pagination
-    if (params.page) queryParams.append('page', params.page);
-    if (params.limit) queryParams.append('limit', params.limit);
-    if (params.status) queryParams.append('status', params.status);
-    if (params.difficulty) queryParams.append('difficulty', params.difficulty);
-    
-    const url = `/api/routes${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    const queryParams = new URLSearchParams(params);
+    const url = Object.keys(params).length > 0 ? `/api/routes?${queryParams.toString()}` : '/api/routes';
     const response = await api.get(url);
     
     console.log('✅ Routes retrieved:', response);
-    return response;
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else {
+      return responseData;
+    }
   } catch (error) {
     console.error('🚨 Get routes failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des parcours');
@@ -225,7 +277,14 @@ export const getRouteDetails = async (routeId) => {
   try {
     const response = await api.get(`/api/routes/${routeId}`);
     console.log('✅ Route details retrieved:', response);
-    return response;
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else {
+      return responseData;
+    }
   } catch (error) {
     console.error('🚨 Get route details failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des détails du parcours');
@@ -237,7 +296,14 @@ export const getActiveRoutes = async () => {
   try {
     const response = await api.get('/api/routes/active-runs');
     console.log('✅ Active routes retrieved:', response);
-    return response;
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else {
+      return responseData;
+    }
   } catch (error) {
     console.error('🚨 Get active routes failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des parcours actifs');
@@ -250,7 +316,14 @@ export const getStats = async (period = 'week') => {
   try {
     const response = await api.get(`/api/stats?period=${period}`);
     console.log('✅ Stats retrieved:', response);
-    return response;
+    
+    const responseData = response.data;
+    
+    if (responseData && responseData.data) {
+      return responseData.data;
+    } else {
+      return responseData;
+    }
   } catch (error) {
     console.error('🚨 Get stats failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des statistiques');
@@ -286,7 +359,7 @@ export default {
   saveRun,
   deleteRun,
   getRunDetails,
-  // Routes (NOUVEAU)
+  // Routes
   getRoutes,
   getRouteDetails,
   getActiveRoutes,
