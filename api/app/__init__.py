@@ -9,6 +9,7 @@ from datetime import timedelta, datetime
 import os
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
 db = SQLAlchemy()
@@ -83,6 +84,7 @@ def create_app(config_name=None):
         from app.routes.routes import routes_bp
         from app.routes.admin import admin_bp
         from app.routes.dashboard import dashboard_bp
+        from app.routes.upload import upload_bp
         
         # Import du modèle stats_cache
         from app.models.stats_cache import StatsCache
@@ -93,6 +95,7 @@ def create_app(config_name=None):
         app.register_blueprint(routes_bp, url_prefix='/api/routes')
         app.register_blueprint(admin_bp, url_prefix='/api/admin')
         app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+        app.register_blueprint(upload_bp, url_prefix='/api/uploads')
         
         print("✅ Blueprints enregistrés avec succès")
     except ImportError as e:

@@ -13,7 +13,8 @@ import {
   CircleStackIcon,
   ClockIcon,
   Cog6ToothIcon,
-  EyeIcon
+  EyeIcon,
+  SignalIcon
 } from '@heroicons/react/24/outline'
 
 import apiConfigUtils from '../utils/apiConfig'
@@ -31,7 +32,9 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [scanningStatus, setScanningStatus] = useState({}) // État de scan pour chaque API
   const buttonRef = useRef(null)
+  const abortControllerRef = useRef(null)
 
   // Configuration
   const [apiConfig] = useState(() => apiConfigUtils.getCompleteApiConfig())
@@ -39,6 +42,35 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
   const defaultPort = apiConfig.config.defaultPort
   const apiTimeout = apiConfig.config.apiTimeout
   const [customApis, setCustomApis] = useState(() => apiConfig.customApis)
+
+  // Initialisation immédiate des APIs par défaut
+  useEffect(() => {
+    console.log('🚀 Initialisation ApiSelectorButton avec', defaultApis.length, 'APIs par défaut')
+    
+    // Affichage immédiat des APIs par défaut avec status "unknown"
+    const defaultApiList = [...defaultApis, ...customApis.map(c => ({ ip: c.ip, name: c.name }))].map(apiConfig => ({
+      id: `${apiConfig.ip}:${defaultPort}`,
+      url: `http://${apiConfig.ip}:${defaultPort}`,
+      ip: apiConfig.ip,
+      port: defaultPort,
+      name: apiConfig.name,
+      status: 'scanning',
+      serverAccessible: null,
+      databaseConnected: null,
+      responseTime: null,
+      details: 'Scan en cours...',
+      diagnosticLevel: 'pending',
+      isCustom: customApis.some(c => c.ip === apiConfig.ip),
+      isScanning: true
+    }))
+
+    setAvailableApis(defaultApiList)
+    
+    // Lancement automatique du scan en arrière-plan
+    setTimeout(() => {
+      scanAvailableApisParallel()
+    }, 100)
+  }, [customApis])
 
   // Drag & Drop
   const handleMouseDown = (e) => {
@@ -113,26 +145,27 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
     }
   }, [isOpen])
 
+  // Cleanup AbortController
   useEffect(() => {
-    scanAvailableApis()
-  }, [customApis])
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
 
   // Test API avancé
-  const advancedApiTest = async (apiUrl) => {
+  const advancedApiTest = async (apiUrl, signal) => {
     const startTime = Date.now()
     
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), apiTimeout)
-
       const response = await fetch(`${apiUrl}/api/health`, {
         method: 'GET',
         mode: 'cors',
-        signal: controller.signal,
+        signal,
         headers: { 'Content-Type': 'application/json' }
       })
 
-      clearTimeout(timeoutId)
       const responseTime = Date.now() - startTime
 
       if (response.ok) {
@@ -175,73 +208,192 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
         }
       }
     } catch (error) {
+      if (error.name === 'AbortError') {
+        throw error // Propager l'erreur d'annulation
+      }
+      
       return {
-        status: error.name === 'AbortError' ? 'timeout' : 'network_error',
+        status: 'network_error',
         serverAccessible: false,
         databaseConnected: false,
         responseTime: Date.now() - startTime,
         error: error.message,
-        details: error.name === 'AbortError' ? 'Timeout serveur' : 'Erreur réseau',
+        details: 'Erreur réseau',
         diagnosticLevel: 'network_only'
       }
     }
   }
 
-  const scanAvailableApis = async () => {
+  // Scan parallèle optimisé
+  const scanAvailableApisParallel = async () => {
+    console.log('🔍 Lancement du scan parallèle des APIs...')
     setIsScanning(true)
-    const discoveredApis = []
-    const allApis = [...defaultApis, ...customApis.map(c => ({ ip: c.ip, name: c.name }))]
     
+    // Annuler le scan précédent si en cours
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+    
+    const allApis = [...defaultApis, ...customApis.map(c => ({ ip: c.ip, name: c.name }))]
     setScanProgress({ current: 0, total: allApis.length })
 
-    for (let i = 0; i < allApis.length; i++) {
-      const apiConfig = allApis[i]
-      setScanProgress({ current: i + 1, total: allApis.length })
+    // Fonction pour tester une API avec timeout personnalisé
+    const testApiWithTimeout = async (apiConfig, index) => {
+      const apiUrl = `http://${apiConfig.ip}:${defaultPort}`
+      const apiId = `${apiConfig.ip}:${defaultPort}`
       
       try {
-        const apiUrl = `http://${apiConfig.ip}:${defaultPort}`
-        const testResult = await advancedApiTest(apiUrl)
+        // Timeout personnalisé avec AbortController
+        const timeoutController = new AbortController()
+        const timeoutId = setTimeout(() => timeoutController.abort(), apiTimeout)
         
-        discoveredApis.push({
-          id: `${apiConfig.ip}:${defaultPort}`,
+        // Combinaison des signals d'annulation
+        const combinedSignal = (() => {
+          const controller = new AbortController()
+          const cleanup = () => {
+            signal.removeEventListener('abort', abortHandler)
+            timeoutController.signal.removeEventListener('abort', timeoutHandler)
+            clearTimeout(timeoutId)
+          }
+          
+          const abortHandler = () => {
+            cleanup()
+            controller.abort()
+          }
+          
+          const timeoutHandler = () => {
+            cleanup()
+            controller.abort()
+          }
+          
+          if (signal.aborted) {
+            controller.abort()
+          } else {
+            signal.addEventListener('abort', abortHandler)
+          }
+          
+          if (timeoutController.signal.aborted) {
+            controller.abort()
+          } else {
+            timeoutController.signal.addEventListener('abort', timeoutHandler)
+          }
+          
+          return controller.signal
+        })()
+
+        // Mettre à jour le statut de scan pour cette API
+        setScanningStatus(prev => ({ ...prev, [apiId]: true }))
+
+        const testResult = await advancedApiTest(apiUrl, combinedSignal)
+        clearTimeout(timeoutId)
+        
+        const apiResult = {
+          id: apiId,
           url: apiUrl,
           ip: apiConfig.ip,
           port: defaultPort,
           name: apiConfig.name,
           isCustom: customApis.some(c => c.ip === apiConfig.ip),
+          isScanning: false,
           ...testResult
-        })
+        }
+
+        // Mise à jour immédiate de cette API dans la liste
+        setAvailableApis(prev => prev.map(api => 
+          api.id === apiId ? { ...api, ...apiResult } : api
+        ))
+        
+        setScanProgress(prev => ({ ...prev, current: prev.current + 1 }))
+        setScanningStatus(prev => ({ ...prev, [apiId]: false }))
+        
+        return apiResult
+        
       } catch (error) {
-        discoveredApis.push({
-          id: `${apiConfig.ip}:${defaultPort}`,
-          url: `http://${apiConfig.ip}:${defaultPort}`,
+        clearTimeout(timeoutId)
+        
+        if (signal.aborted) {
+          console.log(`⚠️ Scan annulé pour ${apiConfig.ip}`)
+          return null
+        }
+        
+        const isTimeout = error.name === 'AbortError'
+        const apiResult = {
+          id: apiId,
+          url: apiUrl,
           ip: apiConfig.ip,
           port: defaultPort,
           name: apiConfig.name,
-          status: 'critical_error',
+          status: isTimeout ? 'timeout' : 'critical_error',
           serverAccessible: false,
           databaseConnected: false,
           responseTime: 0,
           error: error.message,
-          details: 'Erreur critique',
+          details: isTimeout ? 'Timeout serveur' : 'Erreur critique',
           diagnosticLevel: 'none',
-          isCustom: customApis.some(c => c.ip === apiConfig.ip)
-        })
+          isCustom: customApis.some(c => c.ip === apiConfig.ip),
+          isScanning: false
+        }
+
+        // Mise à jour immédiate de cette API dans la liste
+        setAvailableApis(prev => prev.map(api => 
+          api.id === apiId ? { ...api, ...apiResult } : api
+        ))
+        
+        setScanProgress(prev => ({ ...prev, current: prev.current + 1 }))
+        setScanningStatus(prev => ({ ...prev, [apiId]: false }))
+        
+        return apiResult
       }
     }
 
-    // Tri par priorité
-    discoveredApis.sort((a, b) => {
-      if (a.serverAccessible && a.databaseConnected && !(b.serverAccessible && b.databaseConnected)) return -1
-      if (b.serverAccessible && b.databaseConnected && !(a.serverAccessible && a.databaseConnected)) return 1
-      if (a.serverAccessible && !b.serverAccessible) return -1
-      if (b.serverAccessible && !a.serverAccessible) return 1
-      if (a.serverAccessible && b.serverAccessible) return a.responseTime - b.responseTime
-      return a.name.localeCompare(b.name)
-    })
+    try {
+      // Lancement de tous les tests en parallèle avec Promise.allSettled
+      console.log(`🚀 Lancement de ${allApis.length} tests API en parallèle...`)
+      const promises = allApis.map((apiConfig, index) => testApiWithTimeout(apiConfig, index))
+      
+      const results = await Promise.allSettled(promises)
+      
+      if (signal.aborted) {
+        console.log('⚠️ Scan global annulé')
+        return
+      }
 
-    setAvailableApis(discoveredApis)
-    setIsScanning(false)
+      // Filtrer les résultats valides et trier
+      const validResults = results
+        .filter(result => result.status === 'fulfilled' && result.value !== null)
+        .map(result => result.value)
+
+      // Tri par priorité
+      validResults.sort((a, b) => {
+        if (a.serverAccessible && a.databaseConnected && !(b.serverAccessible && b.databaseConnected)) return -1
+        if (b.serverAccessible && b.databaseConnected && !(a.serverAccessible && a.databaseConnected)) return 1
+        if (a.serverAccessible && !b.serverAccessible) return -1
+        if (b.serverAccessible && !a.serverAccessible) return 1
+        if (a.serverAccessible && b.serverAccessible) return a.responseTime - b.responseTime
+        return a.name.localeCompare(b.name)
+      })
+
+      // Mise à jour finale avec tri
+      setAvailableApis(validResults)
+      
+      const okCount = validResults.filter(api => api.serverAccessible && api.databaseConnected).length
+      const serverOnlyCount = validResults.filter(api => api.serverAccessible && !api.databaseConnected).length
+      const offlineCount = validResults.filter(api => !api.serverAccessible).length
+      
+      console.log(`✅ Scan parallèle terminé: ${okCount} OK complets, ${serverOnlyCount} serveur seul, ${offlineCount} hors ligne`)
+      
+    } catch (error) {
+      if (!signal.aborted) {
+        console.error('❌ Erreur lors du scan parallèle:', error)
+      }
+    } finally {
+      setIsScanning(false)
+      setScanProgress({ current: 0, total: 0 })
+      setScanningStatus({})
+    }
   }
 
   const handleApiSelect = (api) => {
@@ -289,9 +441,17 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
     apiConfigUtils.saveCustomApis(updated)
   }
 
+  // Relancer le scan manuellement
+  const handleRefreshScan = () => {
+    console.log('🔄 Relancement manuel du scan...')
+    scanAvailableApisParallel()
+  }
+
   // UI Helpers
   const getApiStatusIcon = (api) => {
-    if (api.serverAccessible && api.databaseConnected) {
+    if (api.isScanning || api.status === 'scanning') {
+      return <ArrowPathIcon className="h-4 w-4 text-blue-500 animate-spin" />
+    } else if (api.serverAccessible && api.databaseConnected) {
       return <CheckCircleIcon className="h-4 w-4 text-green-500" />
     } else if (api.serverAccessible && !api.databaseConnected) {
       return <ExclamationTriangleIcon className="h-4 w-4 text-yellow-500" />
@@ -303,7 +463,16 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
   }
 
   const getStatusBadge = (api) => {
-    if (api.serverAccessible && api.databaseConnected) {
+    if (api.isScanning || api.status === 'scanning') {
+      return (
+        <div className="flex items-center space-x-1">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+            🔄 SCAN
+          </span>
+          <ArrowPathIcon className="h-3 w-3 text-blue-600 animate-spin" />
+        </div>
+      )
+    } else if (api.serverAccessible && api.databaseConnected) {
       return (
         <div className="flex items-center space-x-1">
           <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
@@ -344,6 +513,7 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
 
   const availableCount = availableApis.filter(api => api.serverAccessible && api.databaseConnected).length
   const serverOnlyCount = availableApis.filter(api => api.serverAccessible && !api.databaseConnected).length
+  const scanningCount = availableApis.filter(api => api.isScanning || api.status === 'scanning').length
 
   // Calculer position initiale
   const getInitialPosition = () => {
@@ -397,7 +567,9 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
               <CircleStackIcon className={`h-3 w-3 ${
                 selectedApi.databaseConnected ? 'text-green-200' : 'text-red-300'
               }`} />
-              <span className="text-xs text-green-200">{selectedApi.responseTime}ms</span>
+              {selectedApi.responseTime !== null && (
+                <span className="text-xs text-green-200">{selectedApi.responseTime}ms</span>
+              )}
             </div>
           )}
           <ChevronDownIcon className={`h-4 w-4 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
@@ -434,6 +606,11 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                       {serverOnlyCount > 0 && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-600 text-white rounded-full">
                           {serverOnlyCount} DB-
+                        </span>
+                      )}
+                      {scanningCount > 0 && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-600 text-white rounded-full">
+                          {scanningCount} Scan
                         </span>
                       )}
                     </div>
@@ -473,12 +650,12 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
             <div className="px-6 py-4 border-b border-green-100 bg-green-25 space-y-3">
               <div className="flex space-x-2">
                 <button
-                  onClick={scanAvailableApis}
+                  onClick={handleRefreshScan}
                   disabled={isScanning}
                   className="btn bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white flex-1 transition-all duration-300"
                 >
                   <ArrowPathIcon className={`h-4 w-4 mr-2 ${isScanning ? 'animate-spin' : ''}`} />
-                  {isScanning ? 'Scan...' : 'Scanner'}
+                  {isScanning ? 'Scan...' : 'Re-scanner'}
                 </button>
                 
                 <button
@@ -585,19 +762,21 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
               {availableApis.length === 0 ? (
                 <div className="px-6 py-8 text-center text-gray-500">
                   <ServerIcon className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-sm font-medium">Aucune API trouvée</p>
-                  <p className="text-xs text-gray-400 mt-1">Lancez un scan pour découvrir les serveurs</p>
+                  <p className="text-sm font-medium">Aucune API configurée</p>
+                  <p className="text-xs text-gray-400 mt-1">Ajoutez des serveurs pour commencer</p>
                 </div>
               ) : (
                 <div className="space-y-1 p-2">
                   {availableApis.map((api, index) => (
                     <div
                       key={api.id}
-                      onClick={() => handleApiSelect(api)}
-                      className={`p-4 cursor-pointer rounded-xl transition-all duration-200 border-2 animate-slide-in-left ${
-                        selectedApi?.id === api.id
-                          ? 'bg-green-50 border-green-500 shadow-md'
-                          : 'hover:bg-gray-50 border-transparent hover:border-green-200'
+                      onClick={() => !api.isScanning && handleApiSelect(api)}
+                      className={`p-4 rounded-xl transition-all duration-200 border-2 animate-slide-in-left ${
+                        api.isScanning || api.status === 'scanning'
+                          ? 'cursor-wait bg-blue-25 border-blue-200'
+                          : selectedApi?.id === api.id
+                          ? 'bg-green-50 border-green-500 shadow-md cursor-pointer'
+                          : 'hover:bg-gray-50 border-transparent hover:border-green-200 cursor-pointer'
                       }`}
                       style={{ animationDelay: `${index * 50}ms` }}
                     >
@@ -650,26 +829,34 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                             )}
                             
                             {/* Erreurs détaillées */}
-                            {api.errorData && (
+                            {api.error && (
                               <div className="text-xs mt-2 p-2 bg-red-50 rounded border border-red-200">
-                                <div className="text-red-800 font-medium">Erreur serveur:</div>
+                                <div className="text-red-800 font-medium">Erreur:</div>
                                 <div className="text-red-700 text-xs mt-1">
-                                  {api.errorData.message || api.error || 'Erreur inconnue'}
+                                  {api.error}
                                 </div>
+                              </div>
+                            )}
+
+                            {/* Indicateur de scan en cours */}
+                            {(api.isScanning || api.status === 'scanning') && (
+                              <div className="text-xs mt-2 p-2 bg-blue-50 rounded border border-blue-200 flex items-center space-x-2">
+                                <ArrowPathIcon className="h-3 w-3 text-blue-600 animate-spin" />
+                                <span className="text-blue-800 font-medium">Test en cours...</span>
                               </div>
                             )}
                           </div>
                         </div>
 
                         <div className="flex items-center space-x-2 ml-3">
-                          {api.serverAccessible && (
+                          {api.serverAccessible && api.responseTime !== null && (
                             <div className="flex items-center space-x-1 text-xs text-gray-500">
                               <ClockIcon className="h-3 w-3" />
                               <span className="font-medium">{api.responseTime}ms</span>
                             </div>
                           )}
                           
-                          {api.isCustom && (
+                          {api.isCustom && !api.isScanning && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -700,7 +887,7 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
 
             {/* Footer Statistiques */}
             <div className="card-footer">
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-4 gap-3 text-center">
                 <div>
                   <div className="text-lg font-bold text-green-600">{availableCount}</div>
                   <div className="text-xs text-gray-500">Complets</div>
@@ -710,8 +897,12 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                   <div className="text-xs text-gray-500">Serveur OK</div>
                 </div>
                 <div>
+                  <div className="text-lg font-bold text-blue-600">{scanningCount}</div>
+                  <div className="text-xs text-gray-500">En test</div>
+                </div>
+                <div>
                   <div className="text-lg font-bold text-red-600">
-                    {availableApis.length - availableCount - serverOnlyCount}
+                    {availableApis.length - availableCount - serverOnlyCount - scanningCount}
                   </div>
                   <div className="text-xs text-gray-500">Hors ligne</div>
                 </div>
@@ -721,9 +912,28 @@ const ApiSelectorButton = ({ onApiChange, className = "" }) => {
                 <div className="mt-3 pt-3 border-t border-green-100 text-center">
                   <div className="text-xs text-gray-500">
                     Temps moyen: {Math.round(
-                      availableApis.filter(api => api.responseTime).reduce((acc, api) => acc + api.responseTime, 0) / 
-                      availableApis.filter(api => api.responseTime).length || 0
+                      availableApis.filter(api => api.responseTime && api.responseTime > 0).reduce((acc, api) => acc + api.responseTime, 0) / 
+                      (availableApis.filter(api => api.responseTime && api.responseTime > 0).length || 1)
                     )}ms
+                    {isScanning && (
+                      <span className="ml-2 text-blue-600">
+                        • Scan en cours...
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Indicateurs de performance */}
+              {availableApis.length > 0 && !isScanning && (
+                <div className="mt-2 pt-2 border-t border-green-100">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>
+                      Meilleur: {Math.min(...availableApis.filter(api => api.responseTime && api.responseTime > 0).map(api => api.responseTime)) || 0}ms
+                    </span>
+                    <span>
+                      APIs configurées: {availableApis.length}
+                    </span>
                   </div>
                 </div>
               )}
