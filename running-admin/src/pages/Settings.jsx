@@ -5,6 +5,7 @@ import cryptoService from '../services/cryptoService'
 import SecurityInfo from '../components/SecurityInfo'
 import { useAuth } from '../contexts/AuthContext'
 
+
 // Données temporaires pour le développement
 const tempSettings = {
   general: {
