@@ -25,6 +25,8 @@ def login():
         email_or_username = data.get('email') or data.get('username')
         password = data.get('password')
         
+        print(f"🔍 Tentative de connexion pour: {email_or_username}")
+        
         if not email_or_username or not password:
             return jsonify({
                 "status": "error",
@@ -38,19 +40,35 @@ def login():
         # Chercher l'utilisateur
         if is_email:
             user = User.query.filter_by(email=email_or_username.lower()).first()
+            print(f"🔍 Recherche par email: {email_or_username.lower()}")
         else:
             user = User.query.filter_by(username=email_or_username).first()
+            print(f"🔍 Recherche par username: {email_or_username}")
         
-        # Vérifier l'utilisateur et le mot de passe
-        if not user or not user.verify_password(password):
+        if not user:
+            print(f"❌ Utilisateur non trouvé: {email_or_username}")
             return jsonify({
                 "status": "error",
                 "message": "Identifiants invalides",
                 "errors": {"credentials": "Email/username ou mot de passe incorrect"}
             }), 401
         
+        print(f"✅ Utilisateur trouvé: {user.username} (ID: {user.id})")
+        
+        # Vérifier le mot de passe avec la méthode du modèle
+        if not user.verify_password(password):
+            print(f"❌ Mot de passe incorrect pour: {user.username}")
+            return jsonify({
+                "status": "error",
+                "message": "Identifiants invalides",
+                "errors": {"credentials": "Email/username ou mot de passe incorrect"}
+            }), 401
+        
+        print(f"✅ Mot de passe correct pour: {user.username}")
+        
         # Vérifier si le compte est actif
         if not user.is_active:
+            print(f"❌ Compte désactivé: {user.username}")
             return jsonify({
                 "status": "error",
                 "message": "Compte désactivé",
@@ -63,9 +81,11 @@ def login():
         
         # Créer le token JWT avec identity en string
         access_token = create_access_token(
-            identity=str(user.id),  # CONVERSION EN STRING
+            identity=str(user.id),
             expires_delta=timedelta(hours=24)
         )
+        
+        print(f"✅ Connexion réussie: {user.username}")
         
         return jsonify({
             "status": "success",
@@ -78,6 +98,7 @@ def login():
         
     except Exception as e:
         db.session.rollback()
+        print(f"❌ Erreur login: {e}")
         return jsonify({
             "status": "error",
             "message": "Erreur lors de la connexion",
@@ -90,7 +111,7 @@ def validate_token():
     """Valide le token JWT et retourne les infos utilisateur"""
     try:
         print("🔍 Validation du token...")
-        current_user_id = int(get_jwt_identity())  # CONVERSION EN INT
+        current_user_id = int(get_jwt_identity())
         print(f"👤 User ID extrait du token: {current_user_id}")
         
         user = User.query.get(current_user_id)
@@ -181,21 +202,25 @@ def register():
         user = User(
             username=data['username'].strip(),
             email=data['email'].strip().lower(),
-            password=data['password'],  # Le setter s'occupe du hashage
             first_name=data.get('first_name', '').strip(),
             last_name=data.get('last_name', '').strip(),
             is_active=True,
-            is_admin=False  # Les nouveaux utilisateurs ne sont pas admin par défaut
+            is_admin=False
         )
+        
+        # UTILISER set_password() au lieu du setter password
+        user.set_password(data['password'])
         
         db.session.add(user)
         db.session.commit()
         
         # Créer le token d'accès avec identity en string
         access_token = create_access_token(
-            identity=str(user.id),  # CONVERSION EN STRING
+            identity=str(user.id),
             expires_delta=timedelta(hours=24)
         )
+        
+        print(f"✅ Inscription réussie: {user.username}")
         
         return jsonify({
             "status": "success",
@@ -208,6 +233,7 @@ def register():
         
     except Exception as e:
         db.session.rollback()
+        print(f"❌ Erreur inscription: {e}")
         return jsonify({
             "status": "error",
             "message": "Erreur lors de l'inscription",
@@ -219,7 +245,7 @@ def register():
 def change_password():
     """Changement de mot de passe"""
     try:
-        current_user_id = int(get_jwt_identity())  # CONVERSION EN INT
+        current_user_id = int(get_jwt_identity())
         user = User.query.get(current_user_id)
         
         if not user:
@@ -266,7 +292,7 @@ def change_password():
             }), 400
         
         # Changer le mot de passe
-        user.password = new_password
+        user.set_password(new_password)
         db.session.commit()
         
         return jsonify({
@@ -287,7 +313,7 @@ def change_password():
 def refresh():
     """Rafraîchit le token JWT"""
     try:
-        current_user_id = int(get_jwt_identity())  # CONVERSION EN INT
+        current_user_id = int(get_jwt_identity())
         user = User.query.get(current_user_id)
         
         if not user or not user.is_active:
@@ -298,7 +324,7 @@ def refresh():
         
         # Créer un nouveau token avec identity en string
         new_token = create_access_token(
-            identity=str(user.id),  # CONVERSION EN STRING
+            identity=str(user.id),
             expires_delta=timedelta(hours=24)
         )
         
@@ -332,7 +358,7 @@ def promote_admin():
                 "message": "Clé secrète invalide"
             }), 401
         
-        current_user_id = int(get_jwt_identity())  # CONVERSION EN INT
+        current_user_id = int(get_jwt_identity())
         user = User.query.get(current_user_id)
         
         if not user:
