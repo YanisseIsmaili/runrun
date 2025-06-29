@@ -1,70 +1,104 @@
-// running-admin/src/pages/Dashboard.jsx - EXEMPLE AVEC THEME VERT
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import { 
   UserGroupIcon, 
   ClockIcon, 
   ChartBarIcon,
-  TrophyIcon,
+  MapPinIcon,
   ArrowUpIcon,
   ArrowDownIcon,
   EyeIcon,
   PlusIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  TrophyIcon,
+  FireIcon,
+  HeartIcon
 } from '@heroicons/react/24/outline'
+import { ChartBarIcon as ChartBarSolidIcon } from '@heroicons/react/24/solid'
+import api from '../services/api'
 
 const Dashboard = () => {
-  const { user, isAdmin } = useAuth()
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeRuns: 0,
     totalDistance: 0,
-    avgSpeed: 0,
+    totalRoutes: 0,
     loading: true
   })
   const [recentActivity, setRecentActivity] = useState([])
-  const [quickActions, setQuickActions] = useState([])
+  const [quickStats, setQuickStats] = useState([])
 
-  // Données de démonstration
   useEffect(() => {
-    // Simulation du chargement des données
-    setTimeout(() => {
-      setStats({
-        totalUsers: 1247,
-        activeRuns: 23,
-        totalDistance: 15847.2,
-        avgSpeed: 8.3,
-        loading: false
-      })
-
-      setRecentActivity([
-        {
-          id: 1,
-          user: 'Marie Dubois',
-          action: 'Course terminée',
-          distance: '5.2 km',
-          time: 'il y a 5 min',
-          type: 'success'
-        },
-        {
-          id: 2,
-          user: 'Pierre Martin',
-          action: 'Nouveau parcours créé',
-          distance: '8.7 km',
-          time: 'il y a 12 min',
-          type: 'info'
-        },
-        {
-          id: 3,
-          user: 'Sophie Leroux',
-          action: 'Record personnel battu',
-          distance: '10.1 km',
-          time: 'il y a 23 min',
-          type: 'achievement'
-        }
-      ])
-    }, 1000)
+    fetchDashboardData()
   }, [])
+
+  const fetchDashboardData = async () => {
+    try {
+      // Simulation de données - remplacer par vrais appels API
+      setTimeout(() => {
+        setStats({
+          totalUsers: 1247,
+          activeRuns: 23,
+          totalDistance: 15847.2,
+          totalRoutes: 45,
+          loading: false
+        })
+
+        setRecentActivity([
+          {
+            id: 1,
+            user: 'Marie Dubois',
+            action: 'Course terminée',
+            details: '5.2 km en 28min',
+            time: 'il y a 5 min',
+            type: 'run',
+            avatar: 'MD'
+          },
+          {
+            id: 2,
+            user: 'Pierre Martin', 
+            action: 'Nouveau parcours',
+            details: '8.7 km - Parc Central',
+            time: 'il y a 12 min',
+            type: 'route',
+            avatar: 'PM'
+          },
+          {
+            id: 3,
+            user: 'Sophie Leroux',
+            action: 'Record personnel',
+            details: '10.1 km en 45min',
+            time: 'il y a 23 min',
+            type: 'achievement',
+            avatar: 'SL'
+          },
+          {
+            id: 4,
+            user: 'Thomas Blanc',
+            action: 'Inscription',
+            details: 'Nouveau membre',
+            time: 'il y a 1h',
+            type: 'user',
+            avatar: 'TB'
+          }
+        ])
+
+        setQuickStats([
+          { label: 'Courses aujourd\'hui', value: '47', change: '+12%', positive: true },
+          { label: 'Nouveaux membres', value: '8', change: '+25%', positive: true },
+          { label: 'Distance moyenne', value: '6.3 km', change: '-2%', positive: false },
+          { label: 'Temps moyen', value: '32min', change: '+5%', positive: true }
+        ])
+      }, 1000)
+    } catch (error) {
+      console.error('Erreur chargement dashboard:', error)
+      setStats(prev => ({ ...prev, loading: false }))
+    }
+  }
 
   const statCards = [
     {
@@ -73,17 +107,17 @@ const Dashboard = () => {
       icon: UserGroupIcon,
       change: '+12%',
       changeType: 'increase',
-      emoji: '👥',
-      gradient: 'from-green-500 to-emerald-600'
+      gradient: 'from-blue-500 to-cyan-500',
+      href: '/users'
     },
     {
       title: 'Courses actives',
       value: stats.activeRuns,
       icon: ClockIcon,
       change: '+3',
-      changeType: 'increase',
-      emoji: '🏃',
-      gradient: 'from-emerald-500 to-green-600'
+      changeType: 'increase', 
+      gradient: 'from-green-500 to-emerald-500',
+      href: '/history'
     },
     {
       title: 'Distance totale',
@@ -91,331 +125,291 @@ const Dashboard = () => {
       icon: ChartBarIcon,
       change: '+8%',
       changeType: 'increase',
-      emoji: '📊',
-      gradient: 'from-green-600 to-emerald-700'
+      gradient: 'from-purple-500 to-indigo-500',
+      href: '/stats'
     },
     {
-      title: 'Vitesse moyenne',
-      value: `${stats.avgSpeed} km/h`,
-      icon: TrophyIcon,
-      change: '-0.2',
-      changeType: 'decrease',
-      emoji: '🏆',
-      gradient: 'from-emerald-600 to-green-700'
+      title: 'Parcours créés',
+      value: stats.totalRoutes,
+      icon: MapPinIcon,
+      change: '+2',
+      changeType: 'increase',
+      gradient: 'from-orange-500 to-red-500',
+      href: '/routes'
     }
   ]
 
+  const getActivityIcon = (type) => {
+    switch (type) {
+      case 'run': return <ClockIcon className="h-5 w-5 text-green-600" />
+      case 'route': return <MapPinIcon className="h-5 w-5 text-blue-600" />
+      case 'achievement': return <TrophyIcon className="h-5 w-5 text-yellow-600" />
+      case 'user': return <UserGroupIcon className="h-5 w-5 text-purple-600" />
+      default: return <ChartBarSolidIcon className="h-5 w-5 text-gray-600" />
+    }
+  }
+
+  const getActivityBg = (type) => {
+    switch (type) {
+      case 'run': return 'bg-green-100'
+      case 'route': return 'bg-blue-100' 
+      case 'achievement': return 'bg-yellow-100'
+      case 'user': return 'bg-purple-100'
+      default: return 'bg-gray-100'
+    }
+  }
+
   if (stats.loading) {
     return (
-      <div className="animate-fade-in">
-        {/* Loading Skeleton avec thème vert */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="card">
-              <div className="card-body">
-                <div className="skeleton h-4 w-24 mb-2"></div>
-                <div className="skeleton h-8 w-16 mb-2"></div>
-                <div className="skeleton h-3 w-20"></div>
-              </div>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex justify-center items-center h-64">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-emerald-400 to-green-500 mb-6 animate-spin">
+              <div className="w-8 h-8 border-t-2 border-white rounded-full animate-spin"></div>
             </div>
-          ))}
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Header */}
-      <div className="glass-green rounded-2xl p-6 border border-green-200">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
-          <div>
-            <h1 className="text-3xl font-bold text-green-800 text-shadow">
-              Bienvenue, {user?.username} ! 🌟
-            </h1>
-            <p className="text-green-600 mt-2">
-              Voici un aperçu de l'activité de votre plateforme de running
-            </p>
-          </div>
-          <div className="flex space-x-3">
-            <button className="btn btn-secondary btn-sm">
-              <ArrowPathIcon className="h-4 w-4 mr-2" />
-              Actualiser
-            </button>
-            {isAdmin && (
-              <button className="btn btn-primary btn-sm">
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Nouveau
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, index) => (
-          <div 
-            key={stat.title}
-            className="card hover:shadow-green-lg transition-all duration-300 animate-slide-in-right group"
-            style={{ animationDelay: `${index * 100}ms` }}
-          >
-            <div className="card-body">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 bg-gradient-to-br ${stat.gradient} rounded-xl flex items-center justify-center shadow-green-button group-hover:scale-110 transition-transform duration-300`}>
-                  <span className="text-2xl">{stat.emoji}</span>
-                </div>
-                <div className={`flex items-center space-x-1 text-sm font-medium ${
-                  stat.changeType === 'increase' ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {stat.changeType === 'increase' ? (
-                    <ArrowUpIcon className="h-4 w-4" />
-                  ) : (
-                    <ArrowDownIcon className="h-4 w-4" />
-                  )}
-                  <span>{stat.change}</span>
-                </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* En-tête de bienvenue */}
+        <div className="glass-green rounded-2xl p-6 shadow-xl animate-fade-in hover:shadow-2xl transition-all duration-500">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center shadow-lg">
+                <span className="text-lg font-bold text-white">
+                  {user?.first_name?.[0] || user?.username?.[0] || '👋'}
+                </span>
               </div>
-              
               <div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                  {stat.value}
-                </h3>
-                <p className="text-sm text-green-600 font-medium">
-                  {stat.title}
+                <h1 className="text-2xl font-bold text-emerald-800 bg-gradient-to-r from-emerald-800 to-green-600 bg-clip-text text-transparent">
+                  Bienvenue, {user?.first_name || user?.username} !
+                </h1>
+                <p className="text-emerald-600 font-medium">
+                  Voici un aperçu de votre plateforme Running
                 </p>
               </div>
             </div>
+            <button
+              onClick={fetchDashboardData}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-all duration-300 hover:scale-105 flex items-center space-x-2"
+            >
+              <ArrowPathIcon className="h-4 w-4" />
+              <span>Actualiser</span>
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent Activity */}
-        <div className="lg:col-span-2">
-          <div className="card">
-            <div className="card-header">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xl">📈</span>
-                  <h2 className="text-lg font-semibold text-green-800">
-                    Activité récente
-                  </h2>
+        {/* Cartes de statistiques principales */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {statCards.map((card, index) => (
+            <div 
+              key={card.title}
+              className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105 animate-slide-in-up group cursor-pointer"
+              style={{ animationDelay: `${index * 100}ms` }}
+              onClick={() => navigate(card.href)}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className={`p-3 rounded-xl bg-gradient-to-r ${card.gradient} text-white group-hover:scale-110 transition-transform duration-300`}>
+                  <card.icon className="h-6 w-6" />
                 </div>
-                <button className="btn btn-outline btn-sm">
-                  <EyeIcon className="h-4 w-4 mr-2" />
-                  Voir tout
-                </button>
-              </div>
-            </div>
-            <div className="card-body">
-              <div className="space-y-4">
-                {recentActivity.map((activity, index) => (
-                  <div 
-                    key={activity.id}
-                    className="flex items-center space-x-4 p-4 hover:bg-green-50/50 rounded-xl transition-colors duration-200 animate-slide-in-left"
-                    style={{ animationDelay: `${index * 150}ms` }}
-                  >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      activity.type === 'success' ? 'bg-green-badge-gradient' :
-                      activity.type === 'achievement' ? 'bg-yellow-100' : 'bg-blue-100'
-                    }`}>
-                      <span className="text-lg">
-                        {activity.type === 'success' ? '✅' : 
-                         activity.type === 'achievement' ? '🏆' : 'ℹ️'}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">
-                        <span className="text-green-700">{activity.user}</span> • {activity.action}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {activity.distance} • {activity.time}
-                      </p>
-                    </div>
-                    <div className="flex-shrink-0">
-                      <span className={`badge ${
-                        activity.type === 'success' ? 'badge-success' :
-                        activity.type === 'achievement' ? 'badge-warning' : 'badge-primary'
-                      }`}>
-                        {activity.type === 'success' ? 'Terminé' :
-                         activity.type === 'achievement' ? 'Record' : 'Nouveau'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div>
-          <div className="card">
-            <div className="card-header">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">⚡</span>
-                <h2 className="text-lg font-semibold text-green-800">
-                  Actions rapides
-                </h2>
-              </div>
-            </div>
-            <div className="card-body">
-              <div className="space-y-3">
-                {[
-                  { label: 'Créer un parcours', icon: '🗺️', action: '/parcours', color: 'green' },
-                  { label: 'Ajouter un utilisateur', icon: '👤', action: '/users', color: 'emerald', adminOnly: true },
-                  { label: 'Voir les statistiques', icon: '📊', action: '/stats', color: 'green' },
-                  { label: 'Gérer les paramètres', icon: '⚙️', action: '/settings', color: 'emerald' }
-                ].filter(item => !item.adminOnly || (item.adminOnly && isAdmin)).map((action, index) => (
-                  <button
-                    key={action.label}
-                    className={`w-full text-left p-4 rounded-xl border-2 border-${action.color}-200 hover:border-${action.color}-300 hover:bg-${action.color}-50 transition-all duration-300 group animate-scale-in`}
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="text-2xl group-hover:scale-110 transition-transform duration-300">
-                        {action.icon}
-                      </span>
-                      <span className="font-medium text-gray-900 group-hover:text-green-800">
-                        {action.label}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Performance Chart Preview */}
-          <div className="card mt-6">
-            <div className="card-header">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">📈</span>
-                <h2 className="text-lg font-semibold text-green-800">
-                  Performance cette semaine
-                </h2>
-              </div>
-            </div>
-            <div className="card-body">
-              <div className="space-y-4">
-                {[
-                  { day: 'Lun', value: 85, color: 'bg-green-500' },
-                  { day: 'Mar', value: 92, color: 'bg-emerald-500' },
-                  { day: 'Mer', value: 78, color: 'bg-green-400' },
-                  { day: 'Jeu', value: 95, color: 'bg-emerald-600' },
-                  { day: 'Ven', value: 88, color: 'bg-green-500' },
-                  { day: 'Sam', value: 100, color: 'bg-emerald-600' },
-                  { day: 'Dim', value: 82, color: 'bg-green-400' }
-                ].map((item, index) => (
-                  <div key={item.day} className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-600 w-8">
-                      {item.day}
-                    </span>
-                    <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
-                      <div 
-                        className={`h-2 ${item.color} rounded-full transition-all duration-1000 ease-out`}
-                        style={{ 
-                          width: `${item.value}%`,
-                          animationDelay: `${index * 200}ms`
-                        }}
-                      ></div>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900 w-10">
-                      {item.value}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Additional Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* System Status */}
-        <div className="card">
-          <div className="card-header">
-            <div className="flex items-center space-x-2">
-              <span className="text-xl">🔧</span>
-              <h2 className="text-lg font-semibold text-green-800">
-                État du système
-              </h2>
-            </div>
-          </div>
-          <div className="card-body">
-            <div className="space-y-4">
-              {[
-                { label: 'API Server', status: 'connected', uptime: '99.9%' },
-                { label: 'Base de données', status: 'connected', uptime: '99.8%' },
-                { label: 'Cache Redis', status: 'connected', uptime: '100%' },
-                { label: 'Service GPS', status: 'connected', uptime: '98.5%' }
-              ].map((service, index) => (
-                <div key={service.label} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-3 h-3 rounded-full ${
-                      service.status === 'connected' ? 'bg-green-500 animate-green-pulse' : 'bg-red-500'
-                    }`}></div>
-                    <span className="text-sm font-medium text-gray-900">
-                      {service.label}
-                    </span>
-                  </div>
-                  <span className="text-sm text-green-600 font-medium">
-                    {service.uptime}
+                <div className="flex items-center space-x-1">
+                  {card.changeType === 'increase' ? (
+                    <ArrowUpIcon className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <ArrowDownIcon className="h-4 w-4 text-red-600" />
+                  )}
+                  <span className={`text-sm font-semibold ${
+                    card.changeType === 'increase' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {card.change}
                   </span>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-emerald-800 mb-1">{card.value}</h3>
+                <p className="text-sm text-gray-600 font-medium">{card.title}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Statistiques rapides */}
+        <div className="glass-green rounded-2xl p-6 shadow-xl animate-scale-in hover:shadow-2xl transition-all duration-500">
+          <h2 className="text-lg font-bold text-emerald-800 mb-4 flex items-center">
+            <FireIcon className="h-5 w-5 mr-2" />
+            Aujourd'hui
+          </h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {quickStats.map((stat, index) => (
+              <div key={stat.label} className="text-center p-4 bg-white/60 rounded-xl backdrop-blur-sm">
+                <div className="text-2xl font-bold text-emerald-800">{stat.value}</div>
+                <div className="text-sm text-gray-600 mb-1">{stat.label}</div>
+                <div className={`text-xs font-semibold ${stat.positive ? 'text-green-600' : 'text-red-600'}`}>
+                  {stat.change}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Activité récente */}
+          <div className="glass-green rounded-2xl p-6 shadow-xl animate-slide-in-left hover:shadow-2xl transition-all duration-500">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-emerald-800 flex items-center">
+                <ClockIcon className="h-5 w-5 mr-2" />
+                Activité récente
+              </h2>
+              <button 
+                onClick={() => navigate('/history')}
+                className="text-emerald-600 hover:text-emerald-800 text-sm font-medium flex items-center space-x-1 transition-colors duration-300"
+              >
+                <span>Voir tout</span>
+                <EyeIcon className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              {recentActivity.map((activity, index) => (
+                <div 
+                  key={activity.id} 
+                  className="flex items-center space-x-4 p-3 bg-white/60 rounded-xl backdrop-blur-sm hover:bg-white/80 transition-all duration-300 animate-slide-in-up"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className={`w-10 h-10 rounded-full ${getActivityBg(activity.type)} flex items-center justify-center`}>
+                    {getActivityIcon(activity.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-semibold text-gray-900 text-sm">{activity.user}</span>
+                      <span className="text-gray-600 text-sm">{activity.action}</span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">{activity.details}</div>
+                  </div>
+                  <div className="text-xs text-gray-500 font-medium">{activity.time}</div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-        {/* Tips & Announcements */}
-        <div className="card">
-          <div className="card-header">
-            <div className="flex items-center space-x-2">
-              <span className="text-xl">💡</span>
-              <h2 className="text-lg font-semibold text-green-800">
-                Conseils & Annonces
-              </h2>
-            </div>
-          </div>
-          <div className="card-body">
-            <div className="space-y-4">
-              <div className="alert alert-success">
-                <div className="flex items-start space-x-3">
-                  <span className="text-lg flex-shrink-0">🎉</span>
-                  <div>
-                    <h4 className="font-semibold text-green-800 mb-1">
-                      Nouvelle fonctionnalité !
-                    </h4>
-                    <p className="text-sm text-green-700">
-                      Les parcours partagés sont maintenant disponibles. 
-                      Vos utilisateurs peuvent partager leurs routes préférées.
-                    </p>
+          {/* Actions rapides */}
+          <div className="glass-green rounded-2xl p-6 shadow-xl animate-slide-in-right hover:shadow-2xl transition-all duration-500">
+            <h2 className="text-lg font-bold text-emerald-800 mb-6 flex items-center">
+              <PlusIcon className="h-5 w-5 mr-2" />
+              Actions rapides
+            </h2>
+            <div className="grid grid-cols-1 gap-4">
+              {[
+                { 
+                  title: 'Ajouter un utilisateur', 
+                  desc: 'Créer un nouveau compte', 
+                  icon: UserGroupIcon, 
+                  color: 'blue',
+                  action: () => navigate('/users')
+                },
+                { 
+                  title: 'Créer un parcours', 
+                  desc: 'Nouveau parcours de course', 
+                  icon: MapPinIcon, 
+                  color: 'green',
+                  action: () => navigate('/routes')
+                },
+                { 
+                  title: 'Voir les statistiques', 
+                  desc: 'Analyse des performances', 
+                  icon: ChartBarIcon, 
+                  color: 'purple',
+                  action: () => navigate('/stats')
+                },
+                { 
+                  title: 'Historique des courses', 
+                  desc: 'Toutes les activités', 
+                  icon: ClockIcon, 
+                  color: 'orange',
+                  action: () => navigate('/history')
+                }
+              ].map((action, index) => (
+                <button
+                  key={action.title}
+                  onClick={action.action}
+                  className={`p-4 bg-white/60 rounded-xl text-left hover:bg-white/80 transition-all duration-300 hover:scale-105 animate-slide-in-up group`}
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={`p-2 rounded-lg bg-${action.color}-100 text-${action.color}-600 group-hover:scale-110 transition-transform duration-300`}>
+                      <action.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900">{action.title}</div>
+                      <div className="text-sm text-gray-600">{action.desc}</div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              
-              <div className="p-4 bg-green-50/50 rounded-xl border border-green-200">
-                <div className="flex items-start space-x-3">
-                  <span className="text-lg flex-shrink-0">💭</span>
-                  <div>
-                    <h4 className="font-semibold text-green-800 mb-1">
-                      Conseil du jour
-                    </h4>
-                    <p className="text-sm text-green-700">
-                      Pensez à vérifier régulièrement les statistiques d'utilisation 
-                      pour optimiser les performances de votre plateforme.
-                    </p>
-                  </div>
-                </div>
-              </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Styles CSS personnalisés */}
+      <style jsx>{`
+        .glass-green {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slide-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slide-in-left {
+          from { opacity: 0; transform: translateX(-20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes slide-in-right {
+          from { opacity: 0; transform: translateX(20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes scale-in {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out;
+        }
+
+        .animate-slide-in-up {
+          animation: slide-in-up 0.4s ease-out;
+        }
+
+        .animate-slide-in-left {
+          animation: slide-in-left 0.6s ease-out;
+        }
+
+        .animate-slide-in-right {
+          animation: slide-in-right 0.6s ease-out;
+        }
+
+        .animate-scale-in {
+          animation: scale-in 0.4s ease-out;
+        }
+      `}</style>
     </div>
   )
 }
