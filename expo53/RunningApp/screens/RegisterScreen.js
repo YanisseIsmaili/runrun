@@ -1,3 +1,4 @@
+// screens/RegisterScreen.js
 import React, { useState } from 'react';
 import {
   View,
@@ -24,34 +25,60 @@ export default function RegisterScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const validateForm = () => {
+    // Validation email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Erreur', 'Veuillez entrer un email valide');
+      return false;
+    }
+
+    // Validation mot de passe
+    if (password.length < 6) {
+      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      return false;
+    }
+
+    // Validation confirmation mot de passe
+    if (password !== confirmPassword) {
+      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
+      return false;
+    }
+
+    // Validation nom d'utilisateur
+    if (username.length < 3) {
+      Alert.alert('Erreur', 'Le nom d\'utilisateur doit contenir au moins 3 caractères');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleRegister = async () => {
     if (!email || !password || !username || !firstName || !lastName) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
 
-    if (password !== confirmPassword) {
-      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+    if (!validateForm()) {
       return;
     }
 
     setIsLoading(true);
     
     try {
+      console.log('🔵 Tentative d\'inscription pour:', email);
+      
       const result = await AuthService.register({
-        email,
+        email: email.toLowerCase().trim(),
         password,
-        username,
-        first_name: firstName,
-        last_name: lastName
+        username: username.trim(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim()
       });
       
       if (result.success) {
+        console.log('✅ Inscription réussie pour:', email);
         Alert.alert('Succès', 'Inscription réussie !', [
           {
             text: 'OK',
@@ -59,13 +86,34 @@ export default function RegisterScreen({ navigation }) {
           }
         ]);
       } else {
-        Alert.alert('Erreur', result.message || 'Échec de l\'inscription');
+        console.log('❌ Inscription échouée:', result.message);
+        
+        // Gestion des erreurs spécifiques
+        if (result.errors) {
+          // Afficher les erreurs de validation
+          const errorMessages = Object.values(result.errors).join('\n');
+          Alert.alert('Erreurs de validation', errorMessages);
+        } else if (result.message && result.message.includes('existe déjà')) {
+          Alert.alert('Compte existant', 'Un compte avec cet email ou nom d\'utilisateur existe déjà');
+        } else {
+          Alert.alert('Erreur', result.message || 'Échec de l\'inscription');
+        }
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Erreur de connexion au serveur');
+      console.error('💥 Erreur critique inscription:', error);
+      Alert.alert('Erreur Technique', 'Une erreur est survenue lors de l\'inscription');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const clearForm = () => {
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setUsername('');
+    setFirstName('');
+    setLastName('');
   };
 
   return (
@@ -84,6 +132,12 @@ export default function RegisterScreen({ navigation }) {
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Inscription</Text>
+          <TouchableOpacity 
+            onPress={clearForm}
+            style={styles.clearButton}
+          >
+            <Ionicons name="refresh-outline" size={24} color="white" />
+          </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
@@ -120,6 +174,7 @@ export default function RegisterScreen({ navigation }) {
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
@@ -133,6 +188,7 @@ export default function RegisterScreen({ navigation }) {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
@@ -140,7 +196,7 @@ export default function RegisterScreen({ navigation }) {
             <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Mot de passe"
+              placeholder="Mot de passe (min. 6 caractères)"
               placeholderTextColor="#666"
               value={password}
               onChangeText={setPassword}
@@ -170,6 +226,46 @@ export default function RegisterScreen({ navigation }) {
               secureTextEntry={!showPassword}
               autoCapitalize="none"
             />
+            {confirmPassword.length > 0 && (
+              <View style={styles.validationIcon}>
+                <Ionicons
+                  name={password === confirmPassword ? "checkmark-circle" : "close-circle"}
+                  size={20}
+                  color={password === confirmPassword ? "#4CAF50" : "#f44336"}
+                />
+              </View>
+            )}
+          </View>
+
+          {/* Indicateurs de validation */}
+          <View style={styles.validationContainer}>
+            <View style={styles.validationItem}>
+              <Ionicons
+                name={password.length >= 6 ? "checkmark-circle" : "radio-button-off"}
+                size={16}
+                color={password.length >= 6 ? "#4CAF50" : "#666"}
+              />
+              <Text style={[
+                styles.validationText,
+                { color: password.length >= 6 ? "#4CAF50" : "#666" }
+              ]}>
+                Au moins 6 caractères
+              </Text>
+            </View>
+            
+            <View style={styles.validationItem}>
+              <Ionicons
+                name={password === confirmPassword && password.length > 0 ? "checkmark-circle" : "radio-button-off"}
+                size={16}
+                color={password === confirmPassword && password.length > 0 ? "#4CAF50" : "#666"}
+              />
+              <Text style={[
+                styles.validationText,
+                { color: password === confirmPassword && password.length > 0 ? "#4CAF50" : "#666" }
+              ]}>
+                Mots de passe identiques
+              </Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -201,6 +297,16 @@ export default function RegisterScreen({ navigation }) {
               <Text style={styles.linkHighlight}> Se connecter</Text>
             </Text>
           </TouchableOpacity>
+
+          {/* Informations de test */}
+          {__DEV__ && (
+            <View style={styles.devInfo}>
+              <Text style={styles.devInfoTitle}>Mode Développement</Text>
+              <Text style={styles.devInfoText}>
+                Remplissez le formulaire avec des données de test pour créer un compte rapidement.
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -214,6 +320,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 20,
@@ -225,7 +332,9 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 20,
     fontWeight: 'bold',
-    marginLeft: 20,
+  },
+  clearButton: {
+    padding: 5,
   },
   form: {
     flex: 1,
@@ -252,6 +361,22 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     padding: 5,
+  },
+  validationIcon: {
+    padding: 5,
+  },
+  validationContainer: {
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  validationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  validationText: {
+    fontSize: 14,
+    marginLeft: 8,
   },
   registerButton: {
     borderRadius: 12,
@@ -287,5 +412,24 @@ const styles = StyleSheet.create({
   linkHighlight: {
     color: '#4CAF50',
     fontWeight: 'bold',
+  },
+  devInfo: {
+    marginTop: 20,
+    marginBottom: 40,
+    padding: 16,
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 193, 7, 0.3)',
+  },
+  devInfoTitle: {
+    color: '#FFC107',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  devInfoText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 11,
   },
 });

@@ -1,4 +1,4 @@
-// screens/RunHistoryScreen.js - Version corrigée
+// screens/RunHistoryScreen.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -33,8 +33,12 @@ export default function RunHistoryScreen({ navigation }) {
       if (refresh) {
         setRefreshing(true);
         setPage(1);
+        console.log('🔄 Rafraîchissement des courses...');
       } else if (pageNum === 1) {
         setLoading(true);
+        console.log('📊 Chargement initial des courses...');
+      } else {
+        console.log(`📊 Chargement page ${pageNum}...`);
       }
 
       const result = await RunService.getUserRuns(pageNum, 20);
@@ -42,9 +46,12 @@ export default function RunHistoryScreen({ navigation }) {
       if (result.success) {
         let newRuns = result.data.runs || [];
         
+        // Appliquer le filtre
         if (filter !== 'all') {
           newRuns = newRuns.filter(run => run.status === filter);
         }
+        
+        console.log(`✅ ${newRuns.length} courses récupérées`);
         
         if (refresh || pageNum === 1) {
           setRuns(newRuns);
@@ -52,13 +59,20 @@ export default function RunHistoryScreen({ navigation }) {
           setRuns(prev => [...prev, ...newRuns]);
         }
         
-        setHasMore(result.data.pagination?.page < result.data.pagination?.pages);
+        // Gestion de la pagination
+        if (result.data.pagination) {
+          setHasMore(result.data.pagination.page < result.data.pagination.pages);
+        } else {
+          setHasMore(newRuns.length === 20); // Si on a 20 résultats, il y en a peut-être plus
+        }
+        
         setPage(pageNum);
       } else {
-        Alert.alert('Erreur', result.message);
+        console.log('❌ Erreur lors du chargement:', result.message);
+        Alert.alert('Erreur', result.message || 'Impossible de charger les courses');
       }
     } catch (error) {
-      console.error('Erreur chargement:', error);
+      console.error('💥 Erreur chargement:', error);
       Alert.alert('Erreur', 'Impossible de charger les tracés');
     } finally {
       setLoading(false);
@@ -70,13 +84,23 @@ export default function RunHistoryScreen({ navigation }) {
     loadRuns();
   }, [filter]);
 
+  useEffect(() => {
+    // Synchroniser les courses en arrière-plan
+    RunService.syncPendingRuns();
+  }, []);
+
   const onRefresh = () => loadRuns(1, true);
-  const loadMore = () => hasMore && !loading && loadRuns(page + 1);
+  
+  const loadMore = () => {
+    if (hasMore && !loading && !refreshing) {
+      loadRuns(page + 1);
+    }
+  };
 
   const deleteRun = async (runId) => {
     Alert.alert(
       'Supprimer le tracé',
-      'Êtes-vous sûr ?',
+      'Êtes-vous sûr de vouloir supprimer cette course ?',
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -84,13 +108,17 @@ export default function RunHistoryScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('🗑️ Suppression de la course:', runId);
               const result = await RunService.deleteRun(runId);
+              
               if (result.success) {
-                setRuns(prev => prev.filter(run => run.id !== runId));
+                setRuns(prev => prev.filter(run => run.id !== runId && run.id !== parseInt(runId)));
+                console.log('✅ Course supprimée');
               } else {
-                Alert.alert('Erreur', result.message);
+                Alert.alert('Erreur', result.message || 'Impossible de supprimer la course');
               }
             } catch (error) {
+              console.error('❌ Erreur suppression:', error);
               Alert.alert('Erreur', 'Impossible de supprimer');
             }
           }
@@ -103,10 +131,21 @@ export default function RunHistoryScreen({ navigation }) {
     if (!gpsData) return [];
     try {
       const data = typeof gpsData === 'string' ? JSON.parse(gpsData) : gpsData;
-      if (data.coordinates) return data.coordinates;
-      if (Array.isArray(data)) return data;
+      if (data.coordinates && Array.isArray(data.coordinates)) {
+        return data.coordinates.filter(coord => 
+          coord && coord.latitude && coord.longitude &&
+          typeof coord.latitude === 'number' && typeof coord.longitude === 'number'
+        );
+      }
+      if (Array.isArray(data)) {
+        return data.filter(coord => 
+          coord && coord.latitude && coord.longitude &&
+          typeof coord.latitude === 'number' && typeof coord.longitude === 'number'
+        );
+      }
       return [];
-    } catch {
+    } catch (error) {
+      console.log('⚠️ Erreur parsing GPS data:', error);
       return [];
     }
   };
@@ -118,10 +157,10 @@ export default function RunHistoryScreen({ navigation }) {
   };
 
   const formatTime = (seconds) => {
-    if (!seconds) return '00:00';
+    if (!seconds || seconds <= 0) return '00:00';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
     
     if (hours > 0) {
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -130,21 +169,28 @@ export default function RunHistoryScreen({ navigation }) {
   };
 
   const formatDistance = (meters) => {
-    if (!meters) return '0m';
-    if (meters < 1000) return `${meters.toFixed(0)}m`;
+    if (!meters || meters <= 0) return '0m';
+    if (meters < 1000) return `${Math.round(meters)}m`;
     return `${(meters / 1000).toFixed(2)}km`;
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Date inconnue';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Date invalide';
+      
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.log('⚠️ Erreur formatage date:', error);
+      return 'Date invalide';
+    }
   };
 
   const getStatusColor = (status) => {
@@ -195,7 +241,7 @@ export default function RunHistoryScreen({ navigation }) {
 
   const renderRunItem = ({ item }) => {
     const trail = getTrailFromGpsData(item.gps_data);
-    const hasMap = trail.length > 0;
+    const hasMap = trail.length > 1; // Au moins 2 points pour tracer une ligne
 
     return (
       <View style={styles.runCard}>
@@ -230,8 +276,8 @@ export default function RunHistoryScreen({ navigation }) {
               <MapView
                 style={styles.miniMap}
                 region={{
-                  latitude: trail[0].latitude || 0,
-                  longitude: trail[0].longitude || 0,
+                  latitude: trail[0].latitude,
+                  longitude: trail[0].longitude,
                   latitudeDelta: 0.01,
                   longitudeDelta: 0.01,
                 }}
@@ -246,7 +292,7 @@ export default function RunHistoryScreen({ navigation }) {
                   strokeWidth={3}
                 />
                 {trail.map((point, index) => 
-                  index % 3 === 0 && point.latitude && point.longitude && (
+                  index % 3 === 0 && (
                     <Circle
                       key={index}
                       center={point}
@@ -303,8 +349,8 @@ export default function RunHistoryScreen({ navigation }) {
               <MapView
                 style={styles.expandedMap}
                 region={{
-                  latitude: trail[Math.floor(trail.length / 2)]?.latitude || 0,
-                  longitude: trail[Math.floor(trail.length / 2)]?.longitude || 0,
+                  latitude: trail[Math.floor(trail.length / 2)]?.latitude || trail[0].latitude,
+                  longitude: trail[Math.floor(trail.length / 2)]?.longitude || trail[0].longitude,
                   latitudeDelta: 0.005,
                   longitudeDelta: 0.005,
                 }}
@@ -314,17 +360,15 @@ export default function RunHistoryScreen({ navigation }) {
                   strokeColor="#6366F1"
                   strokeWidth={4}
                 />
-                {trail.map((point, index) => 
-                  point.latitude && point.longitude && (
-                    <Circle
-                      key={index}
-                      center={point}
-                      radius={3}
-                      fillColor={getTrailColor(point.speed)}
-                      strokeColor="transparent"
-                    />
-                  )
-                )}
+                {trail.map((point, index) => (
+                  <Circle
+                    key={index}
+                    center={point}
+                    radius={3}
+                    fillColor={getTrailColor(point.speed)}
+                    strokeColor="transparent"
+                  />
+                ))}
               </MapView>
               
               <View style={styles.mapLegend}>
@@ -369,16 +413,35 @@ export default function RunHistoryScreen({ navigation }) {
             : `Aucun tracé "${getStatusText(filter)}"`
           }
         </Text>
+        {filter !== 'all' && (
+          <TouchableOpacity 
+            onPress={() => setFilter('all')}
+            style={styles.showAllButton}
+          >
+            <Text style={styles.showAllButtonText}>Voir tous les tracés</Text>
+          </TouchableOpacity>
+        )}
       </LinearGradient>
     </View>
   );
+
+  const renderFooter = () => {
+    if (!loading || page === 1) return null;
+    
+    return (
+      <View style={styles.loadingFooter}>
+        <ActivityIndicator size="small" color="#6366F1" />
+        <Text style={styles.loadingFooterText}>Chargement...</Text>
+      </View>
+    );
+  };
 
   if (loading && page === 1) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6366F1" />
-          <Text style={styles.loadingText}>Chargement...</Text>
+          <Text style={styles.loadingText}>Chargement des courses...</Text>
         </View>
       </SafeAreaView>
     );
@@ -410,6 +473,12 @@ export default function RunHistoryScreen({ navigation }) {
           <FilterButton filterValue="finished" title="Terminés" icon="checkmark-circle-outline" />
           <FilterButton filterValue="in_progress" title="En cours" icon="play-circle-outline" />
         </View>
+        
+        <View style={styles.statsContainer}>
+          <Text style={styles.statsText}>
+            {runs.length} course{runs.length !== 1 ? 's' : ''} trouvée{runs.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
       </LinearGradient>
 
       {runs.length === 0 ? (
@@ -431,6 +500,7 @@ export default function RunHistoryScreen({ navigation }) {
           onEndReached={loadMore}
           onEndReachedThreshold={0.1}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={renderFooter}
         />
       )}
     </SafeAreaView>
@@ -480,7 +550,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 10,
   },
   filterButton: {
     flexDirection: 'row',
@@ -504,6 +574,15 @@ const styles = StyleSheet.create({
   },
   filterButtonTextActive: {
     color: 'white',
+  },
+  statsContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  statsText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
   },
   listContainer: {
     padding: 16,
@@ -671,5 +750,28 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  showAllButton: {
+    marginTop: 20,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  showAllButtonText: {
+    color: '#6366F1',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  loadingFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingFooterText: {
+    marginLeft: 10,
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
   },
 });

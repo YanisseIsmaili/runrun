@@ -40,19 +40,68 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
     ]).start();
   }, []);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
-      return;
-    }
-
+  // ✅ Test complet de la structure API
+  const testAPIStructure = async () => {
     setIsLoading(true);
-    
     try {
-      const result = await AuthService.login(email, password);
+      const result = await AuthService.testAPIStructure();
+      
+      let message = '🔍 Résultats des tests:\n\n';
+      message += `Health: ${result.health?.status} ${result.health?.status === 200 ? '✅' : '❌'}\n`;
+      message += `API Root: ${result.root?.status} ${result.root?.status !== 404 ? '✅' : '❌'}\n`;
+      message += `Direct Auth: ${result.direct?.status} ${result.direct?.status !== 404 ? '✅' : '❌'}\n`;
+      
+      Alert.alert('🔧 Structure API', message, [{ text: 'OK' }]);
+    } catch (error) {
+      Alert.alert('❌ Erreur test', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ✅ Liste tous les endpoints possibles
+  const listAvailableRoutes = async () => {
+    setIsLoading(true);
+    try {
+      const routes = await AuthService.listAvailableRoutes();
+      
+      let message = '🛣️ Endpoints testés:\n\n';
+      Object.entries(routes).forEach(([endpoint, result]) => {
+        const status = result.status === 'ERROR' ? '💥' : result.exists ? '✅' : '❌';
+        message += `${endpoint}: ${result.status} ${status}\n`;
+      });
+      
+      Alert.alert('🔍 Routes disponibles', message, [{ text: 'OK' }]);
+    } catch (error) {
+      Alert.alert('❌ Erreur scan', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testAPIConnection = async () => {
+    setIsLoading(true);
+    try {
+      const result = await AuthService.testConnection();
+      if (result.success) {
+        Alert.alert('✅ Connexion API', 'Serveur accessible', [{ text: 'OK' }]);
+      } else {
+        Alert.alert('❌ Connexion API', `Erreur: ${result.error}`, [{ text: 'OK' }]);
+      }
+    } catch (error) {
+      Alert.alert('❌ Test échoué', error.message, [{ text: 'OK' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithTestCredentials = async () => {
+    setIsLoading(true);
+    try {
+      const result = await AuthService.login('test@example.com', 'password123');
       
       if (result.success) {
-        Alert.alert('Succès', 'Connexion réussie !', [
+        Alert.alert('✅ Login test', 'Connexion réussie !', [
           {
             text: 'OK',
             onPress: () => {
@@ -65,10 +114,44 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
           }
         ]);
       } else {
-        Alert.alert('Erreur', result.message || 'Échec de la connexion');
+        Alert.alert('❌ Login test', result.message || 'Échec');
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Erreur de connexion au serveur');
+      Alert.alert('❌ Erreur', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('❌ Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      const result = await AuthService.login(email, password);
+      
+      if (result.success) {
+        Alert.alert('✅ Succès', 'Connexion réussie !', [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (onLoginSuccess) {
+                onLoginSuccess(result.data.user);
+              } else {
+                navigation.replace('Main');
+              }
+            }
+          }
+        ]);
+      } else {
+        Alert.alert('❌ Erreur', result.message || 'Échec de la connexion');
+      }
+    } catch (error) {
+      Alert.alert('❌ Erreur', 'Erreur de connexion au serveur');
     } finally {
       setIsLoading(false);
     }
@@ -167,7 +250,7 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
                 <Text style={styles.forgotPassword}>Mot de passe oublié ?</Text>
               </TouchableOpacity>
 
-              {/* Bouton de connexion */}
+              {/* Bouton de connexion principal */}
               <TouchableOpacity
                 style={[styles.loginButton, isLoading && styles.buttonDisabled]}
                 onPress={handleLogin}
@@ -188,6 +271,43 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
                 </LinearGradient>
               </TouchableOpacity>
 
+              {/* ✅ SECTION DEBUG AMÉLIORÉE */}
+              <View style={styles.debugSection}>
+                <Text style={styles.debugTitle}>🔧 Diagnostic API</Text>
+                
+                <TouchableOpacity
+                  style={styles.debugButton}
+                  onPress={testAPIConnection}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.debugButtonText}>🌐 Test Health</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.debugButton}
+                  onPress={testAPIStructure}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.debugButtonText}>🔍 Test Structure</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.debugButton}
+                  onPress={listAvailableRoutes}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.debugButtonText}>🛣️ Scan Routes</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.debugButton}
+                  onPress={loginWithTestCredentials}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.debugButtonText}>🧪 Login Test</Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Séparateur */}
               <View style={styles.separator}>
                 <View style={styles.separatorLine} />
@@ -207,12 +327,16 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
               </TouchableOpacity>
             </View>
 
-            {/* Version de test */}
+            {/* Info API détaillée */}
             <View style={styles.testInfo}>
-              <Text style={styles.testText}>Version de test</Text>
+              <Text style={styles.testText}>🧪 Diagnostic Mode</Text>
               <Text style={styles.testCredentials}>
-                Email: test@example.com{'\n'}
-                Mot de passe: password123
+                Test: test@example.com / password123
+              </Text>
+              <Text style={styles.apiInfo}>
+                API: http://192.168.27.77:5000{'\n'}
+                Health: /api/health ✅{'\n'}
+                Auth: /api/auth/login ❓
               </Text>
             </View>
           </Animated.View>
@@ -308,6 +432,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    marginBottom: 20,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -324,6 +449,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  debugSection: {
+    marginVertical: 20,
+    padding: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 165, 0, 0.3)',
+  },
+  debugTitle: {
+    color: '#FFA500',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  debugButton: {
+    backgroundColor: 'rgba(255, 165, 0, 0.2)',
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 165, 0, 0.4)',
+  },
+  debugButtonText: {
+    color: '#FFA500',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
   },
   separator: {
     flexDirection: 'row',
@@ -370,6 +524,13 @@ const styles = StyleSheet.create({
   testCredentials: {
     color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 11,
+    textAlign: 'center',
+    fontFamily: 'monospace',
+    marginBottom: 8,
+  },
+  apiInfo: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10,
     textAlign: 'center',
     fontFamily: 'monospace',
   },
