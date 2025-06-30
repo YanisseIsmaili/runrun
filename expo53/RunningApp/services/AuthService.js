@@ -1,259 +1,147 @@
-// services/AuthService.js - VERSION AVEC DEBUGGING
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.27.77:5000/api';
+const API_BASE_URL = 'http://192.168.27.77:5000';
 
 class AuthService {
-  async isAuthenticated() {
-    console.log('🔵 Checking authentication...');
-    
+  static async login(email, password) {
     try {
-      const token = await this.getToken();
-      console.log('🔑 Token retrieved:', !!token);
-      
-      if (!token) {
-        console.log('❌ No token found');
-        return false;
-      }
-
-      console.log('🔍 Starting token validation...');
-      
-      const validateEndpoints = [
-        `${API_BASE_URL}/auth/validate`,
-        `http://192.168.27.77:5000/auth/validate`,
-        `${API_BASE_URL}/validate`,
-        `http://192.168.27.77:5000/validate`
-      ];
-
-      console.log('📋 Testing endpoints:', validateEndpoints);
-
-      for (let i = 0; i < validateEndpoints.length; i++) {
-        const endpoint = validateEndpoints[i];
-        console.log(`🌐 [${i+1}/${validateEndpoints.length}] Testing: ${endpoint}`);
-        
-        try {
-          // Timeout de 5 secondes
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
-          
-          const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeoutId);
-          console.log(`📡 Response status: ${response.status} for ${endpoint}`);
-
-          if (response.status !== 404) {
-            const data = await response.json();
-            console.log('📄 Response data:', data);
-            
-            const isValid = data.status === 'success' || response.ok;
-            console.log('✅ Authentication check completed:', isValid);
-            return isValid;
-          }
-        } catch (error) {
-          console.log(`❌ Error with ${endpoint}:`, error.message);
-          continue;
-        }
-      }
-
-      console.log('❌ No validate endpoint found');
-      return false;
-      
-    } catch (error) {
-      console.error('💥 Critical error in isAuthenticated:', error);
-      return false;
-    }
-  }
-
-  async getToken() {
-    try {
-      console.log('🔍 Getting token from storage...');
-      const token = await AsyncStorage.getItem('access_token');
-      console.log('📱 Token from storage:', token ? 'Found' : 'Not found');
-      return token;
-    } catch (error) {
-      console.error('❌ Error getting token:', error);
-      return null;
-    }
-  }
-
-  async testConnection() {
-    console.log('🔵 Testing API connection...');
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch(`http://192.168.27.77:5000/api/health`, {
-        method: 'GET',
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        signal: controller.signal,
+        body: JSON.stringify({
+          email_or_username: email,
+          password: password,
+        }),
       });
 
-      clearTimeout(timeoutId);
       const data = await response.json();
-      console.log('📄 Health check data:', data);
-      
-      return { success: true, data };
+
+      if (response.ok && data.status === 'success') {
+        await AsyncStorage.setItem('access_token', data.data.access_token);
+        await AsyncStorage.setItem('user', JSON.stringify(data.data.user));
+        console.log('👤 User retrieved:', data.data.user.username);
+        
+        return {
+          success: true,
+          data: data.data
+        };
+      } else {
+        return {
+          success: false,
+          message: data.message || 'Erreur de connexion'
+        };
+      }
     } catch (error) {
-      console.error('🚨 Connection test failed:', error);
-      return { success: false, error: error.message };
+      console.error('Erreur login:', error);
+      return {
+        success: false,
+        message: 'Erreur réseau - serveur indisponible'
+      };
     }
   }
 
-  async login(email, password) {
-    console.log('🔵 Login attempt:', email);
-    
-    const possibleEndpoints = [
-      `${API_BASE_URL}/auth/login`,
-      `http://192.168.27.77:5000/auth/login`,
-      `http://192.168.27.77:5000/login`,
-      `${API_BASE_URL}/login`
-    ];
-    
-    for (const endpoint of possibleEndpoints) {
-      console.log(`🔗 Trying endpoint: ${endpoint}`);
-      
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({ email, password }),
-          signal: controller.signal,
-        });
+  static async register(userData) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
 
-        clearTimeout(timeoutId);
-        console.log(`📡 Response status: ${response.status} for ${endpoint}`);
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        await AsyncStorage.setItem('access_token', data.data.access_token);
+        await AsyncStorage.setItem('user', JSON.stringify(data.data.user));
         
-        if (response.status !== 404) {
-          const data = await response.json();
-          console.log('📄 Response data:', data);
-          
-          if (data.status === 'success' || response.ok) {
-            const accessToken = data.data?.access_token || data.access_token;
-            const userData = data.data?.user || data.user;
-            
-            if (accessToken && userData) {
-              await AsyncStorage.setItem('access_token', accessToken);
-              await AsyncStorage.setItem('user_data', JSON.stringify(userData));
-              console.log('✅ Login successful with endpoint:', endpoint);
-              return { success: true, data: { access_token: accessToken, user: userData } };
-            }
-          }
-          
-          return { success: false, message: data.message || 'Login failed', endpoint };
-        }
-        
-      } catch (error) {
-        console.log(`❌ Error with ${endpoint}:`, error.message);
-        continue;
+        return {
+          success: true,
+          data: data.data
+        };
+      } else {
+        return {
+          success: false,
+          message: data.message || 'Erreur d\'inscription'
+        };
       }
+    } catch (error) {
+      console.error('Erreur register:', error);
+      return {
+        success: false,
+        message: 'Erreur réseau - serveur indisponible'
+      };
     }
-    
-    return { success: false, message: 'Aucun endpoint d\'authentification trouvé' };
   }
 
-  async register(userData) {
-    console.log('🔵 Register attempt:', userData.email);
-    
-    const possibleEndpoints = [
-      `${API_BASE_URL}/auth/register`,
-      `http://192.168.27.77:5000/auth/register`,
-      `http://192.168.27.77:5000/register`,
-      `${API_BASE_URL}/register`
-    ];
-    
-    for (const endpoint of possibleEndpoints) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(userData),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        
-        if (response.status !== 404) {
-          const data = await response.json();
-          
-          if (data.status === 'success' || response.ok) {
-            const accessToken = data.data?.access_token || data.access_token;
-            const user = data.data?.user || data.user;
-            
-            if (accessToken && user) {
-              await AsyncStorage.setItem('access_token', accessToken);
-              await AsyncStorage.setItem('user_data', JSON.stringify(user));
-              return { success: true, data: { access_token: accessToken, user } };
-            }
-          }
-          
-          return { success: false, message: data.message || 'Registration failed' };
-        }
-      } catch (error) {
-        continue;
-      }
-    }
-    
-    return { success: false, message: 'Aucun endpoint d\'inscription trouvé' };
-  }
-
-  async logout() {
+  static async logout() {
     try {
       await AsyncStorage.removeItem('access_token');
-      await AsyncStorage.removeItem('user_data');
-      console.log('✅ Logout successful');
-      return true;
+      await AsyncStorage.removeItem('user');
+      return { success: true };
     } catch (error) {
-      console.error('❌ Logout error:', error);
+      console.error('Erreur logout:', error);
+      return { success: false };
+    }
+  }
+
+  static async isAuthenticated() {
+    try {
+      const token = await AsyncStorage.getItem('access_token');
+      return !!token;
+    } catch (error) {
       return false;
     }
   }
 
-  async getUser() {
+  static async getUser() {
     try {
-      const userData = await AsyncStorage.getItem('user_data');
-      return userData ? JSON.parse(userData) : null;
+      const userString = await AsyncStorage.getItem('user');
+      return userString ? JSON.parse(userString) : null;
     } catch (error) {
-      console.error('❌ Error getting user:', error);
       return null;
     }
   }
 
-  // Test simple pour vérifier la connectivité
-  async simpleConnectionTest() {
-    console.log('🧪 Simple connection test...');
+  static async getToken() {
     try {
-      const response = await fetch(`http://192.168.27.77:5000/api/health`, {
-        method: 'GET',
-      });
-      console.log('✅ Basic connection OK, status:', response.status);
-      return true;
+      return await AsyncStorage.getItem('access_token');
     } catch (error) {
-      console.error('❌ Basic connection failed:', error.message);
-      return false;
+      return null;
+    }
+  }
+
+  // Test de connectivité API (pas de données fictives)
+  static async testConnection() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/health`, {
+        method: 'GET',
+        timeout: 5000
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          status: data.status,
+          database: data.database
+        };
+      }
+      
+      return {
+        success: false,
+        message: `Serveur répond avec status ${response.status}`
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Serveur inaccessible'
+      };
     }
   }
 }
 
-export default new AuthService();
+export default AuthService;
