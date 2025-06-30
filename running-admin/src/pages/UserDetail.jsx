@@ -71,7 +71,7 @@ const UserDetail = () => {
           console.log('Runs response:', runsResponse)
           
           let runsData = []
-          if (runsResponse.data?.status === 'success' && runsResponse.data?.data) {
+          if (runsResponse.data?.status === 'success' && runsResponse.data?.data?.runs) {
             runsData = runsResponse.data.data.runs || runsResponse.data.data || []
           } else if (runsResponse.data?.runs) {
             runsData = runsResponse.data.runs
@@ -98,7 +98,7 @@ const UserDetail = () => {
     }
   }, [userId])
 
-  // Gestion de l'upload d'image
+  // Gestion de l'upload d'image - CORRECTION
   const handleImageUpload = async (event) => {
     const file = event.target.files[0]
     if (!file) return
@@ -121,7 +121,8 @@ const UserDetail = () => {
       const formData = new FormData()
       formData.append('image', file)
 
-      const response = await api.instance.post('/api/uploads/profile-image', formData, {
+      // CORRECTION: Utiliser l'endpoint avec userId spécifique
+      const response = await api.instance.post(`/api/users/${userId}/upload-profile-image`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -132,6 +133,7 @@ const UserDetail = () => {
           ...prev,
           profile_picture: response.data.data.profile_picture
         }))
+        setUploadError(null)
       }
     } catch (error) {
       console.error('Erreur upload image:', error)
@@ -141,7 +143,7 @@ const UserDetail = () => {
     }
   }
 
-  // Supprimer l'image de profil
+  // Supprimer l'image de profil - CORRECTION
   const handleDeleteImage = async () => {
     if (!user.profile_picture) return
     
@@ -153,12 +155,14 @@ const UserDetail = () => {
     setUploadError(null)
 
     try {
-      await api.instance.delete('/api/uploads/profile-image')
+      // CORRECTION: Utiliser l'endpoint avec userId spécifique
+      await api.instance.delete(`/api/users/${userId}/upload-profile-image`)
       
       setUser(prev => ({
         ...prev,
         profile_picture: null
       }))
+      setUploadError(null)
     } catch (error) {
       console.error('Erreur suppression image:', error)
       setUploadError(error.response?.data?.message || 'Erreur lors de la suppression de l\'image')
@@ -231,36 +235,33 @@ const UserDetail = () => {
               <>
                 {type === 'select' ? (
                   <select
-                    value={user[field] || ''}
-                    onChange={(e) => handleInputChange(field, e.target.value)}
-                    className="text-sm border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    value={user[field]}
+                    onChange={(e) => handleInputChange(field, type === 'select' && options ? 
+                      (e.target.value === 'true' ? true : e.target.value === 'false' ? false : e.target.value) : 
+                      e.target.value
+                    )}
+                    className="px-3 py-1 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                    disabled={saving}
                   >
-                    {options.map(option => (
+                    {options?.map(option => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </select>
-                ) : type === 'checkbox' ? (
-                  <input
-                    type="checkbox"
-                    checked={user[field] || false}
-                    onChange={(e) => handleInputChange(field, e.target.checked)}
-                    className="text-emerald-600 focus:ring-emerald-500"
-                  />
                 ) : (
                   <input
                     type={type}
                     value={user[field] || ''}
                     onChange={(e) => handleInputChange(field, e.target.value)}
-                    className="text-sm border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-right"
-                    autoFocus
+                    className="px-3 py-1 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                    disabled={saving}
                   />
                 )}
                 <button
                   onClick={() => saveField(field)}
                   disabled={saving}
-                  className="text-green-600 hover:text-green-800 transition-colors"
+                  className="text-green-600 hover:text-green-800 disabled:opacity-50"
                 >
                   {saving ? (
                     <ArrowPathIcon className="h-4 w-4 animate-spin" />
@@ -270,21 +271,23 @@ const UserDetail = () => {
                 </button>
                 <button
                   onClick={cancelEditing}
-                  className="text-red-600 hover:text-red-800 transition-colors"
+                  disabled={saving}
+                  className="text-red-600 hover:text-red-800 disabled:opacity-50"
                 >
                   <XMarkIcon className="h-4 w-4" />
                 </button>
               </>
             ) : (
               <>
-                <span className="text-gray-900">
-                  {type === 'checkbox' ? (user[field] ? 'Oui' : 'Non') : 
-                   type === 'date' && user[field] ? new Date(user[field]).toLocaleDateString('fr-FR') :
-                   user[field] || 'Non renseigné'}
+                <span className="text-gray-900 font-medium">
+                  {type === 'select' && options ? 
+                    options.find(opt => opt.value === user[field])?.label || 'Non défini' :
+                    user[field] || 'Non défini'
+                  }
                 </span>
                 <button
                   onClick={() => startEditing(field)}
-                  className="opacity-0 group-hover:opacity-100 text-emerald-600 hover:text-emerald-800 transition-all duration-300"
+                  className="opacity-0 group-hover:opacity-100 text-emerald-600 hover:text-emerald-800 transition-opacity duration-200"
                 >
                   <PencilIcon className="h-4 w-4" />
                 </button>
@@ -296,123 +299,111 @@ const UserDetail = () => {
     )
   }
 
-  // Calcul des statistiques
-  const getStats = () => {
-    if (!runs.length) {
-      return {
-        totalRuns: 0,
-        totalDistance: 0,
-        totalDuration: 0,
-        avgPace: 'N/A'
-      }
-    }
-
-    const totalDistance = runs.reduce((sum, run) => sum + (run.distance || 0), 0)
-    const totalDuration = runs.reduce((sum, run) => sum + (run.duration || 0), 0)
-    const avgPace = totalDistance > 0 ? (totalDuration / 60) / totalDistance : 0
-
-    return {
-      totalRuns: runs.length,
-      totalDistance: Math.round(totalDistance * 10) / 10,
-      totalDuration,
-      avgPace: avgPace > 0 ? `${Math.floor(avgPace)}:${Math.round((avgPace % 1) * 60).toString().padStart(2, '0')}` : 'N/A'
-    }
-  }
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-center items-center h-64">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-emerald-400 to-green-500 mb-6 animate-spin">
-              <div className="w-8 h-8 border-t-2 border-white rounded-full animate-spin"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="glass-green rounded-2xl p-8 text-center animate-fade-in">
-            <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-red-800 mb-2">Erreur</h3>
-            <p className="text-red-600">{error}</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="glass-green rounded-2xl p-8 text-center animate-fade-in">
-            <UserIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-700">Utilisateur non trouvé</h3>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+          <p className="text-emerald-600 text-lg">Chargement du profil utilisateur...</p>
         </div>
       </div>
     )
   }
 
-  const stats = getStats()
-  
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
+            <h3 className="font-bold">Erreur</h3>
+            <p>{error}</p>
+          </div>
+          <Link
+            to="/users"
+            className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors duration-200"
+          >
+            <ChevronLeftIcon className="h-4 w-4 mr-2" />
+            Retour à la liste
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500 text-lg">Utilisateur non trouvé</p>
+          <Link
+            to="/users"
+            className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors duration-200"
+          >
+            <ChevronLeftIcon className="h-4 w-4 mr-2" />
+            Retour à la liste
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  // Calculer les statistiques
+  const stats = {
+    totalRuns: runs.length,
+    totalDistance: runs.reduce((acc, run) => acc + (run.distance || 0), 0),
+    totalTime: runs.reduce((acc, run) => acc + (run.duration || 0), 0),
+    avgPace: runs.length > 0 ? 
+      runs.reduce((acc, run) => acc + (run.pace || 0), 0) / runs.length : 0
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* En-tête avec animations */}
-        <div className="glass-green rounded-2xl p-6 shadow-xl animate-fade-in hover:shadow-2xl transition-all duration-500">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="animate-slide-in-left">
-              <Link 
-                to="/users" 
-                className="inline-flex items-center text-sm text-emerald-600 hover:text-emerald-800 mb-3 font-medium transition-all duration-300 hover:scale-105"
+    <div className="min-h-screen">
+      {/* Header */}
+      <div className="glass-green shadow-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link
+                to="/users"
+                className="inline-flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-emerald-700 rounded-xl transition-all duration-300 hover:scale-105"
               >
-                <ChevronLeftIcon className="h-4 w-4 mr-1 transition-transform duration-300 hover:-translate-x-1" />
-                Retour à la liste
+                <ChevronLeftIcon className="h-5 w-5 mr-2" />
+                Retour
               </Link>
-              <h1 className="text-3xl font-bold text-emerald-800 bg-gradient-to-r from-emerald-800 to-green-600 bg-clip-text text-transparent">
-                {user.first_name} {user.last_name}
+              <h1 className="text-3xl font-bold text-emerald-800 text-shadow">
+                Profil Utilisateur
               </h1>
-              <p className="text-emerald-600 mt-1 font-medium">@{user.username}</p>
             </div>
             
-            <div className="flex gap-3 animate-slide-in-right">
-              <button 
-                className="btn px-6 py-3 bg-white text-gray-800 hover:bg-emerald-50 border-2 border-emerald-400 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg group"
-                onClick={() => navigate(`/users/${userId}/edit`)}
+            <div className="flex items-center space-x-3">
+              <Link
+                to={`/users/${userId}/edit`}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all duration-300 hover:scale-105"
               >
-                <PencilIcon className="h-5 w-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
+                <PencilIcon className="h-4 w-4 mr-2" />
                 Modifier
-              </button>
-              <button 
-                className="btn px-6 py-3 bg-red-600 text-white hover:bg-red-700 border-2 border-red-600 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg group"
+              </Link>
+              <button
                 onClick={() => setShowDeleteModal(true)}
+                className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all duration-300 hover:scale-105"
               >
-                <TrashIcon className="h-5 w-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
+                <TrashIcon className="h-4 w-4 mr-2" />
                 Supprimer
               </button>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Statistiques rapides avec animations */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Statistiques en haut */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {[
-            { icon: ChartBarIcon, label: 'Courses', value: stats.totalRuns, color: 'from-blue-500 to-cyan-500', delay: '100ms' },
-            { icon: MapPinIcon, label: 'Distance', value: `${stats.totalDistance} km`, color: 'from-green-500 to-emerald-500', delay: '200ms' },
-            { icon: ClockIcon, label: 'Temps', value: formatDuration(stats.totalDuration), color: 'from-purple-500 to-indigo-500', delay: '300ms' },
-            { icon: HeartIcon, label: 'Allure moy.', value: stats.avgPace, color: 'from-orange-500 to-red-500', delay: '400ms' }
+            { icon: ChartBarIcon, label: 'Total Courses', value: stats.totalRuns, color: 'from-blue-500 to-cyan-500', delay: '100ms' },
+            { icon: MapPinIcon, label: 'Distance Totale', value: `${(stats.totalDistance / 1000).toFixed(1)} km`, color: 'from-green-500 to-emerald-500', delay: '200ms' },
+            { icon: ClockIcon, label: 'Temps Total', value: formatDuration(stats.totalTime), color: 'from-purple-500 to-pink-500', delay: '300ms' },
+            { icon: HeartIcon, label: 'Allure Moyenne', value: stats.avgPace ? `${stats.avgPace.toFixed(2)} min/km` : 'N/A', color: 'from-orange-500 to-red-500', delay: '400ms' }
           ].map((stat, index) => (
             <div 
               key={index}
@@ -530,235 +521,279 @@ const UserDetail = () => {
                   field="is_active" 
                   type="select"
                   options={[
-                    { value: false, label: 'Inactif' },
-                    { value: true, label: 'Actif' }
+                    { value: true, label: 'Actif' },
+                    { value: false, label: 'Inactif' }
                   ]}
                 />
-                <EditableField label="Taille (cm)" field="height" type="number" />
-                <EditableField label="Poids (kg)" field="weight" type="number" />
-                <EditableField label="Date de naissance" field="date_of_birth" type="date" />
-              </div>
-            </div>
-
-            {/* Informations compte */}
-            <div className="glass-green rounded-2xl p-6 animate-slide-in-left hover:shadow-xl transition-all duration-500" style={{ animationDelay: '200ms' }}>
-              <h3 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2 mb-4 flex items-center">
-                <CalendarIcon className="h-5 w-5 mr-2" />
-                Informations compte
-              </h3>
-              <div className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Membre depuis:</span>
-                  <span className="text-gray-900">{new Date(user.created_at).toLocaleDateString('fr-FR')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Dernière connexion:</span>
-                  <span className="text-gray-900">
-                    {user.last_login ? 
-                      new Date(user.last_login).toLocaleDateString('fr-FR') : 
-                      'Jamais'
-                    }
-                  </span>
-                </div>
-                {user.updated_at && (
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Dernière mise à jour:</span>
-                    <span className="text-gray-900">{new Date(user.updated_at).toLocaleDateString('fr-FR')}</span>
+                <div className="mt-4 p-3 bg-emerald-50 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span>Créé le:</span>
+                    <span className="font-medium">
+                      {user.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR') : 'Non défini'}
+                    </span>
                   </div>
-                )}
+                  <div className="flex justify-between text-sm mt-1">
+                    <span>Dernière connexion:</span>
+                    <span className="font-medium">
+                      {user.last_login ? new Date(user.last_login).toLocaleDateString('fr-FR') : 'Jamais'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Colonne droite - Statistiques et activités */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* Onglets avec animations */}
-            <div className="glass-green rounded-2xl overflow-hidden animate-scale-in hover:shadow-xl transition-all duration-500">
-              <div className="flex border-b border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50">
-                {[
-                  { id: 'info', label: 'Informations', icon: UserIcon },
-                  { id: 'runs', label: `Courses (${runs.length})`, icon: MapPinIcon }
-                ].map((tab, index) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setSelectedTab(tab.id)}
-                    className={`px-6 py-4 font-medium transition-all duration-300 flex items-center space-x-2 hover:scale-105 ${
-                      selectedTab === tab.id
-                        ? 'bg-emerald-100 text-emerald-800 border-b-2 border-emerald-500 shadow-lg'
-                        : 'text-gray-600 hover:text-emerald-600 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <tab.icon className="h-4 w-4" />
-                    <span>{tab.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="p-6">
-                {selectedTab === 'info' && (
-                  <div className="space-y-6 animate-fade-in">
-                    <h3 className="text-lg font-bold text-emerald-800 mb-4">Vue d'ensemble</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Informations de base */}
-                      <div className="card bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200 hover:shadow-lg transition-all duration-300 hover:scale-105">
-                        <div className="card-body">
-                          <h4 className="font-semibold text-blue-800 mb-3 flex items-center">
-                            <UserIcon className="h-5 w-5 mr-2" />
-                            Profil
-                          </h4>
-                          <div className="space-y-2 text-sm">
-                            <p><span className="font-medium">Nom complet:</span> {user.first_name} {user.last_name}</p>
-                            <p><span className="font-medium">Email:</span> {user.email}</p>
-                            <p><span className="font-medium">Username:</span> @{user.username}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Statistiques */}
-                      <div className="card bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 hover:shadow-lg transition-all duration-300 hover:scale-105">
-                        <div className="card-body">
-                          <h4 className="font-semibold text-green-800 mb-3 flex items-center">
-                            <ChartBarIcon className="h-5 w-5 mr-2" />
-                            Activité
-                          </h4>
-                          <div className="space-y-2 text-sm">
-                            <p><span className="font-medium">Courses:</span> {stats.totalRuns}</p>
-                            <p><span className="font-medium">Distance:</span> {stats.totalDistance} km</p>
-                            <p><span className="font-medium">Temps total:</span> {formatDuration(stats.totalDuration)}</p>
-                          </div>
-                        </div>
-                      </div>
+          {/* Colonne droite - Courses */}
+          <div className="lg:col-span-2">
+            <div className="glass-green rounded-2xl p-6 animate-slide-in-right hover:shadow-xl transition-all duration-500">
+              <h3 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2 mb-4 flex items-center">
+                <ChartBarIcon className="h-5 w-5 mr-2" />
+                Historique des courses ({runs.length})
+              </h3>
+              
+              {runs.length === 0 ? (
+                <div className="text-center py-8">
+                  <ChartBarIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">Aucune course enregistrée</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-emerald-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-sm font-semibold text-emerald-700">Date</th>
+                        <th className="px-4 py-2 text-left text-sm font-semibold text-emerald-700">Distance</th>
+                        <th className="px-4 py-2 text-left text-sm font-semibold text-emerald-700">Durée</th>
+                        <th className="px-4 py-2 text-left text-sm font-semibold text-emerald-700">Allure</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-emerald-100">
+                      {runs.slice(0, 10).map((run, index) => (
+                        <tr key={run.id} className="hover:bg-emerald-50/50 transition-colors duration-200">
+                          <td className="px-4 py-3 text-sm">
+                            {new Date(run.start_time).toLocaleDateString('fr-FR')}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {run.distance ? `${(run.distance / 1000).toFixed(2)} km` : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {run.duration ? formatDuration(run.duration) : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {run.pace ? `${run.pace.toFixed(2)} min/km` : 'N/A'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {runs.length > 10 && (
+                    <div className="mt-4 text-center">
+                      <p className="text-sm text-gray-500">
+                        Affichage des 10 dernières courses sur {runs.length}
+                      </p>
                     </div>
-                  </div>
-                )}
-
-                {selectedTab === 'runs' && (
-                  <div className="space-y-4 animate-fade-in">
-                    {runs.length === 0 ? (
-                      <div className="text-center py-12">
-                        <ChartBarIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold text-gray-700 mb-2">Aucune course enregistrée</h3>
-                        <p className="text-gray-500">Cet utilisateur n'a pas encore effectué de course.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {runs.map((run, index) => (
-                          <div 
-                            key={run.id} 
-                            className="bg-white bg-opacity-60 rounded-xl p-4 flex items-center justify-between hover:bg-opacity-80 transition-all duration-300 hover:scale-102 hover:shadow-lg animate-slide-in-up group"
-                            style={{ animationDelay: `${index * 50}ms` }}
-                          >
-                            <div className="flex items-center space-x-4">
-                              <div className="bg-emerald-100 p-3 rounded-lg group-hover:bg-emerald-200 transition-colors duration-300">
-                                <MapPinIcon className="h-6 w-6 text-emerald-600" />
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-900 text-lg">
-                                  {run.distance} km
-                                </div>
-                                <div className="text-sm text-gray-500 flex items-center space-x-4">
-                                  <span className="flex items-center">
-                                    <ClockIcon className="h-4 w-4 mr-1" />
-                                    {formatDuration(run.duration)}
-                                  </span>
-                                  {run.avg_heart_rate && (
-                                    <span className="flex items-center">
-                                      <HeartIcon className="h-4 w-4 mr-1" />
-                                      {run.avg_heart_rate} bpm
-                                    </span>
-                                  )}
-                                  {run.elevation_gain > 0 && (
-                                    <span className="flex items-center">
-                                      <FireIcon className="h-4 w-4 mr-1" />
-                                      {run.elevation_gain}m D+
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-medium text-emerald-600 text-lg">
-                                {run.avg_pace || 'N/A'}
-                              </div>
-                              <div className="text-sm text-gray-500 flex items-center">
-                                <CalendarIcon className="h-4 w-4 mr-1" />
-                                {new Date(run.date || run.created_at).toLocaleDateString('fr-FR')}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
-
-        {/* Modal de confirmation de suppression */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 animate-scale-in">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                  <TrashIcon className="h-6 w-6 text-red-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Supprimer l'utilisateur</h3>
-                  <p className="text-sm text-gray-500">Cette action est irréversible</p>
-                </div>
-              </div>
-              
-              <p className="text-gray-700 mb-6">
-                Êtes-vous sûr de vouloir supprimer définitivement l'utilisateur 
-                <span className="font-semibold text-gray-900"> {user.first_name} {user.last_name}</span> ?
-                <br />
-                <span className="text-sm text-red-600">Toutes ses données seront perdues.</span>
-              </p>
-              
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors duration-300"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false)
-                    handleDeleteUser()
-                  }}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-300"
-                >
-                  Supprimer
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Styles CSS personnalisés */}
+      {/* Modal de suppression */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-md mx-4 animate-scale-in">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              Confirmer la suppression
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Êtes-vous sûr de vouloir supprimer l'utilisateur <strong>{user.first_name} {user.last_name}</strong> ? 
+              Cette action est irréversible.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors duration-200"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Styles CSS complets de Users.jsx */}
       <style jsx>{`
         .glass-green {
           background: rgba(255, 255, 255, 0.95);
           backdrop-filter: blur(10px);
           border: 1px solid rgba(16, 185, 129, 0.2);
+          box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.1);
+        }
+
+        .shadow-green {
+          box-shadow: 0 10px 25px -3px rgba(16, 185, 129, 0.1), 0 4px 6px -2px rgba(16, 185, 129, 0.05);
+        }
+
+        .shadow-green-lg {
+          box-shadow: 0 10px 25px -3px rgba(16, 185, 129, 0.1), 0 4px 6px -2px rgba(16, 185, 129, 0.05);
+        }
+
+        .text-shadow {
+          text-shadow: 0 2px 4px rgba(16, 185, 129, 0.1);
+        }
+
+        .alert {
+          border-radius: 12px;
+          padding: 16px;
+          border-width: 1px;
+        }
+
+        .alert-warning {
+          background-color: rgba(251, 191, 36, 0.1);
+          border-color: rgba(251, 191, 36, 0.3);
+        }
+
+        .alert-error {
+          background-color: rgba(239, 68, 68, 0.1);
+          border-color: rgba(239, 68, 68, 0.3);
         }
 
         .card {
-          @apply bg-white rounded-xl p-4 border shadow-sm;
+          background: white;
+          border-radius: 16px;
+          border: 1px solid rgba(16, 185, 129, 0.1);
+          overflow: hidden;
+          transition: all 0.3s ease;
+        }
+
+        .card-header {
+          padding: 20px 24px 16px;
+          border-bottom: 1px solid rgba(16, 185, 129, 0.1);
+          background: rgba(16, 185, 129, 0.02);
         }
 
         .card-body {
-          @apply space-y-3;
+          padding: 20px 24px;
+        }
+
+        .btn {
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          border: 1px solid transparent;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .btn-sm {
+          padding: 6px 12px;
+          font-size: 0.875rem;
+        }
+
+        .btn-primary {
+          background-color: rgb(16, 185, 129);
+          color: white;
+          border-color: rgb(16, 185, 129);
+        }
+
+        .btn-primary:hover {
+          background-color: rgb(5, 150, 105);
+          border-color: rgb(5, 150, 105);
+        }
+
+        .btn-secondary {
+          background-color: transparent;
+          border-color: rgb(16, 185, 129);
+          color: rgb(16, 185, 129);
+        }
+
+        .btn-secondary:hover {
+          background-color: rgb(16, 185, 129);
+          color: white;
+        }
+
+        .btn-success {
+          background-color: rgb(34, 197, 94);
+          color: white;
+          border-color: rgb(34, 197, 94);
+        }
+
+        .btn-success:hover {
+          background-color: rgb(22, 163, 74);
+          border-color: rgb(22, 163, 74);
+        }
+
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 8px;
+          border-radius: 9999px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          transition: all 0.3s ease;
+        }
+
+        .badge-success {
+          background-color: rgb(34, 197, 94);
+          color: white;
+        }
+
+        .badge-warning {
+          background-color: rgb(251, 191, 36);
+          color: rgb(92, 51, 23);
+        }
+
+        .badge-danger {
+          background-color: rgb(239, 68, 68);
+          color: white;
+        }
+
+        .badge-secondary {
+          background-color: rgb(156, 163, 175);
+          color: white;
+        }
+
+        .scrollbar-thin {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(16, 185, 129, 0.3) transparent;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background-color: rgba(16, 185, 129, 0.3);
+          border-radius: 3px;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(16, 185, 129, 0.5);
         }
 
         @keyframes fade-in {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+
+        @keyframes slide-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
         @keyframes slide-in-left {
@@ -769,11 +804,6 @@ const UserDetail = () => {
         @keyframes slide-in-right {
           from { opacity: 0; transform: translateX(20px); }
           to { opacity: 1; transform: translateX(0); }
-        }
-
-        @keyframes slide-in-up {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
         }
 
         @keyframes scale-in {
@@ -791,16 +821,16 @@ const UserDetail = () => {
           animation: fade-in 0.6s ease-out;
         }
 
+        .animate-slide-in-up {
+          animation: slide-in-up 0.4s ease-out;
+        }
+
         .animate-slide-in-left {
           animation: slide-in-left 0.6s ease-out;
         }
 
         .animate-slide-in-right {
           animation: slide-in-right 0.6s ease-out;
-        }
-
-        .animate-slide-in-up {
-          animation: slide-in-up 0.4s ease-out;
         }
 
         .animate-scale-in {
@@ -811,8 +841,56 @@ const UserDetail = () => {
           animation: shake 0.5s ease-in-out;
         }
 
-        .hover\\:scale-102:hover {
-          transform: scale(1.02);
+        /* Input styles neuomorphism light theme */
+        .neuro-container {
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          position: relative;
+          color: #4a5568;
+        }
+
+        .neuro-container .neuro-label {
+          font-size: 14px;
+          padding-left: 10px;
+          position: absolute;
+          top: 13px;
+          transition: 0.3s;
+          pointer-events: none;
+          color: #718096;
+        }
+
+        .neuro-input {
+          width: 100%;
+          height: 40px;
+          border: none;
+          outline: none;
+          padding: 0px 12px;
+          border-radius: 8px;
+          color: #2d3748;
+          font-size: 14px;
+          background-color: #f7fafc;
+          box-shadow: 
+            2px 2px 8px rgba(0,0,0,0.1),
+            -2px -2px 8px rgba(255,255,255,0.8);
+          transition: all 0.3s ease;
+        }
+
+        .neuro-input:focus {
+          color: #2d3748;
+          box-shadow: 
+            inset 2px 2px 8px rgba(0,0,0,0.1),
+            inset -2px -2px 8px rgba(255,255,255,0.8);
+        }
+
+        .neuro-container .neuro-input:valid ~ .neuro-label,
+        .neuro-container .neuro-input:focus ~ .neuro-label {
+          transition: 0.3s;
+          padding-left: 4px;
+          transform: translateY(-28px);
+          font-size: 12px;
+          color: #10b981;
+          font-weight: 500;
         }
       `}</style>
     </div>

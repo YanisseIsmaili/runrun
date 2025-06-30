@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   MagnifyingGlassIcon, 
@@ -15,7 +15,9 @@ import {
   ExclamationTriangleIcon,
   CommandLineIcon,
   BugAntIcon,
-  ArrowDownTrayIcon
+  ArrowDownTrayIcon,
+  HandThumbUpIcon,
+  HandThumbDownIcon
 } from '@heroicons/react/24/outline'
 import { useApiConfig } from '../utils/globalApiConfig'
 import api from '../services/api'
@@ -49,6 +51,34 @@ const Users = () => {
   const [showDebugConsole, setShowDebugConsole] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
 
+  // État pour la sélection de per_page personnalisé
+  const [showCustomPerPage, setShowCustomPerPage] = useState(false)
+  const [customPerPage, setCustomPerPage] = useState('')
+
+  // État pour l'ordre des colonnes
+  const [columnOrder, setColumnOrder] = useState([
+    'checkbox', 'user', 'email', 'role', 'status', 'lastLogin', 'actions'
+  ])
+  const [draggedColumn, setDraggedColumn] = useState(null)
+
+  // NOUVEAUX ÉTATS pour le redimensionnement des colonnes
+  const [columnWidths, setColumnWidths] = useState({
+    checkbox: 60,
+    user: 280,
+    email: 220,
+    role: 140,
+    status: 140,
+    lastLogin: 180,
+    actions: 140
+  })
+  const [isResizing, setIsResizing] = useState(false)
+  const [resizingColumn, setResizingColumn] = useState(null)
+  const [startX, setStartX] = useState(0)
+  const [startWidth, setStartWidth] = useState(0)
+
+  // Refs pour le redimensionnement
+  const tableRef = useRef(null)
+
   // Fonction de debug
   const addDebugInfo = (message) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -57,40 +87,117 @@ const Users = () => {
     console.log(`[USERS DEBUG] ${message}`)
   }
 
+  // NOUVELLES FONCTIONS pour le redimensionnement
+  const handleResizeStart = (e, columnKey) => {
+    e.preventDefault()
+    setIsResizing(true)
+    setResizingColumn(columnKey)
+    setStartX(e.clientX)
+    setStartWidth(columnWidths[columnKey])
+    addDebugInfo(`🔧 Début redimensionnement colonne: ${columnKey}`)
+    
+    document.addEventListener('mousemove', handleResizeMove)
+    document.addEventListener('mouseup', handleResizeEnd)
+  }
+
+  const handleResizeMove = (e) => {
+    if (!isResizing || !resizingColumn) return
+    
+    const deltaX = e.clientX - startX
+    const newWidth = Math.max(50, startWidth + deltaX) // Largeur minimale de 50px
+    
+    setColumnWidths(prev => ({
+      ...prev,
+      [resizingColumn]: newWidth
+    }))
+  }
+
+  const handleResizeEnd = () => {
+    if (resizingColumn) {
+      addDebugInfo(`✅ Redimensionnement terminé: ${resizingColumn} = ${columnWidths[resizingColumn]}px`)
+    }
+    
+    setIsResizing(false)
+    setResizingColumn(null)
+    setStartX(0)
+    setStartWidth(0)
+    
+    document.removeEventListener('mousemove', handleResizeMove)
+    document.removeEventListener('mouseup', handleResizeEnd)
+  }
+
+  // Nettoyage des event listeners
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove)
+      document.removeEventListener('mouseup', handleResizeEnd)
+    }
+  }, [])
+
+  // NOUVELLE FONCTION pour les actions de pouce
+  const handleThumbAction = async (userId, action) => {
+    try {
+      addDebugInfo(`👍 Action ${action} sur utilisateur ${userId}`)
+      
+      // Simule l'action de pouce (à adapter selon votre API)
+      if (action === 'thumbUp') {
+        // Logique pour pouce levé (par exemple, approuver un utilisateur)
+        await api.users.update(userId, { approved: true })
+      } else if (action === 'thumbDown') {
+        // Logique pour pouce baissé (par exemple, rejeter un utilisateur)
+        await api.users.update(userId, { approved: false })
+      }
+      
+      fetchUsers(false)
+      
+    } catch (error) {
+      addDebugInfo(`❌ Erreur action ${action}: ${error.message}`)
+      setError(error.response?.data?.message || `Impossible d'exécuter l'action ${action}`)
+    }
+  }
+
   // Chargement initial
   useEffect(() => {
-    if (isConfigured) {
-      addDebugInfo(`🔧 API configurée: ${selectedApi?.name} (${selectedApi?.url})`)
-      fetchUsers()
-    } else {
-      addDebugInfo('❌ API non configurée')
-      setError('Aucune API configurée. Veuillez sélectionner un serveur API.')
-    }
+  if (isConfigured) {
+    addDebugInfo(`🔧 API configurée: ${selectedApi?.name} (${selectedApi?.url})`)
+    fetchUsers()
+  } else {
+    addDebugInfo('❌ API non configurée')
+    setError('Aucune API configurée. Veuillez sélectionner un serveur API.')
+  }
   }, [isConfigured, selectedApi])
 
   // Auto-refresh
   useEffect(() => {
-    if (autoRefresh && isConfigured) {
-      const interval = setInterval(() => {
-        addDebugInfo('🔄 Auto-refresh activé')
-        fetchUsers(false)
-      }, 30000)
+  if (autoRefresh && isConfigured) {
+    const interval = setInterval(() => {
+      addDebugInfo('🔄 Auto-refresh activé')
+      fetchUsers(false)
+    }, 30000)
 
-      return () => clearInterval(interval)
-    }
+    return () => clearInterval(interval)
+  }
   }, [autoRefresh, isConfigured])
 
   // Recherche et filtres
   useEffect(() => {
-    if (isConfigured) {
-      const timeoutId = setTimeout(() => {
-        addDebugInfo(`🔍 Recherche/Filtres appliqués: "${searchTerm}" - ${filters.status} - ${filters.role}`)
-        fetchUsers()
-      }, 500)
+  if (isConfigured) {
+    const timeoutId = setTimeout(() => {
+      addDebugInfo(`🔍 Recherche/Filtres appliqués: "${searchTerm}" - ${filters.status} - ${filters.role}`)
+      fetchUsers()
+    }, 500)
 
-      return () => clearTimeout(timeoutId)
-    }
-  }, [searchTerm, filters, pagination.page])
+    return () => clearTimeout(timeoutId)
+  }
+  }, [searchTerm, filters])
+
+  // CORRECTION: Changement de page et per_page séparés
+  useEffect(() => {
+  if (isConfigured) {
+    addDebugInfo(`📄 Changement pagination: page ${pagination.page}, per_page ${pagination.per_page}`)
+    fetchUsers()
+  }
+  }, [pagination.page, pagination.per_page])
 
   // Récupérer les utilisateurs
   const fetchUsers = async (showLoading = true) => {
@@ -105,19 +212,28 @@ const Users = () => {
     try {
       const params = {
         page: pagination.page,
-        per_page: pagination.per_page
+        limit: pagination.per_page  // CORRECTION: L'API attend "limit" pas "per_page"
       }
 
       if (searchTerm.trim()) {
         params.search = searchTerm.trim()
       }
 
+      // CORRECTION: Utilisation de paramètres corrects selon l'API
       if (filters.status !== 'all') {
-        params.status = filters.status === 'active' ? true : false
+        if (filters.status === 'active') {
+          params.status = 'active'
+        } else if (filters.status === 'inactive') {
+          params.status = 'inactive'
+        }
       }
 
       if (filters.role !== 'all') {
-        params.is_admin = filters.role === 'admin' ? true : false
+        if (filters.role === 'admin') {
+          params.role = 'admin'
+        } else if (filters.role === 'user') {
+          params.role = 'user'
+        }
       }
 
       addDebugInfo(`📋 Paramètres envoyés: ${JSON.stringify(params)}`)
@@ -213,6 +329,57 @@ const Users = () => {
     fetchUsers()
   }
 
+  // Gestion du changement de page
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }))
+  }
+
+  // CORRECTION: Gestion du changement de per_page
+  const handlePerPageChange = (newPerPage) => {
+    if (newPerPage === 'custom') {
+      setShowCustomPerPage(true)
+      return
+    }
+    
+    const perPageValue = parseInt(newPerPage)
+    addDebugInfo(`📊 Changement per_page: ${perPageValue}`)
+    
+    // CORRECTION: Reset explicite à la page 1 et déclenchement immédiat
+    setPagination(prev => ({ 
+      ...prev, 
+      per_page: perPageValue,
+      page: 1
+    }))
+    setShowCustomPerPage(false)
+    
+    // Force le rechargement immédiat
+    setTimeout(() => {
+      fetchUsers()
+    }, 100)
+  }
+
+  // CORRECTION: Validation et application du per_page personnalisé
+  const handleCustomPerPageSubmit = () => {
+    const value = parseInt(customPerPage)
+    if (value && value > 0 && value <= 1000) {
+      addDebugInfo(`📊 Per_page personnalisé: ${value}`)
+      setPagination(prev => ({ 
+        ...prev, 
+        per_page: value,
+        page: 1
+      }))
+      setShowCustomPerPage(false)
+      setCustomPerPage('')
+      
+      // Force le rechargement immédiat
+      setTimeout(() => {
+        fetchUsers()
+      }, 100)
+    } else {
+      alert('Veuillez entrer un nombre entre 1 et 1000')
+    }
+  }
+
   // Fonctions utilitaires
   const toggleUserSelection = (userId) => {
     setSelectedUsers(prev => 
@@ -276,11 +443,164 @@ const Users = () => {
     addDebugInfo('📥 Logs téléchargés')
   }
 
-  // Changer de page
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.pages) {
-      setPagination(prev => ({ ...prev, page: newPage }))
-      addDebugInfo(`📄 Changement page: ${newPage}`)
+  // Gestion du drag & drop des colonnes
+  const handleDragStart = (e, columnKey) => {
+    setDraggedColumn(columnKey)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = (e, targetColumnKey) => {
+    e.preventDefault()
+    
+    if (!draggedColumn || draggedColumn === targetColumnKey) return
+    
+    const newOrder = [...columnOrder]
+    const draggedIndex = newOrder.indexOf(draggedColumn)
+    const targetIndex = newOrder.indexOf(targetColumnKey)
+    
+    // Supprimer l'élément de sa position actuelle
+    newOrder.splice(draggedIndex, 1)
+    // L'insérer à la nouvelle position
+    newOrder.splice(targetIndex, 0, draggedColumn)
+    
+    setColumnOrder(newOrder)
+    setDraggedColumn(null)
+    addDebugInfo(`📋 Colonne ${draggedColumn} déplacée vers position ${targetIndex}`)
+  }
+
+  // Configuration des colonnes AMÉLIORÉE avec redimensionnement
+  const columnConfig = {
+    checkbox: {
+      key: 'checkbox',
+      title: '',
+      resizable: false, // Les cases à cocher ne doivent pas être redimensionnées
+      render: (user) => (
+        <input
+          type="checkbox"
+          className="rounded border-green-300 text-green-600 focus:ring-green-500"
+          checked={selectedUsers.includes(user.id)}
+          onChange={() => toggleUserSelection(user.id)}
+        />
+      )
+    },
+    user: {
+      key: 'user',
+      title: 'Utilisateur',
+      resizable: true,
+      render: (user) => (
+        <div 
+          className="flex items-center cursor-pointer"
+          onClick={() => navigate(`/users/${user.id}`)}
+          title="Cliquer pour voir les détails"
+        >
+          <div className="w-10 h-10 rounded-full mr-4 group">
+            {user.profile_picture ? (
+              <img
+                src={user.profile_picture}
+                alt={`Photo de ${user.first_name}`}
+                className="w-full h-full rounded-full object-cover border-2 border-green-200 shadow-sm group-hover:scale-105 transition-transform duration-300"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextElementSibling.style.display = 'flex'
+                }}
+              />
+            ) : null}
+            <div 
+              className={`w-full h-full rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center border-2 border-green-200 shadow-sm group-hover:scale-105 transition-transform duration-300 ${user.profile_picture ? 'hidden' : 'flex'}`}
+            >
+              <span className="text-sm font-bold text-white">
+                {user.first_name?.[0] || '?'}{user.last_name?.[0] || ''}
+              </span>
+            </div>
+          </div>
+          <div>
+            <div className="font-medium text-gray-900">
+              {user.first_name} {user.last_name}
+            </div>
+            <div className="text-sm text-gray-500">@{user.username}</div>
+          </div>
+        </div>
+      )
+    },
+    email: {
+      key: 'email',
+      title: 'Email',
+      resizable: true,
+      render: (user) => <span className="text-gray-900 truncate">{user.email}</span>
+    },
+    role: {
+      key: 'role',
+      title: 'Rôle',
+      resizable: true,
+      render: (user) => getRoleBadge(user.is_admin)
+    },
+    status: {
+      key: 'status',
+      title: 'Statut',
+      resizable: true,
+      render: (user) => getStatusBadge(user)
+    },
+    lastLogin: {
+      key: 'lastLogin',
+      title: 'Dernière connexion',
+      resizable: true,
+      render: (user) => (
+        <span className="text-sm text-gray-600">
+          {formatDate(user.last_login)}
+        </span>
+      )
+    },
+    actions: {
+      key: 'actions',
+      title: 'Actions',
+      resizable: true,
+      render: (user) => (
+        <div className="flex space-x-2">
+          {/* NOUVELLES ACTIONS POUCE */}
+          <button
+            onClick={() => handleThumbAction(user.id, 'thumbUp')}
+            className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-all duration-300 hover:scale-110"
+            title="Approuver"
+          >
+            <HandThumbUpIcon className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handleThumbAction(user.id, 'thumbDown')}
+            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-300 hover:scale-110"
+            title="Rejeter"
+          >
+            <HandThumbDownIcon className="h-4 w-4" />
+          </button>
+          
+          {/* ACTIONS EXISTANTES */}
+          <button
+            onClick={() => navigate(`/users/${user.id}`)}
+            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-300 hover:scale-110"
+            title="Voir le détail"
+          >
+            <EyeIcon className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => navigate(`/users/${user.id}/edit`)}
+            className="p-2 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-all duration-300 hover:scale-110"
+            title="Éditer rapidement"
+          >
+            <PencilIcon className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handleUserAction('delete', user.id)}
+            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-300 hover:scale-110"
+            title="Supprimer"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </button>
+        </div>
+      )
     }
   }
 
@@ -497,13 +817,17 @@ const Users = () => {
             <div className="flex flex-col lg:flex-row justify-between gap-4">
               <div className="relative flex-1 max-w-md">
                 <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Rechercher un utilisateur..."
-                  className="w-full pl-12 pr-4 py-3 border border-green-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white/80 backdrop-blur-sm transition-all duration-300"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <div className="neuro-container">
+                  <input
+                    type="text"
+                    required
+                    placeholder=""
+                    className="neuro-input pl-12"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <label className="neuro-label pl-12">Rechercher un utilisateur...</label>
+                </div>
               </div>
               
               <div className="flex gap-3">
@@ -530,7 +854,7 @@ const Users = () => {
           {/* Filtres */}
           {showFilters && (
             <div className="px-6 py-4 border-b border-green-100 bg-green-50/50">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
                   <select 
@@ -556,6 +880,23 @@ const Users = () => {
                     <option value="user">Utilisateurs</option>
                   </select>
                 </div>
+
+                {/* NOUVELLE FONCTIONNALITÉ: Sélecteur du nombre d'utilisateurs par page */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Nombre d'utilisateurs</label>
+                  <select 
+                    className="w-full p-3 border border-green-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 bg-white/80"
+                    value={pagination.per_page}
+                    onChange={(e) => handlePerPageChange(e.target.value)}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                    <option value="custom">Personnalisé...</option>
+                  </select>
+                </div>
                 
                 <div className="flex items-end">
                   <button 
@@ -566,6 +907,41 @@ const Users = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Modal pour per_page personnalisé */}
+              {showCustomPerPage && (
+                <div className="mt-4 p-4 bg-white rounded-xl border border-green-200">
+                  <div className="flex items-center space-x-3">
+                    <label className="text-sm font-medium text-gray-700">
+                      Nombre personnalisé (1-1000):
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="1000"
+                      className="px-3 py-2 border border-green-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 w-24"
+                      value={customPerPage}
+                      onChange={(e) => setCustomPerPage(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCustomPerPageSubmit()}
+                    />
+                    <button
+                      onClick={handleCustomPerPageSubmit}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all duration-300"
+                    >
+                      <CheckIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCustomPerPage(false)
+                        setCustomPerPage('')
+                      }}
+                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-all duration-300"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -594,7 +970,7 @@ const Users = () => {
             </div>
           )}
 
-          {/* Table des utilisateurs */}
+          {/* Table des utilisateurs AMÉLIORÉE avec redimensionnement */}
           <div className="card-body p-0">
             {loading ? (
               <div className="p-8 text-center">
@@ -616,113 +992,98 @@ const Users = () => {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table 
+                  ref={tableRef}
+                  className="w-full table-fixed"
+                  style={{ 
+                    minWidth: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 'px'
+                  }}
+                >
                   <thead className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider">
-                        <input
-                          type="checkbox"
-                          className="rounded border-green-300 text-green-600 focus:ring-green-500"
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedUsers(users.map(u => u.id))
-                            } else {
-                              setSelectedUsers([])
-                            }
-                          }}
-                          checked={selectedUsers.length === users.length && users.length > 0}
-                        />
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider">Utilisateur</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider">Email</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider">Rôle</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider">Statut</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider">Dernière connexion</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider">Actions</th>
+                      {columnOrder.map(columnKey => {
+                        const column = columnConfig[columnKey]
+                        const width = columnWidths[columnKey]
+                        
+                        if (columnKey === 'checkbox') {
+                          return (
+                            <th 
+                              key={columnKey}
+                              className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider cursor-move select-none relative"
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, columnKey)}
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleDrop(e, columnKey)}
+                              title="Glisser pour réorganiser"
+                              style={{ width: `${width}px` }}
+                            >
+                              <input
+                                type="checkbox"
+                                className="rounded border-green-300 text-green-600 focus:ring-green-500"
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedUsers(users.map(u => u.id))
+                                  } else {
+                                    setSelectedUsers([])
+                                  }
+                                }}
+                                checked={selectedUsers.length === users.length && users.length > 0}
+                              />
+                            </th>
+                          )
+                        }
+                        
+                        return (
+                          <th 
+                            key={columnKey}
+                            className="px-6 py-4 text-left text-xs font-semibold text-green-800 uppercase tracking-wider cursor-move select-none hover:bg-green-100 transition-colors duration-200 relative"
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, columnKey)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, columnKey)}
+                            title="Glisser pour réorganiser"
+                            style={{ width: `${width}px` }}
+                          >
+                            <div className="flex items-center justify-between pr-4">
+                              <div className="flex items-center space-x-2">
+                                <span>{column.title}</span>
+                                <span className="text-xs opacity-50">⋮⋮</span>
+                              </div>
+                              
+                              {/* Handle de redimensionnement */}
+                              {column.resizable && (
+                                <div
+                                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-green-300 transition-colors duration-200"
+                                  onMouseDown={(e) => handleResizeStart(e, columnKey)}
+                                  title="Glisser pour redimensionner"
+                                >
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <div className="w-0.5 h-6 bg-green-400 opacity-0 hover:opacity-100 transition-opacity duration-200"></div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </th>
+                        )
+                      })}
                     </tr>
                   </thead>
                   <tbody className="bg-white/60 backdrop-blur-sm divide-y divide-green-100">
                     {users.map((user, index) => (
                       <tr key={user.id} className="hover:bg-green-50/50 transition-all duration-300 animate-slide-in-up" style={{ animationDelay: `${index * 50}ms` }}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            className="rounded border-green-300 text-green-600 focus:ring-green-500"
-                            checked={selectedUsers.includes(user.id)}
-                            onChange={() => toggleUserSelection(user.id)}
-                          />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div 
-                            className="flex items-center cursor-pointer"
-                            onClick={() => navigate(`/users/${user.id}`)}
-                            title="Cliquer pour voir les détails"
-                          >
-                            <div className="w-10 h-10 rounded-full mr-4 group">
-                              {user.profile_picture ? (
-                                <img
-                                  src={user.profile_picture}
-                                  alt={`Photo de ${user.first_name}`}
-                                  className="w-full h-full rounded-full object-cover border-2 border-green-200 shadow-sm group-hover:scale-105 transition-transform duration-300"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none'
-                                    e.target.nextElementSibling.style.display = 'flex'
-                                  }}
-                                />
-                              ) : null}
-                              <div 
-                                className={`w-full h-full rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center border-2 border-green-200 shadow-sm group-hover:scale-105 transition-transform duration-300 ${user.profile_picture ? 'hidden' : 'flex'}`}
-                              >
-                                <span className="text-sm font-bold text-white">
-                                  {user.first_name?.[0] || '?'}{user.last_name?.[0] || ''}
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900">
-                                {user.first_name} {user.last_name}
-                              </div>
-                              <div className="text-sm text-gray-500">@{user.username}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-900">{user.email}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {getRoleBadge(user.is_admin)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {getStatusBadge(user)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-gray-600">
-                            {formatDate(user.last_login)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => navigate(`/users/${user.id}`)}
-                              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-300 hover:scale-110"
-                              title="Voir le détail"
+                        {columnOrder.map(columnKey => {
+                          const column = columnConfig[columnKey]
+                          const width = columnWidths[columnKey]
+                          return (
+                            <td 
+                              key={columnKey} 
+                              className="px-6 py-4 whitespace-nowrap overflow-hidden"
+                              style={{ width: `${width}px` }}
                             >
-                              <EyeIcon className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => navigate(`/users/${user.id}/edit`)}
-                              className="p-2 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-all duration-300 hover:scale-110"
-                              title="Éditer rapidement"
-                            >
-                              <PencilIcon className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleUserAction('delete', user.id)}
-                              className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-300 hover:scale-110"
-                              title="Supprimer"
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
+                              {column.render(user)}
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                   </tbody>
@@ -730,27 +1091,87 @@ const Users = () => {
               </div>
             )}
             
-            {/* Pagination */}
+            {/* Pagination améliorée */}
             {pagination.pages > 1 && (
               <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-t border-green-200">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-sm text-gray-700 font-medium">
-                    Page {pagination.page} sur {pagination.pages}
+                    Page {pagination.page} sur {pagination.pages} ({pagination.total} utilisateurs, {pagination.per_page} par page)
                   </div>
-                  <div className="flex space-x-3">
+                  <div className="flex items-center space-x-3">
+                    {/* Bouton première page */}
                     <button
-                      className="px-4 py-2 bg-white hover:bg-green-50 border border-green-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50"
+                      className="px-3 py-2 bg-white hover:bg-green-50 border border-green-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={pagination.page === 1}
-                      onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                      onClick={() => handlePageChange(1)}
+                      title="Première page"
+                    >
+                      ««
+                    </button>
+                    
+                    {/* Bouton page précédente */}
+                    <button
+                      className="px-4 py-2 bg-white hover:bg-green-50 border border-green-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={pagination.page === 1}
+                      onClick={() => handlePageChange(pagination.page - 1)}
                     >
                       Précédent
                     </button>
+
+                    {/* Numéros de page */}
+                    <div className="flex space-x-1">
+                      {(() => {
+                        const pages = []
+                        const currentPage = pagination.page
+                        const totalPages = pagination.pages
+                        
+                        let startPage = Math.max(1, currentPage - 2)
+                        let endPage = Math.min(totalPages, currentPage + 2)
+                        
+                        if (currentPage <= 3) {
+                          endPage = Math.min(5, totalPages)
+                        }
+                        if (currentPage >= totalPages - 2) {
+                          startPage = Math.max(1, totalPages - 4)
+                        }
+                        
+                        for (let i = startPage; i <= endPage; i++) {
+                          pages.push(
+                            <button
+                              key={i}
+                              className={`px-3 py-2 rounded-lg font-semibold transition-all duration-300 hover:scale-105 ${
+                                i === currentPage
+                                  ? 'bg-green-600 text-white'
+                                  : 'bg-white hover:bg-green-50 border border-green-200 text-gray-700'
+                              }`}
+                              onClick={() => handlePageChange(i)}
+                            >
+                              {i}
+                            </button>
+                          )
+                        }
+                        
+                        return pages
+                      })()}
+                    </div>
+
+                    {/* Bouton page suivante */}
                     <button
-                      className="px-4 py-2 bg-white hover:bg-green-50 border border-green-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50"
+                      className="px-4 py-2 bg-white hover:bg-green-50 border border-green-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={pagination.page === pagination.pages}
-                      onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                      onClick={() => handlePageChange(pagination.page + 1)}
                     >
                       Suivant
+                    </button>
+                    
+                    {/* Bouton dernière page */}
+                    <button
+                      className="px-3 py-2 bg-white hover:bg-green-50 border border-green-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={pagination.page === pagination.pages}
+                      onClick={() => handlePageChange(pagination.pages)}
+                      title="Dernière page"
+                    >
+                      »»
                     </button>
                   </div>
                 </div>
@@ -916,6 +1337,77 @@ const Users = () => {
           background-color: rgba(16, 185, 129, 0.5);
         }
 
+        /* Styles pour le redimensionnement de colonnes */
+        .table-fixed {
+          table-layout: fixed;
+        }
+
+        .cursor-col-resize {
+          cursor: col-resize;
+        }
+
+        /* Effet de redimensionnement en cours */
+        .resizing-cursor {
+          cursor: col-resize;
+        }
+
+        body.resizing-column {
+          cursor: col-resize;
+          user-select: none;
+        }
+
+        /* Input styles neuomorphism light theme */
+        .neuro-container {
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          position: relative;
+          color: #4a5568;
+        }
+
+        .neuro-container .neuro-label {
+          font-size: 14px;
+          padding-left: 10px;
+          position: absolute;
+          top: 13px;
+          transition: 0.3s;
+          pointer-events: none;
+          color: #718096;
+        }
+
+        .neuro-input {
+          width: 100%;
+          height: 40px;
+          border: none;
+          outline: none;
+          padding: 0px 12px;
+          border-radius: 8px;
+          color: #2d3748;
+          font-size: 14px;
+          background-color: #f7fafc;
+          box-shadow: 
+            2px 2px 8px rgba(0,0,0,0.1),
+            -2px -2px 8px rgba(255,255,255,0.8);
+          transition: all 0.3s ease;
+        }
+
+        .neuro-input:focus {
+          color: #2d3748;
+          box-shadow: 
+            inset 2px 2px 8px rgba(0,0,0,0.1),
+            inset -2px -2px 8px rgba(255,255,255,0.8);
+        }
+
+        .neuro-container .neuro-input:valid ~ .neuro-label,
+        .neuro-container .neuro-input:focus ~ .neuro-label {
+          transition: 0.3s;
+          padding-left: 4px;
+          transform: translateY(-28px);
+          font-size: 12px;
+          color: #10b981;
+          font-weight: 500;
+        }
+
         @keyframes fade-in {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -970,6 +1462,27 @@ const Users = () => {
 
           .glass-green {
             padding: 20px;
+          }
+
+          /* Adaptation mobile pour le redimensionnement */
+          .cursor-col-resize {
+            cursor: default;
+          }
+
+          /* Masquer les handles de redimensionnement sur mobile */
+          .resize-handle {
+            display: none;
+          }
+        }
+
+        /* Amélioration pour les petits écrans */
+        @media (max-width: 640px) {
+          .table-fixed {
+            table-layout: auto;
+          }
+
+          .overflow-x-auto {
+            scrollbar-width: thin;
           }
         }
       `}</style>

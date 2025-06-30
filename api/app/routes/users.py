@@ -8,9 +8,38 @@ from app.models.run import Run
 from app.utils.decorators import admin_required
 from sqlalchemy import func, and_, desc, or_
 from datetime import datetime, timedelta
+from PIL import Image
 import re
 import csv
 import io
+import base64
+
+
+# Configuration
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+COMPRESSED_SIZE = (300, 300)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def compress_and_encode_image(file):
+    """Compresse l'image et la convertit en base64"""
+    try:
+        image = Image.open(file)
+        if image.mode in ('RGBA', 'LA', 'P'):
+            image = image.convert('RGB')
+        image.thumbnail(COMPRESSED_SIZE, Image.Resampling.LANCZOS)
+        buffer = io.BytesIO()
+        image.save(buffer, format='JPEG', quality=85, optimize=True)
+        buffer.seek(0)
+        image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        return f"data:image/jpeg;base64,{image_data}"
+    except Exception as e:
+        print(f"Erreur compression image: {e}")
+        return None
+
+
 
 users_bp = Blueprint('users', __name__)
 
@@ -595,3 +624,70 @@ def export_users():
             "message": "Erreur lors de l'export",
             "error": str(e)
         }), 500
+
+
+@users_bp.route('/<int:user_id>/upload-profile-image', methods=['POST'])
+@jwt_required()
+@admin_required
+def upload_user_profile_image(user_id):
+    """Upload d'image de profil pour un utilisateur spécifique (admin seulement)"""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 404
+        
+        if 'image' not in request.files:
+            return jsonify({"status": "error", "message": "Aucun fichier fourni"}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({"status": "error", "message": "Nom de fichier vide"}), 400
+        
+        file_content = file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            return jsonify({"status": "error", "message": "Fichier trop volumineux (max 5MB)"}), 400
+        
+        file.seek(0)
+        if not allowed_file(file.filename):
+            return jsonify({"status": "error", "message": "Format non supporté. Utilisez: PNG, JPG, JPEG, GIF, WEBP"}), 400
+        
+        compressed_image = compress_and_encode_image(file)
+        if not compressed_image:
+            return jsonify({"status": "error", "message": "Erreur lors du traitement de l'image"}), 500
+        
+        user.profile_picture = compressed_image
+        user.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Image uploadée avec succès",
+            "data": {"profile_picture": compressed_image, "size": len(compressed_image), "user_id": user_id}
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": "Erreur lors de l'upload", "error": str(e)}), 500
+
+@users_bp.route('/<int:user_id>/upload-profile-image', methods=['DELETE'])
+@jwt_required()
+@admin_required
+def delete_user_profile_image(user_id):
+    """Supprimer l'image de profil d'un utilisateur spécifique (admin seulement)"""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 404
+        
+        if not user.profile_picture:
+            return jsonify({"status": "error", "message": "Aucune image à supprimer"}), 404
+        
+        user.profile_picture = None
+        user.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({"status": "success", "message": "Image supprimée avec succès", "data": {"user_id": user_id}}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": "Erreur lors de la suppression", "error": str(e)}), 500

@@ -1,30 +1,36 @@
+// RunningApp v3/src/services/api.js - VERSION CORRIGÉE
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.0.47:5000'; // Ajustez selon votre config
+// Configuration de base
+const API_BASE_URL = 'http://192.168.27.77:5000';
 
-// Configuration d'axios
+// Instance axios configurée
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Intercepteur pour ajouter le token d'authentification
+// Intercepteur pour ajouter le token automatiquement
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('🔑 Token ajouté à la requête');
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('🔑 Token ajouté à la requête');
+      }
+    } catch (error) {
+      console.error('🚨 Erreur récupération token:', error);
     }
+    
     console.log(`📡 ${config.method?.toUpperCase()} ${config.url}`);
     return config;
   },
   (error) => {
-    console.error('🚨 Erreur intercepteur requête:', error);
     return Promise.reject(error);
   }
 );
@@ -38,90 +44,54 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    console.error(`❌ ${error.response?.status || 'NETWORK'} ${error.config?.url}:`, 
-                  error.response?.data?.message || error.message);
-
-    // Gestion du token expiré (401)
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
       try {
-        const refreshToken = await AsyncStorage.getItem('refreshToken');
-        if (refreshToken) {
-          console.log('🔄 Refresh token found, requesting new token...');
-          const response = await axios.post(`${API_URL}/auth/refresh`, {
-            refreshToken: refreshToken,
-          });
-
-          const { token: newToken } = response.data;
-          await AsyncStorage.setItem('authToken', newToken);
-          console.log('✅ New token obtained and stored');
-
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          return api(originalRequest);
-        } else {
-          console.log('❌ No refresh token found');
-        }
-      } catch (refreshError) {
-        console.error('🚨 Token refresh failed:', refreshError);
         await AsyncStorage.removeItem('authToken');
-        await AsyncStorage.removeItem('refreshToken');
+        console.log('🔓 Token expiré, suppression automatique');
+      } catch (storageError) {
+        console.error('🚨 Erreur suppression token:', storageError);
       }
     }
-
+    
+    console.error(`❌ ${error.response?.status || 'Network'} ${originalRequest?.url}:`, 
+                  error.response?.data?.message || error.message);
+    
     return Promise.reject(error);
   }
 );
 
-// Services d'authentification
-export const login = async (email, password) => {
-  console.log('🔐 Login attempt for:', email);
+// AUTH SERVICES
+export const login = async (emailOrUsername, password) => {
+  console.log('🔐 Login attempt for:', emailOrUsername);
   try {
-    const response = await api.post('/api/auth/login', {
-      email,
-      password,
-    });
-    console.log('✅ Login successful:', response);
-    
-    // CORRECTION : L'API retourne {data: {access_token, user}, message, status}
-    // Structure complète: response.data.data.access_token
-    const responseData = response.data;
-    
-    if (responseData && responseData.data && responseData.data.access_token) {
-      return {
-        token: responseData.data.access_token,
-        user: responseData.data.user,
-        message: responseData.message
-      };
+    const payload = { password };
+    if (emailOrUsername.includes('@')) {
+      payload.email = emailOrUsername;
     } else {
-      console.error('🚨 Structure de réponse inattendue:', responseData);
-      throw new Error('Format de réponse inattendu du serveur');
+      payload.username = emailOrUsername;
     }
+    
+    const response = await api.post('/api/auth/login', payload);
+    console.log('✅ Login successful:', response.data);
+    
+    return response.data;
   } catch (error) {
     console.error('🚨 Login failed:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Erreur de connexion');
+    throw error;
   }
 };
 
 export const register = async (userData) => {
   console.log('📝 Register attempt for:', userData.email);
-  
   try {
-    // Étape 1: D'abord se connecter comme utilisateur normal
-    console.log('🔄 Tentative de connexion pour vérifier si l\'utilisateur existe...');
-    try {
-      await login(userData.email, userData.password);
-      throw new Error('Un compte avec cet email existe déjà');
-    } catch (loginError) {
-      // Si login échoue, l'utilisateur n'existe pas - on continue
-      console.log('✅ Utilisateur n\'existe pas, on peut créer le compte');
-    }
-
-    // Étape 2: Message temporaire - demander à l'admin de créer le compte
-    throw new Error(`Inscription temporairement indisponible.\n\nContactez un administrateur avec ces infos :\n• Email: ${userData.email}\n• Username: ${userData.username}\n• Nom: ${userData.first_name} ${userData.last_name}`);
-
+    const response = await api.post('/api/auth/register', userData);
+    console.log('✅ Register successful:', response.data);
+    
+    return response.data;
   } catch (error) {
-    console.error('🚨 Registration process failed:', error.message);
+    console.error('🚨 Register failed:', error.response?.data || error.message);
     throw error;
   }
 };
@@ -129,31 +99,24 @@ export const register = async (userData) => {
 export const logout = async () => {
   console.log('👋 Logout process started');
   try {
-    // Tentative de logout côté serveur (optionnel)
     await api.post('/api/auth/logout');
     console.log('✅ Server logout successful');
   } catch (error) {
-    // Si la route n'existe pas (404) ou autre erreur, on continue le logout local
-    console.warn('⚠️ Server logout failed (route may not exist):', error.response?.data?.message || error.message);
-    // Ne pas throw ici car on veut quand même nettoyer les tokens locaux
+    console.warn('⚠️ Server logout failed:', error.response?.data?.message || error.message);
   }
 };
 
+// USER SERVICES - ENDPOINTS CORRIGÉS
 export const getCurrentUser = async () => {
   console.log('👤 Getting current user');
   try {
-    const response = await api.get('/api/auth/validate');
-    console.log('✅ Current user retrieved:', response);
+    const response = await api.get('/api/users/profile'); // CORRIGÉ: /users/ au lieu de /auth/
+    console.log('✅ Current user retrieved:', response.data);
     
-    const responseData = response.data;
-    
-    if (responseData && responseData.data) {
-      return responseData.data;
-    } else if (responseData && responseData.user) {
-      return responseData.user;
-    } else {
-      return responseData;
+    if (response.data?.status === 'success') {
+      return response.data.data;
     }
+    return response.data;
   } catch (error) {
     console.error('🚨 Get current user failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération du profil utilisateur');
@@ -163,35 +126,47 @@ export const getCurrentUser = async () => {
 export const updateProfile = async (profileData) => {
   console.log('👤 Updating profile');
   try {
-    const response = await api.put('/api/auth/profile', profileData);
-    console.log('✅ Profile updated:', response);
+    const response = await api.put('/api/users/profile', profileData); // CORRIGÉ: /users/ au lieu de /auth/
+    console.log('✅ Profile updated:', response.data);
     
-    const responseData = response.data;
-    
-    if (responseData && responseData.data) {
-      return responseData.data;
-    } else {
-      return responseData;
+    if (response.data?.status === 'success') {
+      return response.data.data;
     }
+    return response.data;
   } catch (error) {
     console.error('🚨 Update profile failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de mise à jour du profil');
   }
 };
 
-// Services de courses
+// RUN SERVICES
 export const getRunHistory = async (limit = 20, offset = 0) => {
   console.log('🏃 Getting run history');
   try {
     const response = await api.get(`/api/runs?limit=${limit}&offset=${offset}`);
-    console.log('✅ Run history retrieved:', response);
+    console.log('✅ Run history retrieved:', response.data);
     
     const responseData = response.data;
     
-    if (responseData && responseData.data) {
+    if (responseData?.runs) {
+      console.log('📊 Courses extraites de response.runs');
+      console.log(`📊 ${responseData.runs.length} courses reçues du serveur`);
+      return responseData.runs;
+    } else if (responseData?.data?.runs) {
+      console.log('📊 Courses extraites de response.data.runs');
+      console.log(`📊 ${responseData.data.runs.length} courses reçues du serveur`);
+      return responseData.data.runs;
+    } else if (Array.isArray(responseData?.data)) {
+      console.log('📊 Courses extraites de response.data (array)');
+      console.log(`📊 ${responseData.data.length} courses reçues du serveur`);
       return responseData.data;
-    } else {
+    } else if (Array.isArray(responseData)) {
+      console.log('📊 Courses extraites directement de response');
+      console.log(`📊 ${responseData.length} courses reçues du serveur`);
       return responseData;
+    } else {
+      console.log('⚠️ Structure de réponse inattendue:', Object.keys(responseData));
+      return [];
     }
   } catch (error) {
     console.error('🚨 Get run history failed:', error.response?.data || error.message);
@@ -203,15 +178,9 @@ export const saveRun = async (runData) => {
   console.log('💾 Saving run');
   try {
     const response = await api.post('/api/runs', runData);
-    console.log('✅ Run saved:', response);
+    console.log('✅ Run saved:', response.data);
     
-    const responseData = response.data;
-    
-    if (responseData && responseData.data) {
-      return responseData.data;
-    } else {
-      return responseData;
-    }
+    return response.data;
   } catch (error) {
     console.error('🚨 Save run failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de sauvegarde de la course');
@@ -222,7 +191,8 @@ export const deleteRun = async (runId) => {
   console.log('🗑️ Deleting run:', runId);
   try {
     const response = await api.delete(`/api/runs/${runId}`);
-    console.log('✅ Run deleted:', response);
+    console.log('✅ Run deleted:', response.data);
+    
     return response.data;
   } catch (error) {
     console.error('🚨 Delete run failed:', error.response?.data || error.message);
@@ -234,38 +204,30 @@ export const getRunDetails = async (runId) => {
   console.log('📋 Getting run details:', runId);
   try {
     const response = await api.get(`/api/runs/${runId}`);
-    console.log('✅ Run details retrieved:', response);
+    console.log('✅ Run details retrieved:', response.data);
     
-    const responseData = response.data;
-    
-    if (responseData && responseData.data) {
-      return responseData.data;
-    } else {
-      return responseData;
-    }
+    return response.data;
   } catch (error) {
     console.error('🚨 Get run details failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des détails de la course');
   }
 };
 
-// Services de parcours/routes
+// ROUTE SERVICES
 export const getRoutes = async (params = {}) => {
   console.log('🗺️ Getting routes');
   try {
     const queryParams = new URLSearchParams(params);
-    const url = Object.keys(params).length > 0 ? `/api/routes?${queryParams.toString()}` : '/api/routes';
+    const url = Object.keys(params).length > 0 ? 
+      `/api/routes?${queryParams.toString()}` : '/api/routes';
     const response = await api.get(url);
     
-    console.log('✅ Routes retrieved:', response);
+    console.log('✅ Routes retrieved:', response.data);
     
-    const responseData = response.data;
-    
-    if (responseData && responseData.data) {
-      return responseData.data;
-    } else {
-      return responseData;
+    if (response.data?.data) {
+      return response.data.data;
     }
+    return response.data;
   } catch (error) {
     console.error('🚨 Get routes failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des parcours');
@@ -276,15 +238,9 @@ export const getRouteDetails = async (routeId) => {
   console.log('📋 Getting route details:', routeId);
   try {
     const response = await api.get(`/api/routes/${routeId}`);
-    console.log('✅ Route details retrieved:', response);
+    console.log('✅ Route details retrieved:', response.data);
     
-    const responseData = response.data;
-    
-    if (responseData && responseData.data) {
-      return responseData.data;
-    } else {
-      return responseData;
-    }
+    return response.data;
   } catch (error) {
     console.error('🚨 Get route details failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des détails du parcours');
@@ -295,48 +251,36 @@ export const getActiveRoutes = async () => {
   console.log('🏃 Getting active routes');
   try {
     const response = await api.get('/api/routes/active-runs');
-    console.log('✅ Active routes retrieved:', response);
+    console.log('✅ Active routes retrieved:', response.data);
     
-    const responseData = response.data;
-    
-    if (responseData && responseData.data) {
-      return responseData.data;
-    } else {
-      return responseData;
-    }
+    return response.data;
   } catch (error) {
     console.error('🚨 Get active routes failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des parcours actifs');
   }
 };
 
-// Services de statistiques
+// STATS SERVICES
 export const getStats = async (period = 'week') => {
   console.log('📊 Getting stats for period:', period);
   try {
     const response = await api.get(`/api/stats?period=${period}`);
-    console.log('✅ Stats retrieved:', response);
+    console.log('✅ Stats retrieved:', response.data);
     
-    const responseData = response.data;
-    
-    if (responseData && responseData.data) {
-      return responseData.data;
-    } else {
-      return responseData;
-    }
+    return response.data;
   } catch (error) {
     console.error('🚨 Get stats failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || 'Erreur de récupération des statistiques');
   }
 };
 
-// Service de connectivité
+// CONNECTIVITY SERVICE
 export const checkConnectivity = async () => {
   console.log('🌐 Checking connectivity');
   try {
     const response = await api.get('/api/health');
-    console.log('✅ Connectivity check successful:', response);
-    return { online: true, response };
+    console.log('✅ Connectivity check successful:', response.data);
+    return { online: true, response: response.data };
   } catch (error) {
     console.error('🚨 Connectivity check failed:', error.message);
     return { online: false, error: error.message };
