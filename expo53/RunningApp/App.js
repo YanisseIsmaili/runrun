@@ -1,4 +1,4 @@
-// App.js - Version complète avec SafeArea
+// App.js - Version de base simplifiée
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -34,20 +34,6 @@ import RunService from './services/RunService';
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
-
-// Zone boutons bottom sécurisée
-function BottomButtonArea({ children }) {
-  return (
-    <View style={styles.bottomSafeArea}>
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.95)']}
-        style={styles.bottomGradient}
-      >
-        {children}
-      </LinearGradient>
-    </View>
-  );
-}
 
 // Composant RunPreview
 function RunPreview({ run, index }) {
@@ -209,7 +195,7 @@ function LoadingOverlay({ isVisible, message, runs = [] }) {
   );
 }
 
-// Écran principal
+// Écran principal simplifié
 function MainRunScreen({ navigation }) {
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -386,11 +372,12 @@ function MainRunScreen({ navigation }) {
               clearInterval(intervalId.current);
             }
 
-            // Sauvegarder la course
+            // Créer une course avec distance minimum pour l'API
             const finalRunData = {
               ...runData,
               route: route,
               date: new Date().toISOString(),
+              distance: Math.max(runData.distance, 100), // Minimum 100m pour API
             };
 
             try {
@@ -422,18 +409,31 @@ function MainRunScreen({ navigation }) {
               longitude: location.coords.longitude,
             };
             
-            setRoute(prev => [...prev, newCoord]);
+            console.log('📍 Nouvelle position:', newCoord);
             
-            // Calculer la distance
-            if (route.length > 0) {
-              const lastCoord = route[route.length - 1];
-              const newDistance = calculateDistance(lastCoord, newCoord);
-              setRunData(prev => ({
-                ...prev,
-                distance: prev.distance + newDistance,
-                maxSpeed: Math.max(prev.maxSpeed, location.coords.speed * 3.6 || 0),
-              }));
-            }
+            setRoute(prev => {
+              const newRoute = [...prev, newCoord];
+              
+              // Calculer distance avec les nouvelles coordonnées
+              if (newRoute.length > 1) {
+                const lastCoord = newRoute[newRoute.length - 2]; // Avant-dernière
+                const currentCoord = newCoord; // Nouvelle position
+                const newDistance = calculateDistance(lastCoord, currentCoord);
+                
+                console.log('📏 Distance calculée:', newDistance);
+                setRunData(prevData => {
+                  const updatedData = {
+                    ...prevData,
+                    distance: prevData.distance + newDistance,
+                    maxSpeed: Math.max(prevData.maxSpeed, location.coords.speed * 3.6 || 0),
+                  };
+                  console.log('📊 Distance totale:', updatedData.distance);
+                  return updatedData;
+                });
+              }
+              
+              return newRoute;
+            });
           }
         }
       );
@@ -477,11 +477,7 @@ function MainRunScreen({ navigation }) {
     }
   };
 
-  const handleHistoryPress = () => {
-    navigation.navigate('RunHistory');
-  };
-
-  const handleLogoutPress = () => {
+  const logout = async () => {
     Alert.alert(
       'Déconnexion',
       'Voulez-vous vraiment vous déconnecter ?',
@@ -490,6 +486,7 @@ function MainRunScreen({ navigation }) {
         {
           text: 'Déconnexion',
           onPress: async () => {
+            console.log('🚪 Déconnexion...');
             await AuthService.logout();
             navigation.replace('Login');
           }
@@ -515,12 +512,16 @@ function MainRunScreen({ navigation }) {
                 showsMyLocationButton={false}
                 followsUserLocation={isRunning}
                 mapType="standard"
+                showsCompass={false}
+                showsScale={false}
+                showsBuildings={true}
+                showsTraffic={false}
               >
                 {route.length > 0 && (
                   <Polyline
                     coordinates={route}
                     strokeColor="#4CAF50"
-                    strokeWidth={4}
+                    strokeWidth={6}
                     lineCap="round"
                     lineJoin="round"
                   />
@@ -535,23 +536,38 @@ function MainRunScreen({ navigation }) {
                 )}
               </MapView>
             )}
+            
+            {/* Bouton centrer position amélioré */}
+            <TouchableOpacity 
+              style={styles.centerButton} 
+              onPress={centerOnUser}
+            >
+              <LinearGradient
+                colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.85)']}
+                style={styles.centerButtonGradient}
+              >
+                <Ionicons name="locate" size={20} color={currentLocation ? "#4CAF50" : "#666"} />
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
 
-          {/* Stats en cours de course */}
+          {/* Stats en cours de course améliorées */}
           {isRunning && (
             <View style={styles.statsOverlay}>
               <LinearGradient
-                colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.6)']}
+                colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.75)']}
                 style={styles.statsContainer}
               >
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{(runData.distance / 1000).toFixed(2)}</Text>
                   <Text style={styles.statLabel}>km</Text>
                 </View>
+                <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{Math.floor(runData.duration / 60)}:{(runData.duration % 60).toString().padStart(2, '0')}</Text>
                   <Text style={styles.statLabel}>temps</Text>
                 </View>
+                <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{runData.avgSpeed.toFixed(1)}</Text>
                   <Text style={styles.statLabel}>km/h</Text>
@@ -560,66 +576,76 @@ function MainRunScreen({ navigation }) {
             </View>
           )}
 
-          {/* Bouton centrer */}
-          <TouchableOpacity 
-            style={styles.centerButton} 
-            onPress={centerOnUser}
-          >
-            <Ionicons name="locate" size={24} color={currentLocation ? "#4CAF50" : "#666"} />
-          </TouchableOpacity>
+          {/* Navigation bottom améliorée */}
+          <View style={styles.bottomSafeArea}>
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.95)', 'rgba(0,0,0,1)']}
+              style={styles.bottomGradient}
+            >
+              {!isRunning ? (
+                <View style={styles.navigationMenu}>
+                  <TouchableOpacity onPress={() => navigation.navigate('RunHistory')} style={styles.navButton}>
+                    <View style={styles.navButtonContainer}>
+                      <Ionicons name="list" size={22} color="rgba(255,255,255,0.9)" />
+                      <Text style={styles.navButtonText}>Historique</Text>
+                    </View>
+                  </TouchableOpacity>
 
-          {/* Navigation bottom avec SafeArea */}
-          <BottomButtonArea>
-            {!isRunning ? (
-              <View style={styles.navigationMenu}>
-                <TouchableOpacity onPress={handleHistoryPress} style={styles.navButton}>
-                  <Ionicons name="list" size={24} color="rgba(255,255,255,0.8)" />
-                  <Text style={styles.navButtonText}>Historique</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  onPress={startRun} 
-                  style={[styles.startButton, !locationPermission && styles.startButtonDisabled]}
-                  disabled={!locationPermission}
-                >
-                  <LinearGradient
-                    colors={locationPermission ? ['#4CAF50', '#45a049'] : ['#666', '#555']}
-                    style={styles.startButtonGradient}
+                  <TouchableOpacity 
+                    onPress={startRun} 
+                    style={[styles.startButton, !locationPermission && styles.startButtonDisabled]}
+                    disabled={!locationPermission}
                   >
-                    <Ionicons name="play" size={24} color="white" />
-                    <Text style={styles.startButtonText}>START</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                    <LinearGradient
+                      colors={locationPermission ? ['#4CAF50', '#45a049', '#3e8e41'] : ['#666', '#555']}
+                      style={styles.startButtonGradient}
+                    >
+                      <Ionicons name="play" size={28} color="white" />
+                      <Text style={styles.startButtonText}>START</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
 
-                <TouchableOpacity onPress={handleLogoutPress} style={styles.navButton}>
-                  <Ionicons name="log-out" size={24} color="rgba(255,255,255,0.8)" />
-                  <Text style={styles.navButtonText}>Déconnexion</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.runningControls}>
-                <TouchableOpacity 
-                  onPress={isPaused ? resumeRun : pauseRun} 
-                  style={[styles.controlButton, isPaused ? styles.playButton : styles.pauseButton]}
-                >
-                  <Ionicons name={isPaused ? "play" : "pause"} size={28} color="white" />
-                </TouchableOpacity>
-                
-                <TouchableOpacity onPress={stopRun} style={[styles.controlButton, styles.stopButton]}>
-                  <Ionicons name="stop" size={28} color="white" />
-                </TouchableOpacity>
-              </View>
-            )}
+                  <TouchableOpacity onPress={logout} style={styles.navButton}>
+                    <View style={styles.navButtonContainer}>
+                      <Ionicons name="log-out" size={22} color="rgba(255,255,255,0.9)" />
+                      <Text style={styles.navButtonText}>Déconnexion</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.runningControls}>
+                  <TouchableOpacity 
+                    onPress={isPaused ? resumeRun : pauseRun} 
+                    style={[styles.controlButton, isPaused ? styles.playButton : styles.pauseButton]}
+                  >
+                    <LinearGradient
+                      colors={isPaused ? ['#4CAF50', '#45a049'] : ['#FF9800', '#F57C00']}
+                      style={styles.controlButtonGradient}
+                    >
+                      <Ionicons name={isPaused ? "play" : "pause"} size={32} color="white" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity onPress={stopRun} style={styles.controlButton}>
+                    <LinearGradient
+                      colors={['#f44336', '#d32f2f']}
+                      style={styles.controlButtonGradient}
+                    >
+                      <Ionicons name="stop" size={32} color="white" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              )}
 
-            {/* Info utilisateur */}
-            {user && (
-              <View style={styles.userInfoArea}>
-                <Text style={styles.userInfoText}>
-                  Connecté : {user.username || user.email}
-                </Text>
-              </View>
-            )}
-          </BottomButtonArea>
+              {user && (
+                <View style={styles.userInfoArea}>
+                  <Text style={styles.userInfo}>
+                    Connecté : {user.username || user.email}
+                  </Text>
+                </View>
+              )}
+            </LinearGradient>
+          </View>
 
           <LoadingOverlay
             isVisible={isLocationLoading}
@@ -708,21 +734,27 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    minHeight: Platform.OS === 'ios' ? 120 : 100, // Hauteur minimum garantie
   },
   bottomGradient: {
     paddingTop: 20,
     paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 16,
+    minHeight: Platform.OS === 'ios' ? 86 : 84, // Hauteur cohérente
   },
   navigationMenu: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-evenly', // Distribution égale
     alignItems: 'center',
     paddingVertical: 10,
+    width: '100%',
   },
   navButton: {
     alignItems: 'center',
     padding: 10,
+    minWidth: 60, // Largeur minimum
+    flex: 1,
+    maxWidth: 80, // Largeur maximum
   },
   navButtonText: {
     color: 'rgba(255,255,255,0.8)',
@@ -783,14 +815,11 @@ const styles = StyleSheet.create({
   stopButton: {
     backgroundColor: '#f44336',
   },
-  userInfoArea: {
-    alignItems: 'center',
-    paddingTop: 8,
-  },
-  userInfoText: {
+  userInfo: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 11,
     textAlign: 'center',
+    marginTop: 8,
   },
   loadingOverlay: {
     position: 'absolute',

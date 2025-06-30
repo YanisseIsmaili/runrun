@@ -1,4 +1,4 @@
-// screens/RunHistoryScreen.js
+// screens/RunHistoryScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -42,16 +42,27 @@ export default function RunHistoryScreen({ navigation }) {
       }
 
       const result = await RunService.getUserRuns(pageNum, 20);
+      console.log('📄 Réponse API complète:', result);
       
-      if (result.success) {
-        let newRuns = result.data.runs || [];
+      if (result.status === "success" && result.data) {
+        // ✅ SEULEMENT données de l'API - PAS de fallback local
+        let newRuns = [];
+        console.log('🔍 Structure complète API:', JSON.stringify(result, null, 2));
+        if (result.data.runs && Array.isArray(result.data.runs)) {
+          newRuns = result.data.runs;
+        } else if (Array.isArray(result.data)) {
+          newRuns = result.data;
+        } else {
+          console.log('⚠️ Aucune donnée API disponible');
+          newRuns = [];
+        }
         
         // Appliquer le filtre
         if (filter !== 'all') {
           newRuns = newRuns.filter(run => run.status === filter);
         }
         
-        console.log(`✅ ${newRuns.length} courses récupérées`);
+        console.log(`✅ ${newRuns.length} courses API récupérées`);
         
         if (refresh || pageNum === 1) {
           setRuns(newRuns);
@@ -63,17 +74,18 @@ export default function RunHistoryScreen({ navigation }) {
         if (result.data.pagination) {
           setHasMore(result.data.pagination.page < result.data.pagination.pages);
         } else {
-          setHasMore(newRuns.length === 20); // Si on a 20 résultats, il y en a peut-être plus
+          setHasMore(newRuns.length === 20);
         }
         
         setPage(pageNum);
       } else {
-        console.log('❌ Erreur lors du chargement:', result.message);
-        Alert.alert('Erreur', result.message || 'Impossible de charger les courses');
+        console.log('❌ Pas de données API disponibles');
+        setRuns([]); // Vide si pas de données API
       }
     } catch (error) {
-      console.error('💥 Erreur chargement:', error);
-      Alert.alert('Erreur', 'Impossible de charger les tracés');
+      console.error('💥 Erreur loadRuns:', error);
+      setRuns([]); // Vide si erreur API
+      Alert.alert('Erreur', 'Impossible de charger les courses depuis l\'API');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -83,11 +95,6 @@ export default function RunHistoryScreen({ navigation }) {
   useEffect(() => {
     loadRuns();
   }, [filter]);
-
-  useEffect(() => {
-    // Synchroniser les courses en arrière-plan
-    RunService.syncPendingRuns();
-  }, []);
 
   const onRefresh = () => loadRuns(1, true);
   
@@ -150,12 +157,6 @@ export default function RunHistoryScreen({ navigation }) {
     }
   };
 
-  const getTrailColor = (speed = 0) => {
-    if (speed < 6) return 'rgba(255, 107, 107, 0.7)';
-    if (speed < 12) return 'rgba(78, 205, 196, 0.7)';
-    return 'rgba(69, 183, 209, 0.7)';
-  };
-
   const formatTime = (seconds) => {
     if (!seconds || seconds <= 0) return '00:00';
     const hours = Math.floor(seconds / 3600);
@@ -193,41 +194,35 @@ export default function RunHistoryScreen({ navigation }) {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'finished': return '#10B981';
-      case 'in_progress': return '#F59E0B';
-      case 'paused': return '#6366F1';
-      default: return '#9CA3AF';
-    }
-  };
-
   const getStatusText = (status) => {
     switch (status) {
-      case 'finished': return 'Terminé';
-      case 'in_progress': return 'En cours';
-      case 'paused': return 'En pause';
-      default: return 'Inconnu';
+      case 'finished': return 'terminés';
+      case 'in_progress': return 'en cours';
+      case 'paused': return 'en pause';
+      default: return 'tous';
     }
   };
 
-  const getStatusIcon = (status) => {
+  const getStatusColor = (status) => {
     switch (status) {
-      case 'finished': return 'checkmark-circle';
-      case 'in_progress': return 'play-circle';
-      case 'paused': return 'pause-circle';
-      default: return 'help-circle';
+      case 'finished': return '#4CAF50';
+      case 'in_progress': return '#FF9800';
+      case 'paused': return '#f44336';
+      default: return '#666';
     }
   };
 
   const FilterButton = ({ filterValue, title, icon }) => (
     <TouchableOpacity
-      style={[styles.filterButton, filter === filterValue && styles.filterButtonActive]}
+      style={[
+        styles.filterButton,
+        filter === filterValue && styles.filterButtonActive
+      ]}
       onPress={() => setFilter(filterValue)}
     >
       <Ionicons 
         name={icon} 
-        size={16} 
+        size={14} 
         color={filter === filterValue ? 'white' : 'rgba(255, 255, 255, 0.6)'} 
       />
       <Text style={[
@@ -239,9 +234,9 @@ export default function RunHistoryScreen({ navigation }) {
     </TouchableOpacity>
   );
 
-  const renderRunItem = ({ item }) => {
+  const renderRunItem = ({ item, index }) => {
     const trail = getTrailFromGpsData(item.gps_data);
-    const hasMap = trail.length > 1; // Au moins 2 points pour tracer une ligne
+    const hasValidTrail = trail.length > 1;
 
     return (
       <View style={styles.runCard}>
@@ -251,31 +246,31 @@ export default function RunHistoryScreen({ navigation }) {
         >
           <View style={styles.runHeader}>
             <View style={styles.runHeaderLeft}>
-              <Ionicons 
-                name={getStatusIcon(item.status)} 
-                size={20} 
-                color={getStatusColor(item.status)} 
-              />
-              <Text style={styles.runDate}>{formatDate(item.start_time)}</Text>
+              <Ionicons name="fitness" size={16} color="#4CAF50" />
+              <Text style={styles.runDate}>
+                {formatDate(item.start_time || item.date)}
+              </Text>
             </View>
             <View style={styles.runHeaderRight}>
               <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+                <Text style={styles.statusText}>
+                  {item.status || 'Inconnu'}
+                </Text>
               </View>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => deleteRun(item.id)}
                 style={styles.deleteButton}
               >
-                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                <Ionicons name="trash-outline" size={16} color="#f44336" />
               </TouchableOpacity>
             </View>
           </View>
 
-          {hasMap && (
-            <View style={styles.miniMapContainer}>
+          {hasValidTrail && (
+            <View style={styles.mapContainer}>
               <MapView
                 style={styles.miniMap}
-                region={{
+                initialRegion={{
                   latitude: trail[0].latitude,
                   longitude: trail[0].longitude,
                   latitudeDelta: 0.01,
@@ -288,109 +283,54 @@ export default function RunHistoryScreen({ navigation }) {
               >
                 <Polyline
                   coordinates={trail}
-                  strokeColor="#6366F1"
+                  strokeColor="#4CAF50"
                   strokeWidth={3}
                 />
-                {trail.map((point, index) => 
-                  index % 3 === 0 && (
-                    <Circle
-                      key={index}
-                      center={point}
-                      radius={2}
-                      fillColor={getTrailColor(point.speed)}
-                      strokeColor="transparent"
-                    />
-                  )
+                <Circle
+                  center={trail[0]}
+                  radius={50}
+                  fillColor="rgba(76, 175, 80, 0.3)"
+                  strokeColor="#4CAF50"
+                  strokeWidth={2}
+                />
+                {trail.length > 1 && (
+                  <Circle
+                    center={trail[trail.length - 1]}
+                    radius={50}
+                    fillColor="rgba(244, 67, 54, 0.3)"
+                    strokeColor="#f44336"
+                    strokeWidth={2}
+                  />
                 )}
               </MapView>
-              <TouchableOpacity 
-                style={styles.expandMapButton}
-                onPress={() => setSelectedRun(selectedRun?.id === item.id ? null : item)}
-              >
-                <Ionicons 
-                  name={selectedRun?.id === item.id ? "contract" : "expand"} 
-                  size={16} 
-                  color="white" 
-                />
-              </TouchableOpacity>
             </View>
           )}
 
           <View style={styles.runStats}>
             <View style={styles.statItem}>
-              <Ionicons name="walk-outline" size={18} color="#8B5CF6" />
+              <Text style={styles.statValue}>{item.distance_km ? `${item.distance_km}km` : formatDistance(item.distance)}</Text>
               <Text style={styles.statLabel}>Distance</Text>
-              <Text style={styles.statValue}>{formatDistance(item.distance)}</Text>
             </View>
-
             <View style={styles.statItem}>
-              <Ionicons name="time-outline" size={18} color="#6366F1" />
-              <Text style={styles.statLabel}>Temps</Text>
               <Text style={styles.statValue}>{formatTime(item.duration)}</Text>
+              <Text style={styles.statLabel}>Durée</Text>
             </View>
-
             <View style={styles.statItem}>
-              <Ionicons name="speedometer-outline" size={18} color="#EC4899" />
-              <Text style={styles.statLabel}>Vitesse</Text>
               <Text style={styles.statValue}>
-                {item.avg_speed ? `${item.avg_speed.toFixed(1)} km/h` : '0.0 km/h'}
+                {item.avg_speed ? `${item.avg_speed.toFixed(1)} km/h` : '0 km/h'}
               </Text>
+              <Text style={styles.statLabel}>Vitesse moy.</Text>
             </View>
-
             <View style={styles.statItem}>
-              <Ionicons name="footsteps-outline" size={18} color="#10B981" />
-              <Text style={styles.statLabel}>Points GPS</Text>
-              <Text style={styles.statValue}>{trail.length}</Text>
+              <Text style={styles.statValue}>
+                {item.max_speed ? `${item.max_speed.toFixed(1)} km/h` : '0 km/h'}
+              </Text>
+              <Text style={styles.statLabel}>Vitesse max</Text>
             </View>
           </View>
 
-          {selectedRun?.id === item.id && hasMap && (
-            <View style={styles.expandedMapContainer}>
-              <MapView
-                style={styles.expandedMap}
-                region={{
-                  latitude: trail[Math.floor(trail.length / 2)]?.latitude || trail[0].latitude,
-                  longitude: trail[Math.floor(trail.length / 2)]?.longitude || trail[0].longitude,
-                  latitudeDelta: 0.005,
-                  longitudeDelta: 0.005,
-                }}
-              >
-                <Polyline
-                  coordinates={trail}
-                  strokeColor="#6366F1"
-                  strokeWidth={4}
-                />
-                {trail.map((point, index) => (
-                  <Circle
-                    key={index}
-                    center={point}
-                    radius={3}
-                    fillColor={getTrailColor(point.speed)}
-                    strokeColor="transparent"
-                  />
-                ))}
-              </MapView>
-              
-              <View style={styles.mapLegend}>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendColor, { backgroundColor: '#FF6B6B' }]} />
-                  <Text style={styles.legendText}>{'< 6 km/h'}</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendColor, { backgroundColor: '#4ECDC4' }]} />
-                  <Text style={styles.legendText}>6-12 km/h</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendColor, { backgroundColor: '#45B7D1' }]} />
-                  <Text style={styles.legendText}>{'> 12 km/h'}</Text>
-                </View>
-              </View>
-            </View>
-          )}
-
           {item.notes && (
             <View style={styles.notesContainer}>
-              <Ionicons name="document-text-outline" size={14} color="rgba(255, 255, 255, 0.6)" />
               <Text style={styles.notesText}>{item.notes}</Text>
             </View>
           )}
@@ -399,16 +339,32 @@ export default function RunHistoryScreen({ navigation }) {
     );
   };
 
+  const renderFooter = () => {
+    if (!loading || page === 1) return null;
+    
+    return (
+      <View style={styles.loadingFooter}>
+        <ActivityIndicator size="small" color="#6366F1" />
+        <Text style={styles.loadingFooterText}>Chargement...</Text>
+      </View>
+    );
+  };
+
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
+    <View style={styles.emptyState}>
       <LinearGradient
         colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-        style={styles.emptyGradient}
+        style={styles.emptyStateGradient}
       >
-        <Ionicons name="map-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
-        <Text style={styles.emptyTitle}>Aucun tracé trouvé</Text>
-        <Text style={styles.emptySubtitle}>
+        <Ionicons name="fitness-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
+        <Text style={styles.emptyStateTitle}>
           {filter === 'all' 
+            ? 'Aucune course enregistrée'
+            : `Aucun tracé "${getStatusText(filter)}"`
+          }
+        </Text>
+        <Text style={styles.emptyStateSubtitle}>
+          {runs.length === 0 
             ? 'Commencez votre première course'
             : `Aucun tracé "${getStatusText(filter)}"`
           }
@@ -424,17 +380,6 @@ export default function RunHistoryScreen({ navigation }) {
       </LinearGradient>
     </View>
   );
-
-  const renderFooter = () => {
-    if (!loading || page === 1) return null;
-    
-    return (
-      <View style={styles.loadingFooter}>
-        <ActivityIndicator size="small" color="#6366F1" />
-        <Text style={styles.loadingFooterText}>Chargement...</Text>
-      </View>
-    );
-  };
 
   if (loading && page === 1) {
     return (
@@ -487,7 +432,7 @@ export default function RunHistoryScreen({ navigation }) {
         <FlatList
           data={runs}
           renderItem={renderRunItem}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => (item.id || item.localId || Math.random()).toString()}
           contentContainerStyle={styles.listContainer}
           refreshControl={
             <RefreshControl
@@ -621,157 +566,104 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
     marginRight: 8,
   },
   statusText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '600',
     color: 'white',
   },
   deleteButton: {
-    padding: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderRadius: 8,
+    padding: 4,
   },
-  miniMapContainer: {
+  mapContainer: {
     height: 120,
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 12,
-    position: 'relative',
   },
   miniMap: {
     flex: 1,
   },
-  expandMapButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 8,
-    borderRadius: 8,
-  },
-  expandedMapContainer: {
-    height: 200,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 12,
-    position: 'relative',
-  },
-  expandedMap: {
-    flex: 1,
-  },
-  mapLegend: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: 8,
-    padding: 8,
-    flexDirection: 'row',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  legendColor: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4,
-  },
-  legendText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: 'white',
-  },
   runStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    paddingVertical: 8,
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
   },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 4,
-    marginBottom: 2,
-    textAlign: 'center',
-  },
   statValue: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: 'white',
-    textAlign: 'center',
+  },
+  statLabel: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 2,
   },
   notesContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginTop: 8,
     padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 8,
   },
   notesText: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
-    marginLeft: 6,
-    flex: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    margin: 20,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  emptyGradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: 'white',
-    marginTop: 24,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 12,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  showAllButton: {
-    marginTop: 20,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  showAllButtonText: {
-    color: '#6366F1',
-    fontWeight: '600',
-    fontSize: 14,
+    fontStyle: 'italic',
   },
   loadingFooter: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 16,
   },
   loadingFooterText: {
-    marginLeft: 10,
-    color: 'rgba(255, 255, 255, 0.6)',
+    marginLeft: 8,
     fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  emptyState: {
+    flex: 1,
+    margin: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  emptyStateGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  showAllButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  showAllButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
   },
 });
