@@ -1,10 +1,10 @@
-// RunningApp v3/src/services/api.js - VERSION CORRIGÉE BASÉE SUR PASTE.TXT
+// 📱 RunningApp V3 - Services API (COMPLET ET CORRIGÉ)
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Configuration depuis .env ou valeur par défaut
-const API_URL = process.env.API_BASE_URL || 'http://192.168.0.47:5000';
-const API_TIMEOUT = parseInt(process.env.API_TIMEOUT) || 30000;
+// ✅ CONFIGURATION DEPUIS .ENV OU VALEUR PAR DÉFAUT
+const API_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.0.47:5000';
+const API_TIMEOUT = parseInt(process.env.EXPO_PUBLIC_API_TIMEOUT) || 30000;
 
 // ✅ CLÉS UNIFIÉES - MÊMES QUE AUTHSERVICE ET AUTHCONTEXT
 const STORAGE_KEYS = {
@@ -57,11 +57,11 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       
       try {
-        // ✅ UTILISE LA CLÉ UNIFIÉE
+        // ✅ UTILISE LA CLÉ UNIFIÉE POUR LE REFRESH TOKEN
         const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
         if (refreshToken) {
           console.log('🔄 Refresh token found, requesting new token...');
-          const response = await axios.post(`${API_URL}/auth/refresh`, {
+          const response = await axios.post(`${API_URL}/api/auth/refresh`, {
             refreshToken: refreshToken,
           });
 
@@ -88,26 +88,23 @@ api.interceptors.response.use(
   }
 );
 
-// Services d'authentification
+// 🔐 SERVICES D'AUTHENTIFICATION
 export const login = async (email, password) => {
-  console.log('🔐 Login attempt for:', email);
+  console.log('🔐 Attempting login for:', email);
   try {
-    const response = await api.post('/api/auth/login', {
-      email,
-      password,
-    });
-    console.log('✅ Login successful:', response);
+    const response = await api.post('/api/auth/login', { email, password });
+    console.log('✅ Login successful');
     
-    // CORRECTION : L'API retourne {data: {access_token, user}, message, status}
-    // Structure complète: response.data.data.access_token
     const responseData = response.data;
     
     if (responseData && responseData.data && responseData.data.access_token) {
-      return {
-        token: responseData.data.access_token,
-        user: responseData.data.user,
-        message: responseData.message
-      };
+      const { access_token, user } = responseData.data;
+      
+      // ✅ UTILISE LES CLÉS UNIFIÉES
+      await AsyncStorage.setItem(STORAGE_KEYS.TOKEN, access_token);
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+      
+      return { access_token, user };
     } else {
       console.error('🚨 Structure de réponse inattendue:', responseData);
       throw new Error('Format de réponse inattendu du serveur');
@@ -119,87 +116,54 @@ export const login = async (email, password) => {
 };
 
 export const register = async (userData) => {
-  console.log('📝 Register attempt for:', userData.email);
-  
+  console.log('📝 Attempting registration...');
   try {
-    // Étape 1: D'abord se connecter comme utilisateur normal
-    console.log('🔄 Tentative de connexion pour vérifier si l\'utilisateur existe...');
-    try {
-      await login(userData.email, userData.password);
-      throw new Error('Un compte avec cet email existe déjà');
-    } catch (loginError) {
-      // Si login échoue, l'utilisateur n'existe pas - on continue
-      console.log('✅ Utilisateur n\'existe pas, on peut créer le compte');
-    }
-
-    // Étape 2: Message temporaire - demander à l'admin de créer le compte
-    throw new Error(`Inscription temporairement indisponible.\n\nContactez un administrateur avec ces infos :\n• Email: ${userData.email}\n• Username: ${userData.username}\n• Nom: ${userData.first_name} ${userData.last_name}`);
-
+    const response = await api.post('/api/auth/register', userData);
+    console.log('✅ Registration successful');
+    return response.data.data || response.data;
   } catch (error) {
-    console.error('🚨 Registration process failed:', error.message);
-    throw error;
+    console.error('🚨 Registration failed:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.message || 'Erreur d\'inscription');
   }
 };
 
 export const logout = async () => {
-  console.log('🔄 Logout attempt...');
+  console.log('🚪 Logging out...');
   try {
-    // Tentative de logout côté serveur
-    await api.post('/api/auth/logout');
-    console.log('✅ Server logout successful');
+    await api.post('/api/auth/logout'); // ✅ CORRIGÉ: /api/auth/logout
+    console.log('✅ Logout successful');
   } catch (error) {
-    console.warn('⚠️ Server logout failed (route may not exist):', error.message);
-    // Continue même si le logout serveur échoue
+    console.warn('⚠️ Logout API call failed:', error.message);
+  } finally {
+    await clearStoredAuth();
   }
-  
-  // ✅ NETTOYAGE LOCAL AVEC CLÉS UNIFIÉES
-  await AsyncStorage.removeItem(STORAGE_KEYS.TOKEN);
-  await AsyncStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-  await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
-  console.log('✅ Local cleanup completed');
 };
 
-// USER SERVICES - ENDPOINTS CORRIGÉS POUR PROFIL
 export const getCurrentUser = async () => {
   console.log('👤 Getting current user...');
   try {
-    const response = await api.get('/api/users/profile'); // CORRIGÉ: /users/profile
-    console.log('✅ User data fetched');
-    
-    if (response.data?.status === 'success') {
-      return response.data.data;
-    }
-    return response.data;
+    const response = await api.get('/api/auth/validate');
+    console.log('✅ Current user fetched');
+    return response.data.data || response.data;
   } catch (error) {
     console.error('🚨 Failed to get current user:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Erreur lors de la récupération des données utilisateur');
+    throw new Error(error.response?.data?.message || 'Erreur de récupération utilisateur');
   }
 };
 
 export const updateProfile = async (userData) => {
-  console.log('👤 Updating user profile...');
+  console.log('👤 Updating profile...');
   try {
-    const response = await api.put('/api/users/profile', userData); // CORRIGÉ: /users/profile
+    const response = await api.put('/api/users/profile', userData);
     console.log('✅ Profile updated');
     
-    // ✅ MISE À JOUR DU STOCKAGE LOCAL
     const updatedUser = response.data.data || response.data;
     await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
     
     return updatedUser;
   } catch (error) {
-    console.error('🚨 Profile update failed:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Erreur lors de la mise à jour du profil');
-  }
-};
-
-// ✅ NOUVELLES FONCTIONS UTILITAIRES POUR LA PERSISTANCE
-export const getStoredToken = async () => {
-  try {
-    return await AsyncStorage.getItem(STORAGE_KEYS.TOKEN);
-  } catch (error) {
-    console.error('❌ Error getting stored token:', error);
-    return null;
+    console.error('🚨 Failed to update profile:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.message || 'Erreur de mise à jour du profil');
   }
 };
 
@@ -224,32 +188,87 @@ export const clearStoredAuth = async () => {
   }
 };
 
-// RUN SERVICES
+// 🏃 SERVICES COURSES - VERSION CORRIGÉE
 export const getUserRuns = async (page = 1, limit = 10) => {
   console.log(`📊 Getting user runs (page ${page}, limit ${limit})...`);
   try {
     const response = await api.get(`/api/runs?page=${page}&limit=${limit}`);
     console.log('✅ User runs fetched');
+    console.log('🔍 Raw response:', response.data);
     
     const responseData = response.data;
     
-    if (responseData?.runs) {
-      console.log('📊 Courses extraites de response.runs');
-      console.log(`📊 ${responseData.runs.length} courses reçues du serveur`);
-      return responseData;
-    } else if (responseData?.data?.runs) {
-      console.log('📊 Courses extraites de response.data.runs');
-      return responseData;
-    } else if (Array.isArray(responseData?.data)) {
-      console.log('📊 Courses extraites de response.data (array)');
-      return { runs: responseData.data, pagination: {} };
-    } else {
-      console.log('⚠️ Structure de réponse inattendue:', Object.keys(responseData));
-      return { runs: [], pagination: {} };
+    // Gestion standardisée de toutes les structures possibles
+    let runs = [];
+    let pagination = {};
+    
+    // Structure 1: {status: 'success', data: {runs: [...], pagination: {...}}}
+    if (responseData?.status === 'success' && responseData?.data?.runs) {
+      runs = responseData.data.runs;
+      pagination = responseData.data.pagination || {};
+      console.log('📊 Structure API standard détectée');
     }
+    // Structure 2: {runs: [...], pagination: {...}}
+    else if (responseData?.runs && Array.isArray(responseData.runs)) {
+      runs = responseData.runs;
+      pagination = responseData.pagination || {};
+      console.log('📊 Structure runs directe détectée');
+    }
+    // Structure 3: {data: {runs: [...]}}
+    else if (responseData?.data?.runs && Array.isArray(responseData.data.runs)) {
+      runs = responseData.data.runs;
+      pagination = responseData.data.pagination || {};
+      console.log('📊 Structure data.runs détectée');
+    }
+    // Structure 4: {data: [...]} (array direct dans data)
+    else if (Array.isArray(responseData?.data)) {
+      runs = responseData.data;
+      pagination = responseData.pagination || {};
+      console.log('📊 Structure data array détectée');
+    }
+    // Structure 5: [...] (array direct)
+    else if (Array.isArray(responseData)) {
+      runs = responseData;
+      pagination = {};
+      console.log('📊 Structure array direct détectée');
+    }
+    // Aucune structure reconnue
+    else {
+      console.warn('⚠️ Structure de réponse non reconnue:', {
+        type: typeof responseData,
+        keys: responseData ? Object.keys(responseData) : [],
+        sample: responseData
+      });
+      runs = [];
+      pagination = {};
+    }
+    
+    console.log(`📊 ${runs.length} courses extraites du serveur`);
+    
+    // Validation des données
+    if (!Array.isArray(runs)) {
+      console.error('❌ Les runs ne sont pas un tableau:', runs);
+      runs = [];
+    }
+    
+    // Retourner toujours la même structure normalisée
+    return {
+      runs: runs,
+      pagination: pagination,
+      success: true,
+      total: pagination.total || runs.length
+    };
+    
   } catch (error) {
     console.error('🚨 Failed to get user runs:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Erreur lors de la récupération des courses');
+    
+    // Retourner une structure cohérente même en cas d'erreur
+    return {
+      runs: [],
+      pagination: {},
+      success: false,
+      error: error.response?.data?.message || error.message || 'Erreur lors de la récupération des courses'
+    };
   }
 };
 
@@ -301,7 +320,7 @@ export const getUserStats = async () => {
   }
 };
 
-// ROUTE SERVICES
+// 🗺️ SERVICES PARCOURS
 export const getRoutes = async (location = null) => {
   console.log('🗺️ Getting available routes...');
   try {
@@ -344,9 +363,14 @@ export const testConnection = async () => {
   }
 };
 
-// LEGACY ALIASES POUR COMPATIBILITÉ
-export const getRunHistory = getUserRuns;
+// 🔄 ALIAS POUR COMPATIBILITÉ
+export const getRunHistory = async (page = 1, limit = 10) => {
+  console.log('🔄 getRunHistory appelé - redirection vers getUserRuns');
+  return await getUserRuns(page, limit);
+};
+
 export const saveRun = createRun;
+
 export const getRunDetails = async (runId) => {
   try {
     const response = await api.get(`/api/runs/${runId}`);
@@ -371,7 +395,7 @@ export const checkConnectivity = testConnection;
 // Export de l'instance axios pour accès direct si nécessaire
 export { api as axiosInstance };
 
-// Export par défaut pour compatibilité
+// 📦 EXPORT PAR DÉFAUT
 export default {
   // Auth
   login,
@@ -379,6 +403,8 @@ export default {
   logout,
   getCurrentUser,
   updateProfile,
+  getStoredUser,
+  clearStoredAuth,
   // Runs
   getUserRuns,
   getRunHistory,
@@ -390,6 +416,7 @@ export default {
   // Routes
   getRoutes,
   getActiveRoutes,
+  saveRunLocation,
   // Stats
   getUserStats,
   getStats,

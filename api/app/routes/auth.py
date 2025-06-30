@@ -385,3 +385,29 @@ def promote_admin():
             "message": "Erreur lors de la promotion",
             "error": str(e)
         }), 500
+
+@auth_bp.route('/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    """Déconnexion de l'utilisateur"""
+    try:
+        current_user_id = int(get_jwt_identity())
+        user = User.query.get(current_user_id)
+        
+        if user:
+            print(f"🚪 Déconnexion de: {user.username}")
+            # Optionnel: mettre à jour last_logout ou invalidate token côté serveur
+            # user.last_logout = datetime.utcnow()
+            # db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Déconnexion réussie"
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur logout: {e}")
+        return jsonify({
+            "status": "success", 
+            "message": "Déconnexion réussie"  # Toujours réussir le logout
+        }), 200

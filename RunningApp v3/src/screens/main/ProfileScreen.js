@@ -16,10 +16,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useNavigation } from '@react-navigation/native'; // ✅ AJOUTÉ
 import { useAuth } from '../../context/AuthContext';
-import { updateProfile, getCurrentUser, axiosInstance } from '../../services/api';
+import { axiosInstance } from '../../services/api';
 
 const ProfileScreen = () => {
+  const navigation = useNavigation(); // ✅ AJOUTÉ
   const { user, logout, updateUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -126,11 +128,11 @@ const ProfileScreen = () => {
         date_of_birth: profileData.date_of_birth ? profileData.date_of_birth.toISOString().split('T')[0] : null,
       };
 
-      // Appel API pour mise à jour du profil
+      // ✅ CORRIGÉ: Appel API pour mise à jour du profil
       const updatedUser = await updateProfileCorrect(updateData);
       
       if (updatedUser) {
-        await updateUser(updatedUser, false);
+        await updateUser(updatedUser); // ✅ CORRIGÉ: suppression du second paramètre
         setEditing(false);
         Alert.alert('Succès', 'Profil mis à jour avec succès');
       }
@@ -179,7 +181,8 @@ const ProfileScreen = () => {
         name: 'profile.jpg',
       });
 
-      const response = await api.post('/api/users/profile/upload-profile-image', formData, {
+      // ✅ CORRIGÉ: utilisation d'axiosInstance au lieu de api
+      const response = await axiosInstance.post('/api/users/profile/upload-profile-image', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -187,7 +190,7 @@ const ProfileScreen = () => {
 
       if (response.data.status === 'success') {
         const updatedUser = { ...user, profile_picture: response.data.data.profile_picture };
-        await updateUser(updatedUser, false);
+        await updateUser(updatedUser); // ✅ CORRIGÉ: suppression du second paramètre
         Alert.alert('Succès', 'Photo de profil mise à jour');
       }
     } catch (error) {
@@ -214,7 +217,7 @@ const ProfileScreen = () => {
               // Recharger le profil depuis l'API
               const profileResponse = await getCurrentUserCorrect();
               if (profileResponse) {
-                await updateUser(profileResponse, false);
+                await updateUser(profileResponse); // ✅ CORRIGÉ: suppression du second paramètre
               }
               Alert.alert('Succès', 'Photo de profil supprimée');
             } catch (error) {
@@ -237,7 +240,10 @@ const ProfileScreen = () => {
     try {
       setShowLogoutModal(false);
       await logout();
+      // ✅ AJOUTÉ: Navigation vers l'écran de connexion après déconnexion
+      navigation.replace('Login');
     } catch (error) {
+      console.error('Erreur logout:', error);
       Alert.alert('Erreur', 'Erreur lors de la déconnexion');
     }
   };

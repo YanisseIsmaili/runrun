@@ -63,91 +63,35 @@ const ProposedRunsScreen = ({ navigation }) => {
     applyFiltersAndSort();
   }, [routes, searchTerm, filters, sortBy, sortOrder]);
 
-  const loadRoutes = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('🗺️ Chargement des parcours proposés...');
-      
-      // Appel à l'API pour récupérer les routes avec statut actif
-      const response = await apiService.getRoutes({ status: 'active', limit: 50 });
-      console.log('✅ Réponse API routes:', response.data);
+  // Fonction de chargement des parcours
+    const loadRoutes = useCallback(async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('🗺️ Chargement des parcours proposés...');
 
-      let routesData = [];
-      
-      if (response.data && response.data.status === 'success') {
-        // Structure API standard: {status: 'success', data: {routes: [...], pagination: {...}}}
-        if (response.data.data && response.data.data.routes) {
-          routesData = response.data.data.routes;
-        } else if (Array.isArray(response.data.data)) {
-          routesData = response.data.data;
+        // ✅ CORRIGÉ: Utilisation de getRoutes au lieu de getActiveRoutes
+        const routesData = await apiService.getRoutes();
+        console.log('✅ Parcours chargés:', routesData);
+
+        if (Array.isArray(routesData)) {
+          setRoutes(routesData);
+          console.log(`📊 ${routesData.length} parcours chargés`);
+        } else if (routesData?.routes && Array.isArray(routesData.routes)) {
+          setRoutes(routesData.routes);
+          console.log(`📊 ${routesData.routes.length} parcours chargés`);
+        } else {
+          console.warn('⚠️ Structure de données inattendue:', routesData);
+          setRoutes([]);
         }
-      } else if (Array.isArray(response.data)) {
-        // Structure tableau direct
-        routesData = response.data;
+      } catch (error) {
+        console.error('❌ Erreur chargement parcours:', error);
+        setError(error.message || 'Erreur de chargement des parcours');
+        setRoutes([]);
+      } finally {
+        setLoading(false);
       }
-
-      console.log(`📊 ${routesData.length} parcours chargés`);
-      setRoutes(routesData);
-      
-    } catch (err) {
-      console.error('❌ Erreur chargement parcours:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Erreur de chargement des parcours';
-      setError(errorMessage);
-      
-      // Données de démonstration en cas d'erreur
-      const demoRoutes = [
-        {
-          id: 1,
-          name: 'Parcours du Parc Central',
-          description: 'Circuit autour du parc avec dénivelé modéré',
-          distance: 5.2,
-          estimated_duration: 1800,
-          difficulty: 'Facile',
-          elevation_gain: 50.0,
-          waypoints: [
-            { lat: 48.8566, lng: 2.3522, name: 'Départ' },
-            { lat: 48.8576, lng: 2.3532, name: 'Point 1' },
-            { lat: 48.8586, lng: 2.3542, name: 'Arrivée' }
-          ]
-        },
-        {
-          id: 2,
-          name: 'Circuit Urbain',
-          description: 'Parcours en ville avec plusieurs arrêts',
-          distance: 8.5,
-          estimated_duration: 2700,
-          difficulty: 'Moyen',
-          elevation_gain: 25.0,
-          waypoints: [
-            { lat: 48.8566, lng: 2.3522, name: 'Départ' },
-            { lat: 48.8576, lng: 2.3532, name: 'Centre-ville' },
-            { lat: 48.8586, lng: 2.3542, name: 'Retour' }
-          ]
-        },
-        {
-          id: 3,
-          name: 'Trail Montagne',
-          description: 'Parcours difficile en montagne',
-          distance: 12.3,
-          estimated_duration: 4500,
-          difficulty: 'Difficile',
-          elevation_gain: 300.0,
-          waypoints: [
-            { lat: 48.8566, lng: 2.3522, name: 'Base' },
-            { lat: 48.8576, lng: 2.3532, name: 'Sommet' },
-            { lat: 48.8586, lng: 2.3542, name: 'Retour base' }
-          ]
-        }
-      ];
-      
-      console.log('📝 Utilisation des données de démonstration');
-      setRoutes(demoRoutes);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
