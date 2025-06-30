@@ -854,9 +854,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  // runsContainer: {
-  //   flex: 1,
-  // },
+  runsContainer: {
+    flex: 1,
+  },
   runsTitle: {
     fontSize: 16,
     fontWeight: '600',
