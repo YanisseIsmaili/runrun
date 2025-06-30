@@ -12,7 +12,8 @@ import {
   ChartBarIcon,
   XMarkIcon,
   HeartIcon,
-  FireIcon
+  FireIcon,
+  CheckIcon
 } from '@heroicons/react/24/outline'
 import { useApiConfig } from '../utils/globalApiConfig'
 import api from '../services/api'
@@ -41,94 +42,6 @@ const useDebugIntegration = () => {
   return { addDebugLog }
 }
 
-// Composant de squelette pour les éléments de la page
-const SkeletonLoader = () => {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* En-tête skeleton */}
-        <div className="text-center animate-fade-in">
-          <div className="skeleton h-10 w-96 mx-auto mb-4"></div>
-          <div className="skeleton h-6 w-128 mx-auto"></div>
-        </div>
-
-        {/* Barre de recherche skeleton */}
-        <div className="glass-green rounded-2xl shadow-xl p-6 animate-slide-in-left">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="skeleton h-12 flex-1"></div>
-            <div className="flex gap-3">
-              <div className="skeleton h-12 w-24"></div>
-              <div className="skeleton h-12 w-32"></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Statistiques skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-in-right">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="glass-green rounded-2xl p-6 shadow-xl">
-              <div className="flex items-center">
-                <div className="skeleton h-14 w-14 rounded-xl mr-4"></div>
-                <div className="flex-1">
-                  <div className="skeleton h-4 w-20 mb-2"></div>
-                  <div className="skeleton h-8 w-16"></div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Tableau skeleton */}
-        <div className="glass rounded-3xl shadow-2xl overflow-hidden animate-fade-in">
-          <div className="p-6">
-            {/* Header du tableau */}
-            <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl p-4 mb-4">
-              <div className="grid grid-cols-8 gap-4">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="skeleton h-4"></div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Lignes du tableau */}
-            {[...Array(8)].map((_, rowIndex) => (
-              <div 
-                key={rowIndex} 
-                className="grid grid-cols-8 gap-4 p-4 border-b border-emerald-100 animate-fade-in"
-                style={{ animationDelay: `${rowIndex * 100}ms` }}
-              >
-                {/* Utilisateur */}
-                <div className="flex items-center">
-                  <div className="skeleton h-12 w-12 rounded-full mr-3"></div>
-                  <div>
-                    <div className="skeleton h-4 w-24 mb-1"></div>
-                    <div className="skeleton h-3 w-16"></div>
-                  </div>
-                </div>
-                
-                {/* Autres colonnes */}
-                {[...Array(6)].map((_, colIndex) => (
-                  <div key={colIndex}>
-                    <div className="skeleton h-4 w-full mb-1"></div>
-                    <div className="skeleton h-3 w-3/4"></div>
-                  </div>
-                ))}
-                
-                {/* Actions */}
-                <div className="flex justify-end space-x-2">
-                  <div className="skeleton h-6 w-6 rounded"></div>
-                  <div className="skeleton h-6 w-6 rounded"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 const RunningHistory = () => {
   const { isConfigured, selectedApi } = useApiConfig()
   const { addDebugLog } = useDebugIntegration()
@@ -137,9 +50,6 @@ const RunningHistory = () => {
   const [filteredRuns, setFilteredRuns] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  
-  // État pour le préchargement
-  const [isPreloading, setIsPreloading] = useState(true)
   
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState({
@@ -163,34 +73,44 @@ const RunningHistory = () => {
     total: 0
   })
 
-  // Simulation du préchargement
-  const simulatePreloading = async () => {
-    addDebugLog('🎬 Début du préchargement')
-    
-    // Délai pour montrer le skeleton
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    setIsPreloading(false)
-    addDebugLog('✨ Préchargement terminé')
-  }
+  // États pour la sélection de per_page personnalisé
+  const [showCustomPerPage, setShowCustomPerPage] = useState(false)
+  const [customPerPage, setCustomPerPage] = useState('')
+
+  // États pour les colonnes
+  const [columnOrder, setColumnOrder] = useState([
+    'user', 'course', 'date', 'distance', 'duration', 'pace', 'cardio', 'actions'
+  ])
+  const [draggedColumn, setDraggedColumn] = useState(null)
+  const [sortField, setSortField] = useState('start_time')
+  const [sortDirection, setSortDirection] = useState('desc')
+
+  // États pour le redimensionnement des colonnes
+  const [columnWidths, setColumnWidths] = useState({
+    user: 200,
+    course: 180,
+    date: 140,
+    distance: 120,
+    duration: 120,
+    pace: 100,
+    cardio: 120,
+    actions: 100
+  })
+  const [isResizing, setIsResizing] = useState(false)
+  const [resizingColumn, setResizingColumn] = useState(null)
+  const [startX, setStartX] = useState(0)
+  const [startWidth, setStartWidth] = useState(0)
 
   useEffect(() => {
-    addDebugLog('🚀 Initialisation RunningHistory avec préchargement')
-    simulatePreloading()
-  }, [])
-
-  useEffect(() => {
-    if (!isPreloading && isConfigured) {
+    if (isConfigured) {
       addDebugLog(`✅ API configurée: ${selectedApi?.name || 'Inconnue'} (${selectedApi?.url || 'URL manquante'})`)
       fetchRuns()
     }
-  }, [isPreloading, isConfigured, pagination.page])
+  }, [isConfigured, pagination.page, pagination.per_page])
 
   useEffect(() => {
-    if (!isPreloading) {
-      applyFilters()
-    }
-  }, [runs, searchTerm, filters, isPreloading])
+    applyFilters()
+  }, [runs, searchTerm, filters])
 
   const fetchRuns = async () => {
     if (!isConfigured) {
@@ -208,7 +128,7 @@ const RunningHistory = () => {
     try {
       const params = {
         page: pagination.page,
-        per_page: pagination.per_page,
+        limit: pagination.per_page,
         search: searchTerm || undefined,
         sort_by: filters.sortBy,
         sort_order: filters.sortOrder
@@ -468,6 +388,131 @@ const RunningHistory = () => {
     addDebugLog('🔄 Réinitialisation des filtres')
   }
 
+  // Gestion du changement de page
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }))
+  }
+
+  // Gestion du changement de per_page
+  const handlePerPageChange = (newPerPage) => {
+    if (newPerPage === 'custom') {
+      setShowCustomPerPage(true)
+      return
+    }
+    
+    const perPageValue = parseInt(newPerPage)
+    addDebugLog(`📊 Changement per_page: ${perPageValue}`)
+    
+    setPagination(prev => ({ 
+      ...prev, 
+      per_page: perPageValue,
+      page: 1
+    }))
+    setShowCustomPerPage(false)
+  }
+
+  // Fonctions pour le redimensionnement des colonnes
+  const handleResizeStart = (e, columnKey) => {
+    e.preventDefault()
+    setIsResizing(true)
+    setResizingColumn(columnKey)
+    setStartX(e.clientX)
+    setStartWidth(columnWidths[columnKey])
+    addDebugLog(`🔧 Début redimensionnement colonne: ${columnKey}`)
+    
+    document.addEventListener('mousemove', handleResizeMove)
+    document.addEventListener('mouseup', handleResizeEnd)
+  }
+
+  const handleResizeMove = (e) => {
+    if (!isResizing || !resizingColumn) return
+    
+    const deltaX = e.clientX - startX
+    const newWidth = Math.max(80, startWidth + deltaX)
+    
+    setColumnWidths(prev => ({
+      ...prev,
+      [resizingColumn]: newWidth
+    }))
+  }
+
+  const handleResizeEnd = () => {
+    if (resizingColumn) {
+      addDebugLog(`✅ Redimensionnement terminé: ${resizingColumn} = ${columnWidths[resizingColumn]}px`)
+    }
+    
+    setIsResizing(false)
+    setResizingColumn(null)
+    setStartX(0)
+    setStartWidth(0)
+    
+    document.removeEventListener('mousemove', handleResizeMove)
+    document.removeEventListener('mouseup', handleResizeEnd)
+  }
+
+  // Fonctions pour le drag & drop des colonnes
+  const handleDragStart = (e, columnKey) => {
+    setDraggedColumn(columnKey)
+    e.dataTransfer.effectAllowed = 'move'
+    addDebugLog(`📋 Début déplacement colonne: ${columnKey}`)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = (e, targetColumnKey) => {
+    e.preventDefault()
+    
+    if (!draggedColumn || draggedColumn === targetColumnKey) return
+    
+    const newOrder = [...columnOrder]
+    const draggedIndex = newOrder.indexOf(draggedColumn)
+    const targetIndex = newOrder.indexOf(targetColumnKey)
+    
+    newOrder.splice(draggedIndex, 1)
+    newOrder.splice(targetIndex, 0, draggedColumn)
+    
+    setColumnOrder(newOrder)
+    setDraggedColumn(null)
+    addDebugLog(`📋 Colonne ${draggedColumn} déplacée vers position ${targetIndex}`)
+  }
+
+  // Fonction pour le tri par colonne
+  const handleSort = (field) => {
+    const newDirection = sortField === field && sortDirection === 'desc' ? 'asc' : 'desc'
+    setSortField(field)
+    setSortDirection(newDirection)
+    setFilters(prev => ({ ...prev, sortBy: field, sortOrder: newDirection }))
+    addDebugLog(`📊 Tri par ${field} ${newDirection}`)
+  }
+
+  // Nettoyage des event listeners
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove)
+      document.removeEventListener('mouseup', handleResizeEnd)
+    }
+  }, [])
+
+  // Validation et application du per_page personnalisé
+  const handleCustomPerPageSubmit = () => {
+    const value = parseInt(customPerPage)
+    if (value && value > 0 && value <= 1000) {
+      addDebugLog(`📊 Per_page personnalisé: ${value}`)
+      setPagination(prev => ({ 
+        ...prev, 
+        per_page: value,
+        page: 1
+      }))
+      setShowCustomPerPage(false)
+      setCustomPerPage('')
+    } else {
+      alert('Veuillez entrer un nombre entre 1 et 1000')
+    }
+  }
+
   const stats = {
     totalRuns: filteredRuns.length,
     totalDistance: filteredRuns.reduce((acc, run) => acc + (run.distance || 0), 0),
@@ -475,21 +520,168 @@ const RunningHistory = () => {
     avgDistance: filteredRuns.length > 0 ? filteredRuns.reduce((acc, run) => acc + (run.distance || 0), 0) / filteredRuns.length : 0
   }
 
-  // Affichage du skeleton pendant le préchargement
-  if (isPreloading) {
-    return <SkeletonLoader />
+  const columnConfig = {
+    user: {
+      key: 'user',
+      title: 'Utilisateur', 
+      sortable: true,
+      sortField: 'user',
+      render: (run) => (
+        <div className="flex items-center">
+          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center shadow-lg">
+            <span className="text-sm font-bold text-white">
+              {run.user?.first_name?.[0] || run.user?.username?.[0] || '?'}
+            </span>
+          </div>
+          <div className="ml-3">
+            <div className="text-sm font-semibold text-gray-900">
+              {run.user?.first_name && run.user?.last_name 
+                ? `${run.user.first_name} ${run.user.last_name}`
+                : run.user?.username || 'Utilisateur inconnu'
+              }
+            </div>
+            <div className="text-sm text-emerald-600">
+              @{run.user?.username || 'inconnu'}
+            </div>
+          </div>
+        </div>
+      )
+    },
+    course: {
+      key: 'course',
+      title: 'Course',
+      sortable: true,
+      sortField: 'title',
+      render: (run) => (
+        <div>
+          <div className="text-sm font-semibold text-gray-900">
+            {run.title || 'Course sans titre'}
+          </div>
+          <div className="text-sm text-emerald-600">
+            {run.route?.name || 'Parcours libre'}
+          </div>
+        </div>
+      )
+    },
+    date: {
+      key: 'date',
+      title: 'Date/Heure',
+      sortable: true,
+      sortField: 'start_time',
+      render: (run) => (
+        <div>
+          <div className="text-sm font-medium text-gray-900">
+            {formatDate(run.start_time)}
+          </div>
+          <div className="text-sm text-emerald-600">
+            {formatTime(run.start_time)}
+          </div>
+        </div>
+      )
+    },
+    distance: {
+      key: 'distance',
+      title: 'Distance',
+      sortable: true,
+      sortField: 'distance',
+      render: (run) => (
+        <div>
+          <div className="text-sm font-semibold text-gray-900">
+            {(run.distance || 0).toFixed(2)} m
+          </div>
+          {run.elevation_gain > 0 && (
+            <div className="text-sm text-emerald-600 flex items-center">
+              <span className="mr-1">↗</span>
+              {run.elevation_gain}m
+            </div>
+          )}
+        </div>
+      )
+    },
+    duration: {
+      key: 'duration',
+      title: 'Durée',
+      sortable: true,
+      sortField: 'duration',
+      render: (run) => (
+        <div>
+          <div className="text-sm font-medium text-gray-900">
+            {formatDuration(run.duration || 0)}
+          </div>
+          {run.calories && (
+            <div className="text-sm text-orange-600 flex items-center">
+              <FireIcon className="h-3 w-3 mr-1" />
+              {run.calories} cal
+            </div>
+          )}
+        </div>
+      )
+    },
+    pace: {
+      key: 'pace',
+      title: 'Allure',
+      sortable: true,
+      sortField: 'avg_pace',
+      render: (run) => (
+        <div className="text-sm font-medium text-gray-900">
+          {run.avg_pace || 'N/A'}
+        </div>
+      )
+    },
+    cardio: {
+      key: 'cardio',
+      title: 'Cardio',
+      sortable: true,
+      sortField: 'avg_heart_rate',
+      render: (run) => (
+        <div>
+          <div className="text-sm font-medium text-gray-900 flex items-center">
+            <HeartIcon className="h-4 w-4 mr-1 text-red-500" />
+            {run.avg_heart_rate ? `${run.avg_heart_rate} bpm` : 'N/A'}
+          </div>
+          {run.max_heart_rate && (
+            <div className="text-sm text-red-500">
+              Max: {run.max_heart_rate}
+            </div>
+          )}
+        </div>
+      )
+    },
+    actions: {
+      key: 'actions',
+      title: 'Actions',
+      sortable: false,
+      render: (run) => (
+        <div className="flex justify-end space-x-2">
+          <button
+            onClick={() => handleRunDetail(run)}
+            className="text-emerald-600 hover:text-emerald-800 transition-colors duration-200 hover:scale-110"
+            title="Voir les détails"
+          >
+            <EyeIcon className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => {
+              setSelectedRun(run)
+              setShowDeleteModal(true)
+            }}
+            className="text-red-600 hover:text-red-800 transition-colors duration-200 hover:scale-110"
+            title="Supprimer"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </button>
+        </div>
+      )
+    }
   }
 
   if (!isConfigured) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="glass-green rounded-3xl shadow-2xl p-12 text-center animate-fade-in">
-            <ExclamationTriangleIcon className="mx-auto h-16 w-16 text-emerald-500 mb-6 animate-pulse" />
-            <h3 className="text-2xl font-bold text-emerald-800 mb-4">API non configurée</h3>
-            <p className="text-emerald-600 max-w-md mx-auto">
-              Veuillez configurer une API pour afficher l'historique des courses.
-            </p>
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto">
+          <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg mb-4">
+            <h3 className="font-bold">API non configurée</h3>
+            <p>Veuillez configurer une API pour afficher l'historique des courses.</p>
           </div>
         </div>
       </div>
@@ -497,22 +689,43 @@ const RunningHistory = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* En-tête */}
-        <div className="text-center animate-fade-in">
-          <h1 className="text-4xl font-bold text-emerald-800 mb-4 text-shadow-lg">
-            Historique des Courses
-          </h1>
-          <p className="text-lg text-emerald-600 max-w-2xl mx-auto">
-            Toutes les courses effectuées par les utilisateurs de la plateforme
-          </p>
+    <div className="min-h-screen">
+      {/* Header */}
+      <div className="glass-green shadow-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-3xl font-bold text-emerald-800 text-shadow">
+                Historique des Courses
+              </h1>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`inline-flex items-center px-4 py-2 ${showFilters ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-xl transition-all duration-300 hover:scale-105`}
+              >
+                <FunnelIcon className="h-4 w-4 mr-2" />
+                Filtres
+              </button>
+              <button
+                onClick={() => fetchRuns()}
+                disabled={loading}
+                className="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-xl transition-all duration-300 hover:scale-105 disabled:opacity-50"
+              >
+                <ArrowPathIcon className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Actualiser
+              </button>
+            </div>
+          </div>
         </div>
+      </div>
 
-        {/* Barre de recherche et filtres */}
-        <div className="glass-green rounded-2xl shadow-xl p-6 animate-slide-in-left">
-          <div className="flex flex-col lg:flex-row gap-4 mb-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Barre de recherche */}
+        <div className="glass-green rounded-2xl p-6 mb-8 animate-fade-in">
+          <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative group">
               <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-emerald-400 transition-colors group-focus-within:text-emerald-600" />
               <input
@@ -523,30 +736,12 @@ const RunningHistory = () => {
                 className="w-full pl-12 pr-4 py-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 placeholder-gray-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
               />
             </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`btn ${showFilters ? 'btn-primary' : 'btn-secondary'}`}
-              >
-                <FunnelIcon className="h-5 w-5 mr-2" />
-                Filtres
-              </button>
-              <button
-                onClick={() => fetchRuns()}
-                disabled={loading}
-                className="btn btn-secondary"
-              >
-                <ArrowPathIcon className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Actualiser
-              </button>
-            </div>
           </div>
 
           {/* Panneau de filtres */}
           {showFilters && (
-            <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 border border-emerald-200 animate-scale-in">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="mt-6 bg-white/60 backdrop-blur-sm rounded-xl p-6 border border-emerald-200 animate-scale-in">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-emerald-800">Période</label>
                   <select
@@ -599,7 +794,58 @@ const RunningHistory = () => {
                     <option value="duration">Durée</option>
                   </select>
                 </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-emerald-800">Courses par page</label>
+                  <select 
+                    className="w-full p-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
+                    value={pagination.per_page}
+                    onChange={(e) => handlePerPageChange(e.target.value)}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                    <option value="custom">Personnalisé...</option>
+                  </select>
+                </div>
               </div>
+
+              {/* Modal pour per_page personnalisé */}
+              {showCustomPerPage && (
+                <div className="mt-4 p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-emerald-200">
+                  <div className="flex items-center space-x-3">
+                    <label className="text-sm font-medium text-emerald-800">
+                      Nombre personnalisé (1-1000):
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="1000"
+                      className="px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 w-24"
+                      value={customPerPage}
+                      onChange={(e) => setCustomPerPage(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCustomPerPageSubmit()}
+                    />
+                    <button
+                      onClick={handleCustomPerPageSubmit}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all duration-300"
+                    >
+                      <CheckIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCustomPerPage(false)
+                        setCustomPerPage('')
+                      }}
+                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-all duration-300"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-6">
@@ -647,7 +893,7 @@ const RunningHistory = () => {
                 
                 <button
                   onClick={resetFilters}
-                  className="btn btn-secondary"
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors duration-200"
                 >
                   Réinitialiser
                 </button>
@@ -658,7 +904,7 @@ const RunningHistory = () => {
 
         {/* Messages d'erreur */}
         {error && (
-          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-2xl p-6 animate-scale-in">
+          <div className="bg-yellow-100 border border-yellow-300 rounded-2xl p-6 mb-8 animate-scale-in">
             <div className="flex items-center">
               <ExclamationTriangleIcon className="h-6 w-6 text-yellow-500 mr-4" />
               <div>
@@ -671,439 +917,475 @@ const RunningHistory = () => {
 
         {/* Statistiques globales */}
         {filteredRuns.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-in-right">
-            <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
-              <div className="flex items-center">
-                <div className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white group-hover:scale-110 transition-transform duration-300">
-                  <PlayIcon className="h-8 w-8" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-semibold text-emerald-600">Total Courses</p>
-                  <p className="text-3xl font-bold text-emerald-800">{stats.totalRuns}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
-              <div className="flex items-center">
-                <div className="p-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white group-hover:scale-110 transition-transform duration-300">
-                  <MapPinIcon className="h-8 w-8" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-semibold text-emerald-600">Distance Totale</p>
-                  <p className="text-3xl font-bold text-emerald-800">{stats.totalDistance.toFixed(1)} m</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
-              <div className="flex items-center">
-                <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white group-hover:scale-110 transition-transform duration-300">
-                  <ClockIcon className="h-8 w-8" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-semibold text-emerald-600">Temps Total</p>
-                  <p className="text-3xl font-bold text-emerald-800">{formatDuration(stats.totalDuration)}</p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            {[
+              { icon: PlayIcon, label: 'Total Courses', value: stats.totalRuns, color: 'from-blue-500 to-cyan-500', delay: '100ms' },
+              { icon: MapPinIcon, label: 'Distance Totale', value: `${(stats.totalDistance / 1000).toFixed(1)} km`, color: 'from-green-500 to-emerald-500', delay: '200ms' },
+              { icon: ClockIcon, label: 'Temps Total', value: formatDuration(stats.totalDuration), color: 'from-purple-500 to-pink-500', delay: '300ms' },
+              { icon: ChartBarIcon, label: 'Distance Moyenne', value: `${(stats.avgDistance / 1000).toFixed(1)} km`, color: 'from-orange-500 to-red-500', delay: '400ms' }
+            ].map((stat, index) => (
+              <div 
+                key={index}
+                className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105 animate-fade-in group"
+                style={{ animationDelay: stat.delay }}
+              >
+                <div className="flex items-center">
+                  <div className={`p-3 rounded-xl bg-gradient-to-r ${stat.color} text-white group-hover:scale-110 transition-transform duration-300`}>
+                    <stat.icon className="h-8 w-8" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-semibold text-emerald-600">{stat.label}</p>
+                    <p className="text-2xl font-bold text-emerald-800">{stat.value}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="glass-green rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group">
-              <div className="flex items-center">
-                <div className="p-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white group-hover:scale-110 transition-transform duration-300">
-                  <ChartBarIcon className="h-8 w-8" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-semibold text-emerald-600">Distance Moyenne</p>
-                  <p className="text-3xl font-bold text-emerald-800">{stats.avgDistance.toFixed(1)} m</p>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         )}
 
         {/* Tableau des courses */}
-        <div className="glass rounded-3xl shadow-2xl overflow-hidden animate-fade-in">
+        <div className="glass-green rounded-2xl p-6 animate-slide-in-up hover:shadow-xl transition-all duration-500">
+          <h3 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2 mb-4 flex items-center">
+            <ChartBarIcon className="h-5 w-5 mr-2" />
+            Historique des courses ({filteredRuns.length})
+          </h3>
+          
           {loading ? (
-            <div className="p-20 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-emerald-400 to-green-500 mb-6 animate-spin">
-                <ArrowPathIcon className="h-8 w-8 text-white" />
-              </div>
-              <p className="text-lg text-emerald-700 font-medium">Chargement des courses...</p>
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+              <p className="text-emerald-600 text-lg">Chargement des courses...</p>
             </div>
           ) : filteredRuns.length === 0 ? (
-            <div className="p-20 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-gray-400 to-gray-500 mb-6">
-                <PlayIcon className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-700 mb-4">Aucune course</h3>
-              <p className="text-gray-500 max-w-md mx-auto">
-                {searchTerm || filters.period !== 'all' || filters.minDistance || filters.maxDistance
-                  ? 'Aucune course ne correspond aux critères de recherche.'
-                  : 'Aucune course enregistrée pour le moment.'
-                }
-              </p>
+            <div className="text-center py-8">
+              <PlayIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">Aucune course enregistrée</p>
             </div>
           ) : (
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-200">
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Utilisateur
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Course
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Date/Heure
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Distance
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Durée
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Allure
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Cardio
-                    </th>
-                    <th className="px-6 py-4 text-right text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Actions
-                    </th>
+            <div className="overflow-x-auto">
+              <table 
+                className="w-full table-fixed"
+                style={{ 
+                  minWidth: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 'px'
+                }}
+              >
+                <thead className="bg-emerald-50">
+                  <tr>
+                    {columnOrder.map(columnKey => {
+                      const column = columnConfig[columnKey]
+                      const width = columnWidths[columnKey]
+                      const isSorted = sortField === column.sortField
+                      
+                      return (
+                        <th 
+                          key={columnKey}
+                          className={`px-4 py-2 text-left text-sm font-semibold text-emerald-700 cursor-move select-none hover:bg-emerald-100 transition-colors duration-200 relative ${
+                            column.sortable ? 'cursor-pointer' : ''
+                          } ${isSorted ? 'bg-emerald-100' : ''}`}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, columnKey)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, columnKey)}
+                          onClick={() => column.sortable && handleSort(column.sortField)}
+                          style={{ width: `${width}px` }}
+                          title={column.sortable ? `Cliquer pour trier par ${column.title}` : 'Glisser pour réorganiser'}
+                        >
+                          <div className="flex items-center justify-between pr-4">
+                            <div className="flex items-center space-x-2">
+                              <span>{column.title}</span>
+                              <span className="text-xs opacity-50">⋮⋮</span>
+                              {column.sortable && (
+                                <span className="text-xs">
+                                  {isSorted ? (
+                                    sortDirection === 'asc' ? '↑' : '↓'
+                                  ) : '↕'}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Handle de redimensionnement */}
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize bg-transparent hover:bg-emerald-300 transition-colors duration-200"
+                              onMouseDown={(e) => handleResizeStart(e, columnKey)}
+                              title="Glisser pour redimensionner"
+                            >
+                              <div className="w-full h-full flex items-center justify-center">
+                                <div className="w-0.5 h-6 bg-emerald-400 opacity-0 hover:opacity-100 transition-opacity duration-200"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </th>
+                      )
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-emerald-100">
                   {filteredRuns.map((run, index) => (
-                    <tr 
-                      key={run.id} 
-                      className="hover:bg-gradient-to-r hover:from-emerald-50 hover:to-green-50 transition-all duration-300 group animate-fade-in"
-                      style={{ animationDelay: `${index * 50}ms` }}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-12 w-12">
-                            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                              <span className="text-sm font-bold text-white">
-                                {run.user?.first_name?.[0] || run.user?.username?.[0] || '?'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-semibold text-gray-900">
-                              {run.user?.first_name && run.user?.last_name 
-                                ? `${run.user.first_name} ${run.user.last_name}`
-                                : run.user?.username || 'Utilisateur inconnu'
-                              }
-                            </div>
-                            <div className="text-sm text-emerald-600">
-                              @{run.user?.username || 'inconnu'}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-gray-900">
-                          {run.title || 'Course sans titre'}
-                        </div>
-                        <div className="text-sm text-emerald-600">
-                          {run.route?.name || 'Parcours libre'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatDate(run.start_time)}
-                        </div>
-                        <div className="text-sm text-emerald-600">
-                          {formatTime(run.start_time)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-gray-900">
-                          {(run.distance || 0).toFixed(2)} m
-                        </div>
-                        {run.elevation_gain > 0 && (
-                          <div className="text-sm text-emerald-600 flex items-center">
-                            <span className="mr-1">↗</span>
-                            {run.elevation_gain}m
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatDuration(run.duration || 0)}
-                        </div>
-                        {run.calories && (
-                          <div className="text-sm text-orange-600 flex items-center">
-                            <FireIcon className="h-3 w-3 mr-1" />
-                            {run.calories} cal
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {run.avg_pace || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 flex items-center">
-                          <HeartIcon className="h-4 w-4 mr-1 text-red-500" />
-                          {run.avg_heart_rate ? `${run.avg_heart_rate} bpm` : 'N/A'}
-                        </div>
-                        {run.max_heart_rate && (
-                          <div className="text-sm text-red-500">
-                            Max: {run.max_heart_rate}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-3">
-                          <button
-                            onClick={() => handleRunDetail(run)}
-                            className="text-primary-600 hover:text-primary-900 transition-colors duration-200 hover:scale-110"
-                            title="Voir les détails"
+                    <tr key={run.id} className="hover:bg-emerald-50/50 transition-colors duration-200">
+                      {columnOrder.map(columnKey => {
+                        const column = columnConfig[columnKey]
+                        const width = columnWidths[columnKey]
+                        return (
+                          <td 
+                            key={columnKey} 
+                            className="px-4 py-3 overflow-hidden"
+                            style={{ width: `${width}px` }}
                           >
-                            <EyeIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedRun(run)
-                              setShowDeleteModal(true)
-                            }}
-                            className="text-red-600 hover:text-red-900 transition-colors duration-200 hover:scale-110"
-                            title="Supprimer"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
+                            {column.render(run)}
+                          </td>
+                        )
+                      })}
                     </tr>
                   ))}
                 </tbody>
               </table>
+              
+              {filteredRuns.length > 10 && (
+                <div className="mt-4 text-center">
+                  <p className="text-sm text-gray-500">
+                    Affichage des {Math.min(10, filteredRuns.length)} premières courses sur {filteredRuns.length}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Pagination */}
+        {/* Pagination améliorée */}
         {pagination.pages > 1 && (
-          <div className="glass-green rounded-2xl p-6 shadow-xl animate-slide-in-right">
+          <div className="glass-green rounded-2xl p-6 shadow-xl animate-slide-in-right mt-8">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-emerald-700 font-medium">
-                Affichage de {((pagination.page - 1) * pagination.per_page) + 1} à{' '}
-                {Math.min(pagination.page * pagination.per_page, pagination.total)} sur{' '}
-                {pagination.total} courses
+                Page {pagination.page} sur {pagination.pages} ({pagination.total} courses, {pagination.per_page} par page)
               </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-700">
-                  Page {pagination.page} sur {pagination.pages}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                    disabled={pagination.page === 1}
-                    className="btn btn-sm btn-secondary"
-                  >
-                    Précédent
-                  </button>
-                  <button
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                    disabled={pagination.page === pagination.pages}
-                    className="btn btn-sm btn-secondary"
-                  >
-                    Suivant
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal de détails de course */}
-        {showDetailModal && selectedRun && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto animate-scale-in">
-              <div className="bg-gradient-to-r from-emerald-500 to-green-500 px-8 py-6 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-2xl font-bold text-white">Détails de la Course</h3>
-                  <button
-                    onClick={() => setShowDetailModal(false)}
-                    className="p-2 rounded-full bg-white/20 text-white hover:bg-white/30 transition-all duration-300"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-8 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
-                      Informations générales
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Titre:</span>
-                        <span className="text-gray-900">{selectedRun.title}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Utilisateur:</span>
-                        <span className="text-gray-900">{selectedRun.user?.first_name} {selectedRun.user?.last_name}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Parcours:</span>
-                        <span className="text-gray-900">{selectedRun.route?.name || 'Parcours libre'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Date:</span>
-                        <span className="text-gray-900">{formatDate(selectedRun.start_time)} à {formatTime(selectedRun.start_time)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
-                      Performance
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Distance:</span>
-                        <span className="text-gray-900 font-semibold">{selectedRun.distance?.toFixed(2)} m</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Durée:</span>
-                        <span className="text-gray-900 font-semibold">{formatDuration(selectedRun.duration)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Allure moyenne:</span>
-                        <span className="text-gray-900 font-semibold">{selectedRun.avg_pace}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Dénivelé:</span>
-                        <span className="text-gray-900 font-semibold">{selectedRun.elevation_gain}m</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
-                    Données cardio
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-red-50 rounded-xl p-4 text-center">
-                      <HeartIcon className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                      <div className="font-semibold text-gray-900">{selectedRun.avg_heart_rate} bpm</div>
-                      <div className="text-sm text-gray-600">FC moyenne</div>
-                    </div>
-                    <div className="bg-red-50 rounded-xl p-4 text-center">
-                      <HeartIcon className="h-8 w-8 text-red-600 mx-auto mb-2" />
-                      <div className="font-semibold text-gray-900">{selectedRun.max_heart_rate} bpm</div>
-                      <div className="text-sm text-gray-600">FC max</div>
-                    </div>
-                    <div className="bg-orange-50 rounded-xl p-4 text-center">
-                      <FireIcon className="h-8 w-8 text-orange-500 mx-auto mb-2" />
-                      <div className="font-semibold text-gray-900">{selectedRun.calories} cal</div>
-                      <div className="text-sm text-gray-600">Calories</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
-                    Horaires
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-emerald-50 rounded-xl p-4">
-                      <div className="font-medium text-emerald-800">Début</div>
-                      <div className="text-emerald-900 font-semibold">{new Date(selectedRun.start_time).toLocaleString('fr-FR')}</div>
-                    </div>
-                    <div className="bg-emerald-50 rounded-xl p-4">
-                      <div className="font-medium text-emerald-800">Fin</div>
-                      <div className="text-emerald-900 font-semibold">{new Date(selectedRun.end_time).toLocaleString('fr-FR')}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 px-8 py-6 rounded-b-3xl flex justify-end space-x-4">
+              <div className="flex items-center space-x-3">
+                {/* Bouton première page */}
                 <button
-                  onClick={() => setShowDetailModal(false)}
-                  className="btn btn-secondary"
+                  className="px-3 py-2 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={pagination.page === 1}
+                  onClick={() => handlePageChange(1)}
+                  title="Première page"
                 >
-                  Fermer
+                  ««
                 </button>
+                
+                {/* Bouton page précédente */}
                 <button
-                  onClick={() => {
-                    setShowDetailModal(false)
-                    setSelectedRun(selectedRun)
-                    setShowDeleteModal(true)
-                  }}
-                  className="btn btn-danger"
+                  className="px-4 py-2 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={pagination.page === 1}
+                  onClick={() => handlePageChange(pagination.page - 1)}
                 >
-                  Supprimer
+                  Précédent
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Modal de confirmation de suppression */}
-        {showDeleteModal && selectedRun && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-scale-in">
-              <div className="bg-gradient-to-r from-red-500 to-pink-500 px-6 py-4 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-bold text-white">Confirmer la suppression</h3>
-                  <button
-                    onClick={() => setShowDeleteModal(false)}
-                    className="p-2 rounded-full bg-white/20 text-white hover:bg-white/30 transition-all duration-300"
-                  >
-                    <XMarkIcon className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-6">
-                <p className="text-gray-700 mb-6 leading-relaxed">
-                  Êtes-vous sûr de vouloir supprimer la course{' '}
-                  <span className="font-semibold text-gray-900">
-                    "{selectedRun.title}" de{' '}
-                    {selectedRun.user?.first_name && selectedRun.user?.last_name
-                      ? `${selectedRun.user.first_name} ${selectedRun.user.last_name}`
-                      : selectedRun.user?.username || 'Utilisateur inconnu'
+                {/* Numéros de page */}
+                <div className="flex space-x-1">
+                  {(() => {
+                    const pages = []
+                    const currentPage = pagination.page
+                    const totalPages = pagination.pages
+                    
+                    let startPage = Math.max(1, currentPage - 2)
+                    let endPage = Math.min(totalPages, currentPage + 2)
+                    
+                    if (currentPage <= 3) {
+                      endPage = Math.min(5, totalPages)
                     }
-                  </span>{' '}
-                  ({(selectedRun.distance || 0).toFixed(2)} m) ?
-                </p>
-                <p className="text-sm text-red-600 font-medium">
-                  Cette action est irréversible.
-                </p>
-              </div>
-              
-              <div className="bg-gray-50 px-6 py-4 rounded-b-3xl flex justify-end space-x-3">
+                    if (currentPage >= totalPages - 2) {
+                      startPage = Math.max(1, totalPages - 4)
+                    }
+                    
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          className={`px-3 py-2 rounded-lg font-semibold transition-all duration-300 hover:scale-105 ${
+                            i === currentPage
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-white hover:bg-emerald-50 border border-emerald-200 text-gray-700'
+                          }`}
+                          onClick={() => handlePageChange(i)}
+                        >
+                          {i}
+                        </button>
+                      )
+                    }
+                    
+                    return pages
+                  })()}
+                </div>
+
+                {/* Bouton page suivante */}
                 <button
-                  onClick={() => {
-                    setShowDeleteModal(false)
-                    setSelectedRun(null)
-                  }}
-                  className="btn btn-secondary"
+                  className="px-4 py-2 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={pagination.page === pagination.pages}
+                  onClick={() => handlePageChange(pagination.page + 1)}
                 >
-                  Annuler
+                  Suivant
                 </button>
+                
+                {/* Bouton dernière page */}
                 <button
-                  onClick={() => handleDeleteRun(selectedRun.id)}
-                  className="btn btn-danger"
+                  className="px-3 py-2 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={pagination.page === pagination.pages}
+                  onClick={() => handlePageChange(pagination.pages)}
+                  title="Dernière page"
                 >
-                  Supprimer
+                  »»
                 </button>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Modal de détails de course */}
+      {showDetailModal && selectedRun && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-scale-in">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h3 className="text-lg font-medium text-gray-900">Détails de la Course</h3>
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
+                    Informations générales
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Titre:</span>
+                      <span className="text-gray-900">{selectedRun.title}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Utilisateur:</span>
+                      <span className="text-gray-900">{selectedRun.user?.first_name} {selectedRun.user?.last_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Parcours:</span>
+                      <span className="text-gray-900">{selectedRun.route?.name || 'Parcours libre'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Date:</span>
+                      <span className="text-gray-900">{formatDate(selectedRun.start_time)} à {formatTime(selectedRun.start_time)}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
+                    Performance
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Distance:</span>
+                      <span className="text-gray-900 font-semibold">{selectedRun.distance?.toFixed(2)} m</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Durée:</span>
+                      <span className="text-gray-900 font-semibold">{formatDuration(selectedRun.duration)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Allure moyenne:</span>
+                      <span className="text-gray-900 font-semibold">{selectedRun.avg_pace}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Dénivelé:</span>
+                      <span className="text-gray-900 font-semibold">{selectedRun.elevation_gain}m</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
+                  Données cardio
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-red-50 rounded-xl p-4 text-center">
+                    <HeartIcon className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                    <div className="font-semibold text-gray-900">{selectedRun.avg_heart_rate} bpm</div>
+                    <div className="text-sm text-gray-600">FC moyenne</div>
+                  </div>
+                  <div className="bg-red-50 rounded-xl p-4 text-center">
+                    <HeartIcon className="h-8 w-8 text-red-600 mx-auto mb-2" />
+                    <div className="font-semibold text-gray-900">{selectedRun.max_heart_rate} bpm</div>
+                    <div className="text-sm text-gray-600">FC max</div>
+                  </div>
+                  <div className="bg-orange-50 rounded-xl p-4 text-center">
+                    <FireIcon className="h-8 w-8 text-orange-500 mx-auto mb-2" />
+                    <div className="font-semibold text-gray-900">{selectedRun.calories} cal</div>
+                    <div className="text-sm text-gray-600">Calories</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
+                  Horaires
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-emerald-50 rounded-xl p-4">
+                    <div className="font-medium text-emerald-800">Début</div>
+                    <div className="text-emerald-900 font-semibold">{new Date(selectedRun.start_time).toLocaleString('fr-FR')}</div>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl p-4">
+                    <div className="font-medium text-emerald-800">Fin</div>
+                    <div className="text-emerald-900 font-semibold">{new Date(selectedRun.end_time).toLocaleString('fr-FR')}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors duration-200"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={() => {
+                  setShowDetailModal(false)
+                  setSelectedRun(selectedRun)
+                  setShowDeleteModal(true)
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation de suppression */}
+      {showDeleteModal && selectedRun && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-md mx-4 animate-scale-in">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              Confirmer la suppression
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Êtes-vous sûr de vouloir supprimer la course{' '}
+              <strong>"{selectedRun.title}" de{' '}
+              {selectedRun.user?.first_name && selectedRun.user?.last_name
+                ? `${selectedRun.user.first_name} ${selectedRun.user.last_name}`
+                : selectedRun.user?.username || 'Utilisateur inconnu'
+              }</strong>{' '}
+              ({(selectedRun.distance || 0).toFixed(2)} m) ?
+              Cette action est irréversible.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false)
+                  setSelectedRun(null)
+                }}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors duration-200"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDeleteRun(selectedRun.id)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Styles CSS identiques à UserDetail */}
+      <style jsx>{`
+        .glass-green {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(16, 185, 129, 0.2);
+          box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.1);
+        }
+
+        .text-shadow {
+          text-shadow: 0 2px 4px rgba(16, 185, 129, 0.1);
+        }
+
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slide-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slide-in-right {
+          from { opacity: 0; transform: translateX(20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes scale-in {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out;
+        }
+
+        .animate-slide-in-up {
+          animation: slide-in-up 0.4s ease-out;
+        }
+
+        .animate-slide-in-right {
+          animation: slide-in-right 0.6s ease-out;
+        }
+
+        /* Styles pour les colonnes du tableau */
+        .table-fixed {
+          table-layout: fixed;
+        }
+
+        .cursor-col-resize {
+          cursor: col-resize;
+        }
+
+        body.resizing-column {
+          cursor: col-resize;
+          user-select: none;
+        }
+
+        /* Styles pour les en-têtes triables */
+        .sortable-header {
+          transition: all 0.2s ease;
+        }
+
+        .sortable-header:hover {
+          background-color: rgba(16, 185, 129, 0.1);
+        }
+
+        .sorted-column {
+          background-color: rgba(16, 185, 129, 0.15);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+          .table-fixed {
+            table-layout: auto;
+          }
+          
+          .cursor-col-resize {
+            cursor: default;
+          }
+        }
+      `}</style>
     </div>
   )
 }
