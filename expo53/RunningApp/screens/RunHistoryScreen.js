@@ -1,4 +1,3 @@
-// screens/RunHistoryScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -25,7 +24,6 @@ export default function RunHistoryScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [selectedRun, setSelectedRun] = useState(null);
   const [filter, setFilter] = useState('all');
 
   const loadRuns = useCallback(async (pageNum = 1, refresh = false) => {
@@ -33,36 +31,23 @@ export default function RunHistoryScreen({ navigation }) {
       if (refresh) {
         setRefreshing(true);
         setPage(1);
-        console.log('🔄 Rafraîchissement des courses...');
       } else if (pageNum === 1) {
         setLoading(true);
-        console.log('📊 Chargement initial des courses...');
-      } else {
-        console.log(`📊 Chargement page ${pageNum}...`);
       }
 
       const result = await RunService.getUserRuns(pageNum, 20);
-      console.log('📄 Réponse API complète:', result);
       
       if (result.status === "success" && result.data) {
-        // ✅ SEULEMENT données de l'API - PAS de fallback local
         let newRuns = [];
-        console.log('🔍 Structure complète API:', JSON.stringify(result, null, 2));
         if (result.data.runs && Array.isArray(result.data.runs)) {
           newRuns = result.data.runs;
         } else if (Array.isArray(result.data)) {
           newRuns = result.data;
-        } else {
-          console.log('⚠️ Aucune donnée API disponible');
-          newRuns = [];
         }
         
-        // Appliquer le filtre
         if (filter !== 'all') {
           newRuns = newRuns.filter(run => run.status === filter);
         }
-        
-        console.log(`✅ ${newRuns.length} courses API récupérées`);
         
         if (refresh || pageNum === 1) {
           setRuns(newRuns);
@@ -70,22 +55,17 @@ export default function RunHistoryScreen({ navigation }) {
           setRuns(prev => [...prev, ...newRuns]);
         }
         
-        // Gestion de la pagination
-        if (result.data.pagination) {
-          setHasMore(result.data.pagination.page < result.data.pagination.pages);
-        } else {
-          setHasMore(newRuns.length === 20);
-        }
-        
-        setPage(pageNum);
+        setHasMore(newRuns.length === 20);
       } else {
-        console.log('❌ Pas de données API disponibles');
-        setRuns([]); // Vide si pas de données API
+        const localRuns = await RunService.getLocalRuns();
+        setRuns(localRuns);
+        setHasMore(false);
       }
+      
     } catch (error) {
-      console.error('💥 Erreur loadRuns:', error);
-      setRuns([]); // Vide si erreur API
-      Alert.alert('Erreur', 'Impossible de charger les courses depuis l\'API');
+      console.error('Erreur chargement courses:', error);
+      const localRuns = await RunService.getLocalRuns();
+      setRuns(localRuns);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -94,19 +74,19 @@ export default function RunHistoryScreen({ navigation }) {
 
   useEffect(() => {
     loadRuns();
-  }, [filter]);
+  }, [loadRuns]);
 
   const onRefresh = () => loadRuns(1, true);
-  
   const loadMore = () => {
-    if (hasMore && !loading && !refreshing) {
+    if (!loading && hasMore) {
       loadRuns(page + 1);
+      setPage(prev => prev + 1);
     }
   };
 
   const deleteRun = async (runId) => {
     Alert.alert(
-      'Supprimer le tracé',
+      'Supprimer la course',
       'Êtes-vous sûr de vouloir supprimer cette course ?',
       [
         { text: 'Annuler', style: 'cancel' },
@@ -115,18 +95,10 @@ export default function RunHistoryScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🗑️ Suppression de la course:', runId);
-              const result = await RunService.deleteRun(runId);
-              
-              if (result.success) {
-                setRuns(prev => prev.filter(run => run.id !== runId && run.id !== parseInt(runId)));
-                console.log('✅ Course supprimée');
-              } else {
-                Alert.alert('Erreur', result.message || 'Impossible de supprimer la course');
-              }
+              await RunService.deleteRun(runId);
+              setRuns(prev => prev.filter(run => run.id !== runId));
             } catch (error) {
-              console.error('❌ Erreur suppression:', error);
-              Alert.alert('Erreur', 'Impossible de supprimer');
+              Alert.alert('Erreur', 'Impossible de supprimer la course');
             }
           }
         }
@@ -136,42 +108,30 @@ export default function RunHistoryScreen({ navigation }) {
 
   const getTrailFromGpsData = (gpsData) => {
     if (!gpsData) return [];
+    
     try {
-      const data = typeof gpsData === 'string' ? JSON.parse(gpsData) : gpsData;
-      if (data.coordinates && Array.isArray(data.coordinates)) {
-        return data.coordinates.filter(coord => 
-          coord && coord.latitude && coord.longitude &&
-          typeof coord.latitude === 'number' && typeof coord.longitude === 'number'
-        );
-      }
-      if (Array.isArray(data)) {
-        return data.filter(coord => 
-          coord && coord.latitude && coord.longitude &&
-          typeof coord.latitude === 'number' && typeof coord.longitude === 'number'
-        );
-      }
-      return [];
+      const parsed = typeof gpsData === 'string' ? JSON.parse(gpsData) : gpsData;
+      return parsed.coordinates || parsed || [];
     } catch (error) {
-      console.log('⚠️ Erreur parsing GPS data:', error);
       return [];
     }
   };
 
-  const formatTime = (seconds) => {
-    if (!seconds || seconds <= 0) return '00:00';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
+  const formatTime = (duration) => {
+    if (!duration) return '0:00';
+    const hours = Math.floor(duration / 3600);
+    const minutes = Math.floor((duration % 3600) / 60);
+    const seconds = duration % 60;
     
     if (hours > 0) {
-      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      return `${hours}h${minutes.toString().padStart(2, '0')}m`;
     }
-    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const formatDistance = (meters) => {
-    if (!meters || meters <= 0) return '0m';
-    if (meters < 1000) return `${Math.round(meters)}m`;
+    if (!meters) return '0m';
+    if (meters < 1000) return `${meters.toFixed(0)}m`;
     return `${(meters / 1000).toFixed(2)}km`;
   };
 
@@ -179,27 +139,14 @@ export default function RunHistoryScreen({ navigation }) {
     if (!dateString) return 'Date inconnue';
     try {
       const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Date invalide';
-      
       return date.toLocaleDateString('fr-FR', {
         day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
+        month: 'short',
         hour: '2-digit',
         minute: '2-digit'
       });
     } catch (error) {
-      console.log('⚠️ Erreur formatage date:', error);
       return 'Date invalide';
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'finished': return 'terminés';
-      case 'in_progress': return 'en cours';
-      case 'paused': return 'en pause';
-      default: return 'tous';
     }
   };
 
@@ -207,13 +154,13 @@ export default function RunHistoryScreen({ navigation }) {
     switch (status) {
       case 'finished': return '#4CAF50';
       case 'in_progress': return '#FF9800';
-      case 'paused': return '#f44336';
-      default: return '#666';
+      case 'paused': return '#2196F3';
+      default: return '#757575';
     }
   };
 
-  const FilterButton = ({ filterValue, title, icon }) => (
-    <TouchableOpacity
+  const FilterButton = ({ title, filterValue }) => (
+    <TouchableOpacity 
       style={[
         styles.filterButton,
         filter === filterValue && styles.filterButtonActive
@@ -221,8 +168,8 @@ export default function RunHistoryScreen({ navigation }) {
       onPress={() => setFilter(filterValue)}
     >
       <Ionicons 
-        name={icon} 
-        size={14} 
+        name="checkmark-circle" 
+        size={16} 
         color={filter === filterValue ? 'white' : 'rgba(255, 255, 255, 0.6)'} 
       />
       <Text style={[
@@ -280,6 +227,16 @@ export default function RunHistoryScreen({ navigation }) {
                 zoomEnabled={false}
                 rotateEnabled={false}
                 pitchEnabled={false}
+                
+                // MASQUER L'ATTRIBUTION MAPS
+                showsPointsOfInterest={false}
+                showsCompass={false}
+                showsScale={false}
+                showsBuildings={false}
+                showsTraffic={false}
+                showsIndoors={false}
+                loadingEnabled={false}
+                provider={null}
               >
                 <Polyline
                   coordinates={trail}
@@ -308,7 +265,9 @@ export default function RunHistoryScreen({ navigation }) {
 
           <View style={styles.runStats}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{item.distance_km ? `${item.distance_km}km` : formatDistance(item.distance)}</Text>
+              <Text style={styles.statValue}>
+                {item.distance_km ? `${item.distance_km}km` : formatDistance(item.distance)}
+              </Text>
               <Text style={styles.statLabel}>Distance</Text>
             </View>
             <View style={styles.statItem}>
@@ -328,76 +287,36 @@ export default function RunHistoryScreen({ navigation }) {
               <Text style={styles.statLabel}>Vitesse max</Text>
             </View>
           </View>
-
-          {item.notes && (
-            <View style={styles.notesContainer}>
-              <Text style={styles.notesText}>{item.notes}</Text>
-            </View>
-          )}
         </LinearGradient>
-      </View>
-    );
-  };
-
-  const renderFooter = () => {
-    if (!loading || page === 1) return null;
-    
-    return (
-      <View style={styles.loadingFooter}>
-        <ActivityIndicator size="small" color="#6366F1" />
-        <Text style={styles.loadingFooterText}>Chargement...</Text>
       </View>
     );
   };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <LinearGradient
-        colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-        style={styles.emptyStateGradient}
-      >
-        <Ionicons name="fitness-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
-        <Text style={styles.emptyStateTitle}>
-          {filter === 'all' 
-            ? 'Aucune course enregistrée'
-            : `Aucun tracé "${getStatusText(filter)}"`
-          }
-        </Text>
-        <Text style={styles.emptyStateSubtitle}>
-          {runs.length === 0 
-            ? 'Commencez votre première course'
-            : `Aucun tracé "${getStatusText(filter)}"`
-          }
-        </Text>
-        {filter !== 'all' && (
-          <TouchableOpacity 
-            onPress={() => setFilter('all')}
-            style={styles.showAllButton}
-          >
-            <Text style={styles.showAllButtonText}>Voir tous les tracés</Text>
-          </TouchableOpacity>
-        )}
-      </LinearGradient>
+      <Ionicons name="fitness-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
+      <Text style={styles.emptyStateTitle}>
+        Aucune course trouvée
+      </Text>
+      <Text style={styles.emptyStateSubtitle}>
+        Commencez votre première course depuis l'écran principal
+      </Text>
     </View>
   );
 
-  if (loading && page === 1) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366F1" />
-          <Text style={styles.loadingText}>Chargement des courses...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6366F1" />
+        <Text style={styles.loadingText}>Chargement des courses...</Text>
+      </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
-        colors={['#6366F1', '#8B5CF6', '#EC4899']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+        colors={['#0f0f23', '#1a1a2e', '#16213e']}
         style={styles.header}
       >
         <View style={styles.headerContent}>
@@ -407,20 +326,25 @@ export default function RunHistoryScreen({ navigation }) {
           >
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Mes Tracés</Text>
-          <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+          
+          <Text style={styles.headerTitle}>Historique des courses</Text>
+          
+          <TouchableOpacity 
+            onPress={onRefresh}
+            style={styles.refreshButton}
+          >
             <Ionicons name="refresh" size={24} color="white" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.filtersContainer}>
-          <FilterButton filterValue="all" title="Tous" icon="apps-outline" />
-          <FilterButton filterValue="finished" title="Terminés" icon="checkmark-circle-outline" />
-          <FilterButton filterValue="in_progress" title="En cours" icon="play-circle-outline" />
+          <FilterButton title="Toutes" filterValue="all" />
+          <FilterButton title="Terminées" filterValue="finished" />
+          <FilterButton title="En cours" filterValue="in_progress" />
         </View>
-        
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>
+
+        <View style={styles.statsHeader}>
+          <Text style={styles.statsHeaderText}>
             {runs.length} course{runs.length !== 1 ? 's' : ''} trouvée{runs.length !== 1 ? 's' : ''}
           </Text>
         </View>
@@ -445,7 +369,6 @@ export default function RunHistoryScreen({ navigation }) {
           onEndReached={loadMore}
           onEndReachedThreshold={0.1}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={renderFooter}
         />
       )}
     </SafeAreaView>
@@ -461,6 +384,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#0F0F23',
   },
   loadingText: {
     fontSize: 16,
@@ -500,7 +424,7 @@ const styles = StyleSheet.create({
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -508,29 +432,29 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   filterButtonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: '#6366F1',
+    borderColor: '#6366F1',
   },
   filterButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
+    fontWeight: '500',
     marginLeft: 6,
   },
   filterButtonTextActive: {
     color: 'white',
   },
-  statsContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+  statsHeader: {
+    alignItems: 'center',
+    paddingBottom: 15,
   },
-  statsText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
+  statsHeaderText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+    fontWeight: '500',
   },
   listContainer: {
-    padding: 16,
+    padding: 20,
   },
   runCard: {
     marginBottom: 16,
@@ -539,8 +463,6 @@ const styles = StyleSheet.create({
   },
   runCardGradient: {
     padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   runHeader: {
     flexDirection: 'row',
@@ -551,32 +473,33 @@ const styles = StyleSheet.create({
   runHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
   runDate: {
+    color: 'white',
     fontSize: 14,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
     marginLeft: 8,
   },
   runHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 8,
+    borderRadius: 12,
   },
   statusText: {
+    color: 'white',
     fontSize: 10,
     fontWeight: '600',
-    color: 'white',
   },
   deleteButton: {
     padding: 4,
   },
+  
+  // Carte mini - ATTRIBUTION MASQUÉE
   mapContainer: {
     height: 120,
     borderRadius: 12,
@@ -585,85 +508,44 @@ const styles = StyleSheet.create({
   },
   miniMap: {
     flex: 1,
+    marginBottom: -30, // Coupe l'attribution Maps
   },
+  
   runStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
+    justifyContent: 'space-around',
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
   },
   statValue: {
-    fontSize: 14,
-    fontWeight: '700',
     color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   statLabel: {
-    fontSize: 10,
     color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 2,
-  },
-  notesContainer: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-  },
-  notesText: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontStyle: 'italic',
-  },
-  loadingFooter: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  loadingFooterText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 2,
   },
   emptyState: {
     flex: 1,
-    margin: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  emptyStateGradient: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    paddingHorizontal: 40,
   },
   emptyStateTitle: {
+    color: 'white',
     fontSize: 18,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 16,
     textAlign: 'center',
   },
   emptyStateSubtitle: {
-    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
-  },
-  showAllButton: {
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  showAllButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
   },
 });

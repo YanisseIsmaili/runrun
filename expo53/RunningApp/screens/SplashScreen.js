@@ -1,3 +1,4 @@
+// screens/SplashScreen.js - SYNTAXE CORRIGÉE
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -6,6 +7,7 @@ import {
   Animated,
   StatusBar,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,13 +23,21 @@ export default function SplashScreen({ navigation }) {
   const logoRotateAnim = useRef(new Animated.Value(0)).current;
   const dotsAnim = useRef(new Animated.Value(0)).current;
 
+  const [initializationStatus, setInitializationStatus] = useState('starting');
+  const [currentStep, setCurrentStep] = useState('Démarrage...');
+
   useEffect(() => {
     startAnimations();
     initializeApp();
+
+    return () => {
+      console.log('🔄 [SPLASH] Nettoyage du composant');
+    };
   }, []);
 
   const startAnimations = () => {
-    // Animation d'entrée
+    console.log('🎬 [SPLASH] Démarrage des animations');
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -47,7 +57,6 @@ export default function SplashScreen({ navigation }) {
       }),
     ]).start();
 
-    // Animation rotation continue du logo
     Animated.loop(
       Animated.timing(logoRotateAnim, {
         toValue: 1,
@@ -56,7 +65,6 @@ export default function SplashScreen({ navigation }) {
       })
     ).start();
 
-    // Animation des points de chargement
     Animated.loop(
       Animated.sequence([
         Animated.timing(dotsAnim, {
@@ -75,44 +83,99 @@ export default function SplashScreen({ navigation }) {
 
   const initializeApp = async () => {
     console.log('🚀 [SPLASH] Début initialisation app...');
+    setInitializationStatus('initializing');
     
     try {
-      // Vérifier les permissions géolocalisation
+      setCurrentStep('Vérification GPS...');
       console.log('📍 [SPLASH] Demande permission géolocalisation...');
+      
+      // LIGNE CORRIGÉE - suppression de la syntaxe cassée
       const { status } = await Location.requestForegroundPermissionsAsync();
       console.log('📍 [SPLASH] Permission géoloc:', status);
       
-      // Vérifier l'authentification avec la vraie méthode AuthService
+      if (status !== 'granted') {
+        console.log('❌ [SPLASH] Permission géolocalisation refusée');
+        setCurrentStep('Permission GPS requise');
+        
+        setTimeout(() => {
+          Alert.alert(
+            'Permission requise',
+            'L\'accès à la géolocalisation est nécessaire pour utiliser cette application.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  console.log('🔄 [SPLASH] Redirection -> Login (pas de géoloc)');
+                  navigation.replace('Login');
+                }
+              }
+            ]
+          );
+        }, 1000);
+        return;
+      }
+
+      setCurrentStep('Vérification compte...');
       console.log('🔐 [SPLASH] Vérification authentification...');
-      const isAuthenticated = await AuthService.isAuthenticated();
-      console.log('✅ [SPLASH] Résultat authentification:', isAuthenticated);
       
+      let isAuthenticated = false;
+      
+      try {
+        isAuthenticated = await AuthService.isAuthenticated();
+        console.log('✅ [SPLASH] Résultat authentification:', isAuthenticated);
+      } catch (authError) {
+        console.error('❌ [SPLASH] Erreur authentification:', authError);
+        isAuthenticated = false;
+      }
+      
+      setCurrentStep('Vérification serveur...');
+      console.log('🌐 [SPLASH] Test connectivité API...');
+      
+      try {
+        const connectionTest = await AuthService.testConnection();
+        console.log('📡 [SPLASH] Test connexion:', connectionTest.success);
+        
+        if (!connectionTest.success) {
+          console.log('⚠️ [SPLASH] API non disponible, mode hors ligne');
+        }
+      } catch (networkError) {
+        console.log('⚠️ [SPLASH] Erreur réseau (mode hors ligne):', networkError.message);
+      }
+
+      setCurrentStep('Chargement...');
       console.log('⏱️ [SPLASH] Attente animation (2.5s)...');
       
-      // Délai minimum pour l'animation
       setTimeout(() => {
-        console.log('🎯 [SPLASH] Navigation décision:');
-        console.log('   - Géoloc:', status);
-        console.log('   - Auth:', isAuthenticated);
-        
-        if (status !== 'granted') {
-          console.log('🔄 [SPLASH] Redirection -> Login (pas de géoloc)');
-          navigation.replace('Login');
-        } else if (isAuthenticated) {
-          console.log('🔄 [SPLASH] Redirection -> Main (connecté)');
-          navigation.replace('Main');
-        } else {
-          console.log('🔄 [SPLASH] Redirection -> Login (pas connecté)');
-          navigation.replace('Login');
-        }
+        setInitializationStatus('completed');
+        navigateToNextScreen(status, isAuthenticated);
       }, 2500);
       
     } catch (error) {
-      console.error('💥 [SPLASH] Erreur initialisation:', error);
+      console.error('💥 [SPLASH] Erreur critique initialisation:', error);
+      setInitializationStatus('error');
+      setCurrentStep('Erreur de connexion');
+      
       setTimeout(() => {
         console.log('🔄 [SPLASH] Redirection -> Login (erreur)');
         navigation.replace('Login');
-      }, 2500);
+      }, 3000);
+    }
+  };
+
+  const navigateToNextScreen = (locationStatus, isAuthenticated) => {
+    console.log('🎯 [SPLASH] Navigation décision:');
+    console.log('   - Géoloc:', locationStatus);
+    console.log('   - Auth:', isAuthenticated);
+    
+    if (locationStatus !== 'granted') {
+      console.log('🔄 [SPLASH] Redirection -> Login (pas de géoloc)');
+      navigation.replace('Login');
+    } else if (isAuthenticated) {
+      console.log('🔄 [SPLASH] Redirection -> Main (connecté)');
+      navigation.replace('Main');
+    } else {
+      console.log('🔄 [SPLASH] Redirection -> Login (pas connecté)');
+      navigation.replace('Login');
     }
   };
 
@@ -125,6 +188,16 @@ export default function SplashScreen({ navigation }) {
     inputRange: [0, 1],
     outputRange: [0.3, 1],
   });
+
+  const getStatusColor = () => {
+    switch (initializationStatus) {
+      case 'starting': return '#4CAF50';
+      case 'initializing': return '#FF9800';
+      case 'completed': return '#4CAF50';
+      case 'error': return '#f44336';
+      default: return '#4CAF50';
+    }
+  };
 
   return (
     <LinearGradient
@@ -145,7 +218,6 @@ export default function SplashScreen({ navigation }) {
           },
         ]}
       >
-        {/* Logo principal */}
         <View style={styles.logoContainer}>
           <View style={styles.decorativeRing1} />
           <View style={styles.decorativeRing2} />
@@ -167,13 +239,11 @@ export default function SplashScreen({ navigation }) {
           </Animated.View>
         </View>
 
-        {/* Titre et sous-titre */}
         <Text style={styles.appTitle}>RunTracker</Text>
         <Text style={styles.appSubtitle}>
           Votre compagnon de course intelligent
         </Text>
 
-        {/* Indicateur de chargement */}
         <View style={styles.loadingContainer}>
           <Animated.View
             style={[
@@ -181,14 +251,15 @@ export default function SplashScreen({ navigation }) {
               { opacity: dotsOpacity },
             ]}
           >
-            <View style={[styles.dot, { backgroundColor: '#4CAF50' }]} />
-            <View style={[styles.dot, { backgroundColor: '#4CAF50' }]} />
-            <View style={[styles.dot, { backgroundColor: '#4CAF50' }]} />
+            <View style={[styles.dot, { backgroundColor: getStatusColor() }]} />
+            <View style={[styles.dot, { backgroundColor: getStatusColor() }]} />
+            <View style={[styles.dot, { backgroundColor: getStatusColor() }]} />
           </Animated.View>
-          <Text style={styles.loadingText}>Initialisation...</Text>
+          <Text style={[styles.loadingText, { color: getStatusColor() }]}>
+            {currentStep}
+          </Text>
         </View>
 
-        {/* Fonctionnalités */}
         <View style={styles.featuresContainer}>
           <View style={styles.feature}>
             <Ionicons name="location" size={20} color="#4CAF50" />
@@ -205,7 +276,6 @@ export default function SplashScreen({ navigation }) {
         </View>
       </Animated.View>
 
-      {/* Version */}
       <View style={styles.versionContainer}>
         <Text style={styles.versionText}>v1.0.0</Text>
       </View>
@@ -216,104 +286,109 @@ export default function SplashScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   content: {
-    alignItems: 'center',
-    justifyContent: 'center',
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
   },
   logoContainer: {
-    position: 'relative',
     marginBottom: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  decorativeRing1: {
+    position: 'absolute',
     width: 120,
     height: 120,
     borderRadius: 60,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+    top: -10,
+    left: -10,
+  },
+  decorativeRing2: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.1)',
+    top: -20,
+    left: -20,
   },
   logoGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 10,
     shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  decorativeRing1: {
-    position: 'absolute',
-    top: -15,
-    left: -15,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 2,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
-  },
-  decorativeRing2: {
-    position: 'absolute',
-    top: -25,
-    left: -25,
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.1)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
   },
   appTitle: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
     color: 'white',
-    marginBottom: 8,
     textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: 1,
   },
   appSubtitle: {
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
     marginBottom: 60,
-    paddingHorizontal: 40,
+    fontWeight: '300',
   },
   loadingContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 50,
   },
   loadingDots: {
     flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 15,
   },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
-    marginHorizontal: 3,
+    marginHorizontal: 4,
   },
   loadingText: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
     fontWeight: '500',
+    textAlign: 'center',
   },
   featuresContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    width: width * 0.8,
+    width: '100%',
+    maxWidth: 250,
   },
   feature: {
     alignItems: 'center',
+    flex: 1,
   },
   featureText: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.6)',
     marginTop: 5,
     fontWeight: '500',
   },
   versionContainer: {
     position: 'absolute',
     bottom: 30,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   versionText: {
     fontSize: 12,

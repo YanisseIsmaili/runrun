@@ -1,194 +1,237 @@
-// config/config.js
+// config/config.js - Design System Modernisé
 import { Platform } from 'react-native';
 
-// Configuration des URLs API
+// Configuration API
 export const API_CONFIG = {
-  // URL de base de l'API
   BASE_URL: 'http://192.168.27.77:5000/api',
-  
-  // URLs alternatives à tester en cas d'échec
-  FALLBACK_URLS: [
-    'http://192.168.27.77:5000/api',
-    'http://127.0.0.1:5000/api',
-    'http://localhost:5000/api',
-  ],
-  
-  // Timeout pour les requêtes (en millisecondes)
   TIMEOUT: 10000,
-  
-  // Nombre de tentatives en cas d'échec
   RETRY_ATTEMPTS: 3,
-  
-  // Délai entre les tentatives (en millisecondes)
-  RETRY_DELAY: 1000,
 };
 
-// Configuration de l'application
+// Configuration app
 export const APP_CONFIG = {
-  // Nom de l'application
-  APP_NAME: 'RunTracker',
-  
-  // Version
-  VERSION: '1.0.0',
-  
-  // Mode debug (activé automatiquement en développement)
-  DEBUG_MODE: __DEV__,
-  
-  // Configuration GPS
-  GPS: {
-    // Précision requise
-    ACCURACY: 'high',
-    
-    // Intervalle de mise à jour (millisecondes)
-    UPDATE_INTERVAL: 1000,
-    
-    // Distance minimale pour déclencher une mise à jour (mètres)
-    DISTANCE_FILTER: 2,
-    
-    // Timeout pour obtenir la position initiale
-    INITIAL_TIMEOUT: 15000,
-  },
-  
-  // Configuration de stockage local
-  STORAGE: {
-    // Clés de stockage
-    KEYS: {
-      ACCESS_TOKEN: 'access_token',
-      USER_DATA: 'user_data',
-      RUNS_DATA: 'runs',
-      SETTINGS: 'app_settings',
-    },
-    
-    // Durée de cache pour les données (millisecondes)
-    CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
-  },
-  
-  // Configuration des courses
-  RUNS: {
-    // Nombre minimum de points GPS pour une course valide
-    MIN_GPS_POINTS: 5,
-    
-    // Distance minimale pour une course valide (mètres)
-    MIN_DISTANCE: 100,
-    
-    // Durée minimale pour une course valide (secondes)
-    MIN_DURATION: 30,
-    
-    // Pagination
-    ITEMS_PER_PAGE: 20,
-  },
+  NAME: 'RunTracker',
+  VERSION: '2.0.0',
+  LOCATION_PERMISSIONS: ['location'],
+  BACKGROUND_MODES: ['location'],
 };
 
-// Configuration spécifique à la plateforme
-export const PLATFORM_CONFIG = {
-  // Configuration iOS
-  ios: {
-    LOCATION_WHEN_IN_USE: 'Cette app a besoin d\'accéder à votre localisation pour enregistrer vos courses.',
-    BACKGROUND_MODES: ['location'],
-  },
-  
-  // Configuration Android
-  android: {
-    LOCATION_PERMISSION: 'Cette app a besoin d\'accéder à votre localisation pour enregistrer vos courses.',
-    BACKGROUND_LOCATION: false, // Pas encore implémenté
-  },
-};
-
-// Messages d'erreur standardisés
+// Messages d'erreur
 export const ERROR_MESSAGES = {
   NETWORK: {
-    NO_CONNECTION: 'Aucune connexion internet détectée',
-    SERVER_UNREACHABLE: 'Impossible de contacter le serveur',
-    TIMEOUT: 'Le serveur met trop de temps à répondre',
-    UNKNOWN: 'Erreur de connexion inconnue',
+    NO_CONNECTION: 'Aucune connexion internet',
+    SERVER_UNREACHABLE: 'Serveur inaccessible',
+    TIMEOUT: 'Délai d\'attente dépassé',
+    UNKNOWN: 'Erreur réseau inconnue',
   },
-  
   AUTH: {
-    INVALID_CREDENTIALS: 'Email ou mot de passe incorrect',
-    ACCOUNT_DISABLED: 'Votre compte a été désactivé',
-    TOKEN_EXPIRED: 'Votre session a expiré, veuillez vous reconnecter',
-    REGISTRATION_FAILED: 'Impossible de créer le compte',
+    INVALID_CREDENTIALS: 'Identifiants incorrects',
+    ACCOUNT_DISABLED: 'Compte désactivé',
+    TOKEN_EXPIRED: 'Session expirée',
+    REGISTRATION_FAILED: 'Échec de l\'inscription',
   },
-  
   GPS: {
-    PERMISSION_DENIED: 'L\'accès à la localisation est requis pour utiliser cette application',
-    UNAVAILABLE: 'Service de localisation indisponible',
+    PERMISSION_DENIED: 'Autorisation GPS requise',
+    UNAVAILABLE: 'GPS indisponible',
     ACCURACY_LOW: 'Précision GPS insuffisante',
-    TIMEOUT: 'Impossible d\'obtenir votre position',
-  },
-  
-  RUNS: {
-    SAVE_FAILED: 'Impossible de sauvegarder la course',
-    LOAD_FAILED: 'Impossible de charger les courses',
-    DELETE_FAILED: 'Impossible de supprimer la course',
-    INVALID_DATA: 'Données de course invalides',
+    TIMEOUT: 'Impossible d\'obtenir la position',
   },
 };
 
-// Configuration des couleurs (thème)
+// Nouveau Design System
 export const THEME = {
   colors: {
-    primary: '#4CAF50',
-    primaryDark: '#45a049',
-    secondary: '#6366F1',
-    accent: '#EC4899',
-    background: '#0F0F23',
-    backgroundLight: '#1A1A3A',
-    surface: 'rgba(255, 255, 255, 0.1)',
-    text: '#FFFFFF',
-    textSecondary: 'rgba(255, 255, 255, 0.7)',
-    textDisabled: 'rgba(255, 255, 255, 0.5)',
-    error: '#EF4444',
-    warning: '#F59E0B',
+    // Couleurs principales
+    primary: '#FF6B35',
+    primaryDark: '#E55A2B',
+    primaryLight: '#FF8A5C',
+    
+    secondary: '#4ECDC4',
+    secondaryDark: '#26C6DA',
+    secondaryLight: '#7FDEDB',
+    
+    accent: '#45B7D1',
+    accentDark: '#2196F3',
+    accentLight: '#73C9E8',
+    
+    // Backgrounds
+    background: '#0A0A0F',
+    backgroundSecondary: '#141420',
+    backgroundTertiary: '#1E1E2E',
+    
+    // Surfaces
+    surface: '#1E1E2E',
+    surfaceElevated: '#252538',
+    surfaceHighlight: '#2A2A42',
+    
+    // Textes
+    textPrimary: '#FFFFFF',
+    textSecondary: '#B8BCC8',
+    textMuted: '#6B7280',
+    textDisabled: '#4B5563',
+    
+    // États
     success: '#10B981',
+    successDark: '#059669',
+    warning: '#F59E0B',
+    warningDark: '#D97706',
+    error: '#EF4444',
+    errorDark: '#DC2626',
     info: '#3B82F6',
+    infoDark: '#2563EB',
+    
+    // Transparences
+    overlay: 'rgba(0, 0, 0, 0.5)',
+    backdrop: 'rgba(10, 10, 15, 0.9)',
+    glassDark: 'rgba(30, 30, 46, 0.8)',
+    glassLight: 'rgba(255, 255, 255, 0.1)',
   },
   
   gradients: {
-    primary: ['#4CAF50', '#45a049'],
-    secondary: ['#6366F1', '#8B5CF6'],
-    background: ['#0f0f23', '#1a1a2e', '#16213e', '#0f3460'],
-    surface: ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)'],
+    primary: ['#FF6B35', '#E55A2B', '#D44A1C'],
+    secondary: ['#4ECDC4', '#26C6DA', '#00BCD4'],
+    accent: ['#45B7D1', '#2196F3', '#1976D2'],
+    background: ['#0A0A0F', '#141420', '#1E1E2E'],
+    surface: ['#1E1E2E', '#252538', '#2A2A42'],
+    success: ['#10B981', '#059669', '#047857'],
+    error: ['#EF4444', '#DC2626', '#B91C1C'],
+    warning: ['#F59E0B', '#D97706', '#B45309'],
+    
+    // Gradients spéciaux
+    sunset: ['#FF6B35', '#FF8A5C', '#FFA07A'],
+    ocean: ['#4ECDC4', '#45B7D1', '#3B82F6'],
+    cosmic: ['#6366F1', '#8B5CF6', '#EC4899'],
   },
   
+  // Espacement
   spacing: {
     xs: 4,
     sm: 8,
     md: 16,
     lg: 24,
     xl: 32,
+    xxl: 48,
+    xxxl: 64,
   },
   
+  // Border radius
   borderRadius: {
+    xs: 4,
     sm: 8,
     md: 12,
     lg: 16,
     xl: 20,
-    round: 50,
+    xxl: 24,
+    full: 9999,
+  },
+  
+  // Typographie
+  typography: {
+    display: {
+      fontSize: 32,
+      fontWeight: '800',
+      lineHeight: 40,
+      letterSpacing: -0.5,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: '700',
+      lineHeight: 32,
+      letterSpacing: -0.3,
+    },
+    heading: {
+      fontSize: 20,
+      fontWeight: '600',
+      lineHeight: 28,
+      letterSpacing: -0.2,
+    },
+    body: {
+      fontSize: 16,
+      fontWeight: '400',
+      lineHeight: 24,
+      letterSpacing: 0,
+    },
+    bodySmall: {
+      fontSize: 14,
+      fontWeight: '400',
+      lineHeight: 20,
+      letterSpacing: 0,
+    },
+    caption: {
+      fontSize: 12,
+      fontWeight: '500',
+      lineHeight: 16,
+      letterSpacing: 0.3,
+    },
+    overline: {
+      fontSize: 10,
+      fontWeight: '600',
+      lineHeight: 14,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+    },
+  },
+  
+  // Shadows
+  shadows: {
+    small: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+    },
+    medium: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.30,
+      shadowRadius: 4.65,
+      elevation: 8,
+    },
+    large: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.44,
+      shadowRadius: 10.32,
+      elevation: 16,
+    },
+  },
+  
+  // Animations
+  animations: {
+    fast: 200,
+    normal: 300,
+    slow: 500,
+    
+    easing: {
+      easeOut: 'cubic-bezier(0.0, 0.0, 0.2, 1)',
+      easeIn: 'cubic-bezier(0.4, 0.0, 1, 1)',
+      easeInOut: 'cubic-bezier(0.4, 0.0, 0.2, 1)',
+    },
   },
 };
 
-// Utilitaires de configuration
+// Utilitaires
 export const getApiUrl = (endpoint = '') => {
   return `${API_CONFIG.BASE_URL}${endpoint}`;
 };
 
-export const isDebugMode = () => {
-  return APP_CONFIG.DEBUG_MODE;
-};
-
 export const getPlatformConfig = () => {
-  return PLATFORM_CONFIG[Platform.OS] || {};
+  return Platform.OS === 'ios' ? {
+    statusBarStyle: 'light-content',
+    hapticFeedback: true,
+  } : {
+    statusBarStyle: 'light-content',
+    hapticFeedback: false,
+  };
 };
 
-// Export par défaut avec toute la configuration
+// Export par défaut
 export default {
   API_CONFIG,
   APP_CONFIG,
-  PLATFORM_CONFIG,
   ERROR_MESSAGES,
   THEME,
   getApiUrl,
-  isDebugMode,
   getPlatformConfig,
 };
