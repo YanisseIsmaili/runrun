@@ -1,3 +1,4 @@
+// App.js - Version complète avec SafeArea
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -11,6 +12,7 @@ import {
   Animated,
   ScrollView,
   TextInput,
+  Platform,
 } from 'react-native';
 import MapView, { Polyline, Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -22,224 +24,32 @@ import { createStackNavigator } from '@react-navigation/stack';
 // Import des composants et screens
 import GeoDebugJoystick from './components/GeoDebugJoystick';
 import RunHistoryScreen from './screens/RunHistoryScreen';
+import LoginScreen from './screens/LoginScreen';
+import RegisterScreen from './screens/RegisterScreen';
+import SplashScreen from './screens/SplashScreen';
 
-// Services existants
+// Services
 import AuthService from './services/AuthService';
 import RunService from './services/RunService';
 
 const { width, height } = Dimensions.get('window');
 const Stack = createStackNavigator();
 
-// ÉCRANS D'AUTHENTIFICATION
-function AuthCheckScreen({ navigation }) {
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    const isAuthenticated = await AuthService.isAuthenticated();
-    if (isAuthenticated) {
-      navigation.replace('Main');
-    } else {
-      navigation.replace('Login');
-    }
-  };
-
+// Zone boutons bottom sécurisée
+function BottomButtonArea({ children }) {
   return (
-    <View style={styles.authCheckContainer}>
+    <View style={styles.bottomSafeArea}>
       <LinearGradient
-        colors={['#0F0F23', '#1A1A3A', '#2D1B69']}
-        style={styles.authCheckGradient}
+        colors={['transparent', 'rgba(0,0,0,0.95)']}
+        style={styles.bottomGradient}
       >
-        <Ionicons name="flash" size={64} color="#6366F1" />
-        <Text style={styles.authCheckText}>RunTracker</Text>
+        {children}
       </LinearGradient>
     </View>
   );
 }
 
-function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [username, setUsername] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const handleAuth = async () => {
-    if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      let result;
-      if (isLogin) {
-        result = await AuthService.login(email, password);
-      } else {
-        if (!username || !firstName || !lastName) {
-          Alert.alert('Erreur', 'Veuillez remplir tous les champs');
-          setLoading(false);
-          return;
-        }
-        result = await AuthService.register({
-          email,
-          password,
-          username,
-          first_name: firstName,
-          last_name: lastName,
-        });
-      }
-
-      if (result.success) {
-        navigation.replace('Main');
-      } else {
-        Alert.alert('Erreur', result.message);
-      }
-    } catch (error) {
-      Alert.alert('Erreur', 'Une erreur est survenue');
-    }
-    setLoading(false);
-  };
-
-  return (
-    <Animated.View style={[styles.loginContainer, { opacity: fadeAnim }]}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient
-        colors={['#0F0F23', '#1A1A3A', '#2D1B69', '#6366F1']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.loginGradient}
-      >
-        <ScrollView contentContainerStyle={styles.loginScrollView}>
-          <View style={styles.logoContainer}>
-            <LinearGradient
-              colors={['#EC4899', '#8B5CF6', '#6366F1']}
-              style={styles.logoBackground}
-            >
-              <Ionicons name="flash" size={40} color="white" />
-            </LinearGradient>
-            <Text style={styles.logoText}>RunTracker</Text>
-            <Text style={styles.logoSubtext}>Votre compagnon de course</Text>
-          </View>
-
-          <View style={styles.formContainer}>
-            <View style={styles.toggleContainer}>
-              <TouchableOpacity
-                style={[styles.toggleButton, isLogin && styles.toggleButtonActive]}
-                onPress={() => setIsLogin(true)}
-              >
-                <Text style={[styles.toggleText, isLogin && styles.toggleTextActive]}>
-                  Connexion
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleButton, !isLogin && styles.toggleButtonActive]}
-                onPress={() => setIsLogin(false)}
-              >
-                <Text style={[styles.toggleText, !isLogin && styles.toggleTextActive]}>
-                  Inscription
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {!isLogin && (
-              <>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="person-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Nom d'utilisateur"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={username}
-                    onChangeText={setUsername}
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Ionicons name="person-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Prénom"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={firstName}
-                    onChangeText={setFirstName}
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Ionicons name="person-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Nom"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    value={lastName}
-                    onChangeText={setLastName}
-                  />
-                </View>
-              </>
-            )}
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
-              <TextInput
-                style={styles.input}
-                placeholder="Mot de passe"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.authButton, loading && styles.authButtonDisabled]}
-              onPress={handleAuth}
-              disabled={loading}
-            >
-              <LinearGradient
-                colors={['#EC4899', '#8B5CF6', '#6366F1']}
-                style={styles.authButtonGradient}
-              >
-                <Text style={styles.authButtonText}>
-                  {loading ? 'Chargement...' : isLogin ? 'Se connecter' : 'S\'inscrire'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </LinearGradient>
-    </Animated.View>
-  );
-}
-
-// COMPOSANTS EXISTANTS (RunPreview, LoadingOverlay)
+// Composant RunPreview
 function RunPreview({ run, index }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(30)).current;
@@ -262,6 +72,7 @@ function RunPreview({ run, index }) {
   }, []);
 
   const formatTime = (duration) => {
+    if (!duration) return '0:00';
     const hours = Math.floor(duration / 3600);
     const minutes = Math.floor((duration % 3600) / 60);
     const seconds = duration % 60;
@@ -273,18 +84,24 @@ function RunPreview({ run, index }) {
   };
 
   const formatDistance = (meters) => {
+    if (!meters) return '0m';
     if (meters < 1000) return `${meters.toFixed(0)}m`;
     return `${(meters / 1000).toFixed(2)}km`;
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'Date inconnue';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return 'Date invalide';
+    }
   };
 
   return (
@@ -302,8 +119,8 @@ function RunPreview({ run, index }) {
         style={styles.runPreviewGradient}
       >
         <View style={styles.runPreviewHeader}>
-          <Ionicons name="footsteps" size={16} color="#6366F1" />
           <Text style={styles.runPreviewDate}>{formatDate(run.date || run.start_time)}</Text>
+          <Ionicons name="fitness" size={16} color="#4CAF50" />
         </View>
         
         <View style={styles.runPreviewStats}>
@@ -311,13 +128,17 @@ function RunPreview({ run, index }) {
             <Text style={styles.runStatValue}>{formatDistance(run.distance)}</Text>
             <Text style={styles.runStatLabel}>Distance</Text>
           </View>
+          
           <View style={styles.runStat}>
             <Text style={styles.runStatValue}>{formatTime(run.duration)}</Text>
-            <Text style={styles.runStatLabel}>Temps</Text>
+            <Text style={styles.runStatLabel}>Durée</Text>
           </View>
+          
           <View style={styles.runStat}>
-            <Text style={styles.runStatValue}>{(run.maxSpeed || run.max_speed || 0).toFixed(1)}</Text>
-            <Text style={styles.runStatLabel}>km/h max</Text>
+            <Text style={styles.runStatValue}>
+              {run.maxSpeed ? `${run.maxSpeed.toFixed(1)} km/h` : '0 km/h'}
+            </Text>
+            <Text style={styles.runStatLabel}>Vitesse max</Text>
           </View>
         </View>
       </LinearGradient>
@@ -325,32 +146,27 @@ function RunPreview({ run, index }) {
   );
 }
 
-function LoadingOverlay({ isVisible, message, runs }) {
+// Composant LoadingOverlay
+function LoadingOverlay({ isVisible, message, runs = [] }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isVisible) {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-
-      Animated.loop(
-        Animated.sequence([
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.loop(
           Animated.timing(progressAnim, {
             toValue: 1,
             duration: 2000,
-            useNativeDriver: false,
-          }),
-          Animated.timing(progressAnim, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: false,
-          }),
-        ])
-      ).start();
+            useNativeDriver: true,
+          })
+        ),
+      ]).start();
     } else {
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -360,134 +176,90 @@ function LoadingOverlay({ isVisible, message, runs }) {
     }
   }, [isVisible]);
 
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['20%', '100%'],
-  });
-
   if (!isVisible) return null;
 
+  const rotation = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   return (
-    <Animated.View 
-      style={[
-        styles.loadingOverlay,
-        { opacity: fadeAnim }
-      ]}
-    >
+    <Animated.View style={[styles.loadingOverlay, { opacity: fadeAnim }]}>
       <LinearGradient
-        colors={['rgba(15, 15, 35, 0.95)', 'rgba(26, 26, 58, 0.95)', 'rgba(45, 27, 105, 0.95)']}
+        colors={['#0f0f23', '#1a1a2e', '#16213e']}
         style={styles.loadingGradient}
       >
         <View style={styles.loadingHeader}>
-          <View style={styles.loadingIconContainer}>
-            <Ionicons name="location" size={24} color="#6366F1" />
-          </View>
+          <Animated.View style={[styles.loadingIconContainer, { transform: [{ rotate: rotation }] }]}>
+            <Ionicons name="sync" size={24} color="#6366F1" />
+          </Animated.View>
           <Text style={styles.loadingTitle}>{message}</Text>
-          
-          <View style={styles.progressContainer}>
-            <Animated.View 
-              style={[
-                styles.progressBar,
-                { width: progressWidth }
-              ]}
-            />
-          </View>
         </View>
 
-        {runs && runs.length > 0 && (
-          <View style={styles.runsContainer}>
-            <Text style={styles.runsTitle}>Vos dernières courses</Text>
-            <ScrollView 
-              style={styles.runsScrollView}
-              showsVerticalScrollIndicator={false}
-            >
-              {runs.slice(0, 5).map((run, index) => (
-                <RunPreview key={run.id} run={run} index={index} />
-              ))}
-            </ScrollView>
-          </View>
+        {runs.length > 0 && (
+          <ScrollView style={styles.runsContainer} showsVerticalScrollIndicator={false}>
+            <Text style={styles.runsTitle}>Courses récentes</Text>
+            {runs.slice(0, 3).map((run, index) => (
+              <RunPreview key={run.id || index} run={run} index={index} />
+            ))}
+          </ScrollView>
         )}
-
-        <View style={styles.encouragementContainer}>
-          <Ionicons name="flash" size={20} color="#EC4899" />
-          <Text style={styles.encouragementText}>
-            {runs && runs.length > 0 
-              ? "Prêt pour une nouvelle course ?" 
-              : "Votre première course vous attend !"}
-          </Text>
-        </View>
       </LinearGradient>
     </Animated.View>
   );
 }
 
-// ÉCRAN PRINCIPAL
+// Écran principal
 function MainRunScreen({ navigation }) {
-  const [user, setUser] = useState(null);
-  const [location, setLocation] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [startTime, setStartTime] = useState(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [distance, setDistance] = useState(0);
-  const [locationPermission, setLocationPermission] = useState(false);
-  const [previousLocation, setPreviousLocation] = useState(null);
-  const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [speed, setSpeed] = useState(0);
-  const [maxSpeed, setMaxSpeed] = useState(0);
-  const [followUser, setFollowUser] = useState(true);
-  const [mapInitialized, setMapInitialized] = useState(false);
-  
-  const [isLocationLoading, setIsLocationLoading] = useState(true);
-  const [loadingMessage, setLoadingMessage] = useState('Demande d\'autorisation...');
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [route, setRoute] = useState([]);
+  const [runData, setRunData] = useState({
+    distance: 0,
+    duration: 0,
+    avgSpeed: 0,
+    maxSpeed: 0,
+    startTime: null,
+  });
   const [savedRuns, setSavedRuns] = useState([]);
+  const [isLocationLoading, setIsLocationLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Initialisation...');
+  const [locationPermission, setLocationPermission] = useState(false);
+  const [user, setUser] = useState(null);
 
-  const intervalRef = useRef(null);
-  const locationSubscription = useRef(null);
   const mapRef = useRef(null);
+  const watchId = useRef(null);
+  const intervalId = useRef(null);
 
   useEffect(() => {
-    initializeApp();
+    loadUserData();
+    loadSavedRuns();
+    initializeLocation();
+    
+    return () => {
+      if (watchId.current) {
+        Location.watchPositionAsync.remove && Location.watchPositionAsync.remove(watchId.current);
+      }
+      if (intervalId.current) {
+        clearInterval(intervalId.current);
+      }
+    };
   }, []);
 
-  useEffect(() => {
-    let interval = null;
-    if (isRunning && !isPaused) {
-      interval = setInterval(() => {
-        setElapsedTime(Date.now() - startTime);
-      }, 1000);
-    } else if (interval) {
-      clearInterval(interval);
+  const loadUserData = async () => {
+    try {
+      const userData = await AuthService.getUser();
+      setUser(userData);
+    } catch (error) {
+      console.error('Erreur chargement utilisateur:', error);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRunning, isPaused, startTime]);
-
-  useEffect(() => {
-    if (location && mapRef.current && followUser && mapInitialized) {
-      const region = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      };
-      mapRef.current.animateToRegion(region, 500);
-    }
-  }, [location, followUser, mapInitialized]);
-
-  const initializeApp = async () => {
-    await loadSavedRuns();
-    await loadUser();
-    await initializeLocation();
   };
 
   const loadSavedRuns = async () => {
     try {
-      // Synchroniser les courses en attente
-      await RunService.syncPendingRuns();
+      setLoadingMessage('Chargement des courses...');
       
-      // Récupérer les courses depuis l'API
       const result = await RunService.getUserRuns(1, 20);
       if (result.success && result.data && result.data.runs) {
         const runs = result.data.runs.map(run => ({
@@ -497,19 +269,219 @@ function MainRunScreen({ navigation }) {
         }));
         setSavedRuns(runs.sort((a, b) => new Date(b.date) - new Date(a.date)));
       } else {
-        // Fallback sur données locales
         const localRuns = await RunService.getAllRuns();
         setSavedRuns(localRuns.sort((a, b) => new Date(b.date) - new Date(a.date)));
       }
     } catch (error) {
       console.error('Erreur chargement courses:', error);
-      // Fallback sur données locales
       const localRuns = await RunService.getAllRuns();
       setSavedRuns(localRuns.sort((a, b) => new Date(b.date) - new Date(a.date)));
     }
   };
 
-  const logout = async () => {
+  const initializeLocation = async () => {
+    try {
+      setLoadingMessage('Demande d\'autorisation GPS...');
+      
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLoadingMessage('Permission GPS refusée');
+        setTimeout(() => {
+          setIsLocationLoading(false);
+          Alert.alert('Permission refusée', 'La géolocalisation est requise pour l\'application');
+        }, 1000);
+        return;
+      }
+
+      setLocationPermission(true);
+      setLoadingMessage('Recherche de votre position...');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      setLoadingMessage('Position trouvée !');
+      setCurrentLocation({
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setIsLocationLoading(false);
+    } catch (error) {
+      console.error('Erreur géolocalisation:', error);
+      setLoadingMessage('Erreur de géolocalisation');
+      setTimeout(() => setIsLocationLoading(false), 2000);
+    }
+  };
+
+  const startRun = async () => {
+    if (!locationPermission) {
+      Alert.alert('Erreur', 'Permission GPS requise pour démarrer une course');
+      return;
+    }
+
+    try {
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      setIsRunning(true);
+      setIsPaused(false);
+      setRunData({
+        distance: 0,
+        duration: 0,
+        avgSpeed: 0,
+        maxSpeed: 0,
+        startTime: Date.now(),
+      });
+      setRoute([{
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      }]);
+
+      startLocationTracking();
+      startTimer();
+
+      Alert.alert('Course démarrée', 'Bonne course !');
+    } catch (error) {
+      console.error('Erreur démarrage course:', error);
+      Alert.alert('Erreur', 'Impossible de démarrer la course');
+    }
+  };
+
+  const pauseRun = () => {
+    setIsPaused(true);
+    if (intervalId.current) {
+      clearInterval(intervalId.current);
+    }
+    Alert.alert('Course en pause', 'Appuyez sur Play pour reprendre ou Stop pour terminer');
+  };
+
+  const resumeRun = () => {
+    setIsPaused(false);
+    startTimer();
+    Alert.alert('Course reprise', 'C\'est reparti !');
+  };
+
+  const stopRun = () => {
+    Alert.alert(
+      'Terminer la course',
+      'Voulez-vous arrêter votre course ?',
+      [
+        { text: 'Continuer', style: 'cancel' },
+        { 
+          text: 'Terminer', 
+          onPress: async () => {
+            setIsRunning(false);
+            setIsPaused(false);
+            
+            if (watchId.current) {
+              watchId.current.remove();
+            }
+            if (intervalId.current) {
+              clearInterval(intervalId.current);
+            }
+
+            // Sauvegarder la course
+            const finalRunData = {
+              ...runData,
+              route: route,
+              date: new Date().toISOString(),
+            };
+
+            try {
+              await RunService.saveRun(finalRunData);
+              Alert.alert('Course terminée', 'Bravo ! Votre course a été sauvegardée.');
+              loadSavedRuns();
+            } catch (error) {
+              console.error('Erreur sauvegarde:', error);
+              Alert.alert('Course terminée', 'Course terminée mais erreur de sauvegarde');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const startLocationTracking = async () => {
+    try {
+      watchId.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 1000,
+          distanceInterval: 5,
+        },
+        (location) => {
+          if (isRunning && !isPaused) {
+            const newCoord = {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            };
+            
+            setRoute(prev => [...prev, newCoord]);
+            
+            // Calculer la distance
+            if (route.length > 0) {
+              const lastCoord = route[route.length - 1];
+              const newDistance = calculateDistance(lastCoord, newCoord);
+              setRunData(prev => ({
+                ...prev,
+                distance: prev.distance + newDistance,
+                maxSpeed: Math.max(prev.maxSpeed, location.coords.speed * 3.6 || 0),
+              }));
+            }
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Erreur tracking:', error);
+    }
+  };
+
+  const startTimer = () => {
+    intervalId.current = setInterval(() => {
+      setRunData(prev => {
+        const newDuration = prev.duration + 1;
+        const avgSpeed = prev.distance > 0 ? (prev.distance / newDuration) * 3.6 : 0;
+        return {
+          ...prev,
+          duration: newDuration,
+          avgSpeed: avgSpeed,
+        };
+      });
+    }, 1000);
+  };
+
+  const calculateDistance = (coord1, coord2) => {
+    const R = 6371e3; // Rayon de la Terre en mètres
+    const φ1 = coord1.latitude * Math.PI/180;
+    const φ2 = coord2.latitude * Math.PI/180;
+    const Δφ = (coord2.latitude-coord1.latitude) * Math.PI/180;
+    const Δλ = (coord2.longitude-coord1.longitude) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance en mètres
+  };
+
+  const centerOnUser = () => {
+    if (mapRef.current && currentLocation) {
+      mapRef.current.animateToRegion(currentLocation, 1000);
+    }
+  };
+
+  const handleHistoryPress = () => {
+    navigation.navigate('RunHistory');
+  };
+
+  const handleLogoutPress = () => {
     Alert.alert(
       'Déconnexion',
       'Voulez-vous vraiment vous déconnecter ?',
@@ -526,386 +498,151 @@ function MainRunScreen({ navigation }) {
     );
   };
 
-  const initializeLocation = async () => {
-    try {
-      setLoadingMessage('Demande d\'autorisation GPS...');
-      
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLoadingMessage('Permission GPS refusée');
-        setTimeout(() => {
-          setIsLocationLoading(false);
-          Alert.alert('Permission refusée', 'Géolocalisation requise');
-        }, 1000);
-        return;
-      }
-
-      setLocationPermission(true);
-      setLoadingMessage('Recherche de votre position...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      setLoadingMessage('Position trouvée !');
-      setLocation(currentLocation);
-      
-      setTimeout(() => {
-        setMapInitialized(true);
-        setIsLocationLoading(false);
-      }, 1000);
-    } catch (error) {
-      console.error('Erreur géolocalisation:', error);
-      setLoadingMessage('Erreur de géolocalisation');
-      setTimeout(() => {
-        setIsLocationLoading(false);
-        Alert.alert('Erreur', 'Impossible d\'obtenir votre position');
-      }, 1000);
-    }
-  };
-
-  const handleDebugLocationUpdate = (newLocation) => {
-    setLocation(newLocation);
-    
-    if (isRunning && !isPaused && previousLocation) {
-      const currentSpeed = (newLocation.coords.speed && newLocation.coords.speed > 0) ? 
-        newLocation.coords.speed * 3.6 : 0;
-      setSpeed(currentSpeed);
-      
-      if (currentSpeed > maxSpeed) {
-        setMaxSpeed(currentSpeed);
-      }
-      
-      const newDistance = calculateDistance(
-        previousLocation.coords,
-        newLocation.coords
-      );
-      
-      const newTotalDistance = distance + newDistance;
-      setDistance(newTotalDistance);
-      
-      const newCoordinate = {
-        latitude: newLocation.coords.latitude,
-        longitude: newLocation.coords.longitude,
-      };
-      setRouteCoordinates(prev => [...prev, newCoordinate]);
-    }
-    
-    setPreviousLocation(newLocation);
-  };
-
-  const startLocationTracking = async () => {
-    try {
-      locationSubscription.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 1000,
-          distanceInterval: 2,
-        },
-        (newLocation) => {
-          handleDebugLocationUpdate(newLocation);
-        }
-      );
-    } catch (error) {
-      console.error('Erreur tracking:', error);
-    }
-  };
-
-  const calculateDistance = (coords1, coords2) => {
-    const R = 6371000;
-    const dLat = (coords2.latitude - coords1.latitude) * Math.PI / 180;
-    const dLon = (coords2.longitude - coords1.longitude) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(coords1.latitude * Math.PI / 180) *
-      Math.cos(coords2.latitude * Math.PI / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  const startRun = () => {
-    setIsRunning(true);
-    setIsPaused(false);
-    setStartTime(Date.now());
-    setDistance(0);
-    setRouteCoordinates([]);
-    setSpeed(0);
-    setMaxSpeed(0);
-    setFollowUser(true);
-    setElapsedTime(0);
-    
-    if (location) {
-      setRouteCoordinates([{
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      }]);
-      setPreviousLocation(location);
-    }
-    
-    startLocationTracking();
-  };
-
-  const pauseRun = () => {
-    setIsPaused(true);
-    if (locationSubscription.current) {
-      locationSubscription.current.remove();
-      locationSubscription.current = null;
-    }
-  };
-
-  const resumeRun = () => {
-    setIsPaused(false);
-    startLocationTracking();
-  };
-
-  const stopRun = async () => {
-    Alert.alert(
-      'Arrêter la course',
-      'Voulez-vous vraiment arrêter la course ?',
-      [
-        { text: 'Continuer', style: 'cancel' },
-        {
-          text: 'Arrêter',
-          style: 'destructive',
-          onPress: async () => {
-            setIsRunning(false);
-            setIsPaused(false);
-            
-            if (locationSubscription.current) {
-              locationSubscription.current.remove();
-              locationSubscription.current = null;
-            }
-            
-            try {
-              await RunService.saveRun({
-                distance,
-                duration: Math.floor(elapsedTime / 1000),
-                route: routeCoordinates,
-                maxSpeed,
-                date: new Date().toISOString()
-              });
-              
-              // Recharger les courses depuis l'API
-              await loadSavedRuns();
-              
-              Alert.alert('Course sauvegardée !', 'Votre course a été enregistrée localement et sur le serveur.');
-            } catch (error) {
-              console.error('Erreur sauvegarde:', error);
-              Alert.alert('Erreur', 'Impossible de sauvegarder la course');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const loadUser = async () => {
-    const userData = await AuthService.getUser();
-    setUser(userData);
-  };
-
-  const formatTime = (time) => {
-    const seconds = Math.floor(time / 1000) % 60;
-    const minutes = Math.floor(time / (1000 * 60)) % 60;
-    const hours = Math.floor(time / (1000 * 60 * 60));
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  if (!locationPermission && !isLocationLoading) {
-    return (
-      <View style={styles.errorContainer}>
-        <LinearGradient
-          colors={['#0F0F23', '#1A1A3A']}
-          style={styles.errorGradient}
-        >
-          <Ionicons name="location-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
-          <Text style={styles.errorTitle}>Géolocalisation indisponible</Text>
-          <Text style={styles.errorMessage}>
-            Veuillez autoriser l'accès à votre position pour utiliser l'application
-          </Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={initializeLocation}
-          >
-            <Text style={styles.retryButtonText}>Réessayer</Text>
-          </TouchableOpacity>
-        </LinearGradient>
-      </View>
-    );
-  }
-
   return (
-    <GeoDebugJoystick 
-      onLocationUpdate={handleDebugLocationUpdate}
-      isRunning={isRunning}
-    >
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        
-        {location && mapInitialized ? (
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            initialRegion={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }}
-            showsUserLocation={false}
-            showsMyLocationButton={false}
-            onPanDrag={() => setFollowUser(false)}
-          >
-            <Marker
-              coordinate={{
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-              }}
-              title="Ma position"
-            >
-              <View style={styles.userMarker}>
-                <View style={styles.userMarkerInner} />
-              </View>
-            </Marker>
-            
-            {routeCoordinates.length > 1 && (
-              <Polyline
-                coordinates={routeCoordinates}
-                strokeColor="#4CAF50"
-                strokeWidth={4}
-              />
-            )}
-            
-            <Circle
-              center={{
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-              }}
-              radius={location.coords.accuracy || 10}
-              fillColor="rgba(76, 175, 80, 0.1)"
-              strokeColor="rgba(76, 175, 80, 0.3)"
-              strokeWidth={1}
-            />
-          </MapView>
-        ) : (
-          <View style={styles.mapPlaceholder}>
-            <LinearGradient
-              colors={['#0F0F23', '#1A1A3A']}
-              style={styles.mapPlaceholderGradient}
-            >
-              <Ionicons name="map-outline" size={48} color="rgba(255, 255, 255, 0.3)" />
-              <Text style={styles.mapPlaceholderText}>Carte en cours de chargement...</Text>
-            </LinearGradient>
-          </View>
-        )}
-        
-        <View style={styles.runInterface}>
-          <View style={styles.statsContainer}>
-            <View style={styles.stat}>
-              <Text style={styles.statLabel}>Temps</Text>
-              <Text style={styles.statValue}>{formatTime(elapsedTime)}</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statLabel}>Distance</Text>
-              <Text style={styles.statValue}>{(distance / 1000).toFixed(2)} km</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statLabel}>Vitesse</Text>
-              <Text style={styles.statValue}>{speed.toFixed(1)} km/h</Text>
-            </View>
-          </View>
-          
-          <View style={styles.controlsContainer}>
-            {!isRunning ? (
-              <TouchableOpacity 
-                style={[styles.startButton, (!location || isLocationLoading) && styles.startButtonDisabled]} 
-                onPress={startRun}
-                disabled={!location || isLocationLoading}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      
+      <GeoDebugJoystick>
+        <View style={styles.container}>
+          {/* Carte principale */}
+          <View style={styles.mapContainer}>
+            {currentLocation && (
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                initialRegion={currentLocation}
+                showsUserLocation={true}
+                showsMyLocationButton={false}
+                followsUserLocation={isRunning}
+                mapType="standard"
               >
-                <Ionicons name="play" size={30} color="white" />
-                <Text style={styles.buttonText}>
-                  {isLocationLoading ? 'Chargement...' : 'Démarrer'}
-                </Text>
-              </TouchableOpacity>
+                {route.length > 0 && (
+                  <Polyline
+                    coordinates={route}
+                    strokeColor="#4CAF50"
+                    strokeWidth={4}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                )}
+                
+                {route.length > 0 && (
+                  <Marker
+                    coordinate={route[0]}
+                    title="Départ"
+                    pinColor="#4CAF50"
+                  />
+                )}
+              </MapView>
+            )}
+          </View>
+
+          {/* Stats en cours de course */}
+          {isRunning && (
+            <View style={styles.statsOverlay}>
+              <LinearGradient
+                colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.6)']}
+                style={styles.statsContainer}
+              >
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{(runData.distance / 1000).toFixed(2)}</Text>
+                  <Text style={styles.statLabel}>km</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{Math.floor(runData.duration / 60)}:{(runData.duration % 60).toString().padStart(2, '0')}</Text>
+                  <Text style={styles.statLabel}>temps</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{runData.avgSpeed.toFixed(1)}</Text>
+                  <Text style={styles.statLabel}>km/h</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
+
+          {/* Bouton centrer */}
+          <TouchableOpacity 
+            style={styles.centerButton} 
+            onPress={centerOnUser}
+          >
+            <Ionicons name="locate" size={24} color={currentLocation ? "#4CAF50" : "#666"} />
+          </TouchableOpacity>
+
+          {/* Navigation bottom avec SafeArea */}
+          <BottomButtonArea>
+            {!isRunning ? (
+              <View style={styles.navigationMenu}>
+                <TouchableOpacity onPress={handleHistoryPress} style={styles.navButton}>
+                  <Ionicons name="list" size={24} color="rgba(255,255,255,0.8)" />
+                  <Text style={styles.navButtonText}>Historique</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  onPress={startRun} 
+                  style={[styles.startButton, !locationPermission && styles.startButtonDisabled]}
+                  disabled={!locationPermission}
+                >
+                  <LinearGradient
+                    colors={locationPermission ? ['#4CAF50', '#45a049'] : ['#666', '#555']}
+                    style={styles.startButtonGradient}
+                  >
+                    <Ionicons name="play" size={24} color="white" />
+                    <Text style={styles.startButtonText}>START</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={handleLogoutPress} style={styles.navButton}>
+                  <Ionicons name="log-out" size={24} color="rgba(255,255,255,0.8)" />
+                  <Text style={styles.navButtonText}>Déconnexion</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <View style={styles.runningControls}>
                 <TouchableOpacity 
-                  style={[styles.controlButton, styles.pauseButton]} 
-                  onPress={isPaused ? resumeRun : pauseRun}
+                  onPress={isPaused ? resumeRun : pauseRun} 
+                  style={[styles.controlButton, isPaused ? styles.playButton : styles.pauseButton]}
                 >
-                  <Ionicons name={isPaused ? "play" : "pause"} size={24} color="white" />
+                  <Ionicons name={isPaused ? "play" : "pause"} size={28} color="white" />
                 </TouchableOpacity>
                 
-                <TouchableOpacity 
-                  style={[styles.controlButton, styles.stopButton]} 
-                  onPress={stopRun}
-                >
-                  <Ionicons name="stop" size={24} color="white" />
+                <TouchableOpacity onPress={stopRun} style={[styles.controlButton, styles.stopButton]}>
+                  <Ionicons name="stop" size={28} color="white" />
                 </TouchableOpacity>
               </View>
             )}
-          </View>
-        </View>
-        
-        <View style={styles.navigationMenu}>
-          <TouchableOpacity 
-            style={styles.navButton}
-            onPress={() => navigation.navigate('RunHistory')}
-          >
-            <Ionicons name="list" size={24} color="white" />
-            <Text style={styles.navButtonText}>Historique</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.navButton}
-            onPress={logout}
-          >
-            <Ionicons name="log-out-outline" size={24} color="white" />
-            <Text style={styles.navButtonText}>Déconnexion</Text>
-          </TouchableOpacity>
-        </View>
-        
-        {location && mapInitialized && (
-          <TouchableOpacity 
-            style={styles.centerButton}
-            onPress={() => {
-              setFollowUser(true);
-              if (location && mapRef.current) {
-                mapRef.current.animateToRegion({
-                  latitude: location.coords.latitude,
-                  longitude: location.coords.longitude,
-                  latitudeDelta: 0.005,
-                  longitudeDelta: 0.005,
-                }, 1000);
-              }
-            }}
-          >
-            <Ionicons name="locate" size={24} color={followUser ? "#4CAF50" : "#666"} />
-          </TouchableOpacity>
-        )}
 
-        <LoadingOverlay
-          isVisible={isLocationLoading}
-          message={loadingMessage}
-          runs={savedRuns}
-        />
-      </View>
-    </GeoDebugJoystick>
+            {/* Info utilisateur */}
+            {user && (
+              <View style={styles.userInfoArea}>
+                <Text style={styles.userInfoText}>
+                  Connecté : {user.username || user.email}
+                </Text>
+              </View>
+            )}
+          </BottomButtonArea>
+
+          <LoadingOverlay
+            isVisible={isLocationLoading}
+            message={loadingMessage}
+            runs={savedRuns}
+          />
+        </View>
+      </GeoDebugJoystick>
+    </SafeAreaView>
   );
 }
 
-// NAVIGATION PRINCIPALE
+// Navigation principale
 export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator 
-        initialRouteName="AuthCheck"
+        initialRouteName="Splash"
         screenOptions={{ headerShown: false }}
       >
-        <Stack.Screen name="AuthCheck" component={AuthCheckScreen} />
+        <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="Main" component={MainRunScreen} />
         <Stack.Screen name="RunHistory" component={RunHistoryScreen} />
       </Stack.Navigator>
@@ -914,127 +651,146 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  // Styles AuthCheck
-  authCheckContainer: {
-    flex: 1,
-  },
-  authCheckGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  authCheckText: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: 'white',
-    marginTop: 20,
-    letterSpacing: 2,
-  },
-
-  // Styles Login
-  loginContainer: {
-    flex: 1,
-  },
-  loginGradient: {
-    flex: 1,
-  },
-  loginScrollView: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  logoBackground: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  logoText: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: 'white',
-    letterSpacing: 2,
-  },
-  logoSubtext: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 4,
-  },
-  formContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 25,
-    padding: 4,
-    marginBottom: 24,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 20,
-  },
-  toggleButtonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  toggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.6)',
-  },
-  toggleTextActive: {
-    color: 'white',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: 'white',
-    marginLeft: 12,
-  },
-  authButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    marginTop: 8,
-  },
-  authButtonDisabled: {
-    opacity: 0.6,
-  },
-  authButtonGradient: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  authButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: 'white',
-  },
-
-  // Styles App
   container: {
     flex: 1,
+    backgroundColor: '#0F0F23',
+  },
+  mapContainer: {
+    flex: 1,
+  },
+  map: {
+    flex: 1,
+  },
+  statsOverlay: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    left: 20,
+    right: 20,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 15,
+    borderRadius: 12,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  centerButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 100 : 80,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  bottomSafeArea: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+  },
+  bottomGradient: {
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  navigationMenu: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  navButton: {
+    alignItems: 'center',
+    padding: 10,
+  },
+  navButtonText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  startButton: {
+    borderRadius: 35,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  startButtonDisabled: {
+    opacity: 0.6,
+  },
+  startButtonGradient: {
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  runningControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 30,
+    paddingVertical: 10,
+  },
+  controlButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  pauseButton: {
+    backgroundColor: '#FF9800',
+  },
+  playButton: {
+    backgroundColor: '#4CAF50',
+  },
+  stopButton: {
+    backgroundColor: '#f44336',
+  },
+  userInfoArea: {
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  userInfoText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 11,
+    textAlign: 'center',
   },
   loadingOverlay: {
     position: 'absolute',
@@ -1047,7 +803,7 @@ const styles = StyleSheet.create({
   loadingGradient: {
     flex: 1,
     padding: 20,
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
   },
   loadingHeader: {
     alignItems: 'center',
@@ -1069,51 +825,33 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  progressContainer: {
-    width: width * 0.6,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#6366F1',
-    borderRadius: 2,
-  },
   runsContainer: {
     flex: 1,
-    marginTop: 20,
   },
   runsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 16,
+    color: 'white',
+    marginBottom: 15,
     textAlign: 'center',
   },
-  runsScrollView: {
-    flex: 1,
-  },
   runPreview: {
-    marginBottom: 12,
+    marginBottom: 15,
     borderRadius: 12,
     overflow: 'hidden',
   },
   runPreviewGradient: {
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 15,
   },
   runPreviewHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   runPreviewDate: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
-    marginLeft: 8,
   },
   runPreviewStats: {
     flexDirection: 'row',
@@ -1124,216 +862,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   runStatValue: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: 'white',
   },
   runStatLabel: {
     fontSize: 10,
     color: 'rgba(255, 255, 255, 0.6)',
     marginTop: 2,
-  },
-  encouragementContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    marginTop: 20,
-  },
-  encouragementText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  errorContainer: {
-    flex: 1,
-  },
-  errorGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  errorTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: 'white',
-    marginTop: 24,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  retryButton: {
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  retryButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  mapPlaceholder: {
-    flex: 1,
-  },
-  mapPlaceholderGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mapPlaceholderText: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  map: {
-    flex: 1,
-  },
-  userMarker: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#4CAF50',
-    borderWidth: 3,
-    borderColor: 'white',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  userMarkerInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'white',
-    position: 'absolute',
-    top: 3,
-    left: 3,
-  },
-  runInterface: {
-    position: 'absolute',
-    bottom: 80,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    paddingTop: 20,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  stat: {
-    alignItems: 'center',
-  },
-  statLabel: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    marginBottom: 5,
-  },
-  statValue: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  controlsContainer: {
-    alignItems: 'center',
-  },
-  startButton: {
-    backgroundColor: '#4CAF50',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 30,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  startButtonDisabled: {
-    backgroundColor: '#666',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
-  runningControls: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-  },
-  controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  pauseButton: {
-    backgroundColor: '#FF9800',
-  },
-  stopButton: {
-    backgroundColor: '#f44336',
-  },
-  navigationMenu: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    paddingBottom: 25,
-  },
-  navButton: {
-    alignItems: 'center',
-    padding: 10,
-  },
-  navButtonText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  centerButton: {
-    position: 'absolute',
-    top: 100,
-    right: 20,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
   },
 });

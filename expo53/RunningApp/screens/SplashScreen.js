@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ export default function SplashScreen({ navigation }) {
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const logoRotateAnim = useRef(new Animated.Value(0)).current;
+  const dotsAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     startAnimations();
@@ -54,30 +55,62 @@ export default function SplashScreen({ navigation }) {
         useNativeDriver: true,
       })
     ).start();
+
+    // Animation des points de chargement
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(dotsAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(dotsAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   };
 
   const initializeApp = async () => {
+    console.log('🚀 [SPLASH] Début initialisation app...');
+    
     try {
       // Vérifier les permissions géolocalisation
+      console.log('📍 [SPLASH] Demande permission géolocalisation...');
       const { status } = await Location.requestForegroundPermissionsAsync();
+      console.log('📍 [SPLASH] Permission géoloc:', status);
       
-      // Vérifier l'authentification
+      // Vérifier l'authentification avec la vraie méthode AuthService
+      console.log('🔐 [SPLASH] Vérification authentification...');
       const isAuthenticated = await AuthService.isAuthenticated();
+      console.log('✅ [SPLASH] Résultat authentification:', isAuthenticated);
+      
+      console.log('⏱️ [SPLASH] Attente animation (2.5s)...');
       
       // Délai minimum pour l'animation
       setTimeout(() => {
+        console.log('🎯 [SPLASH] Navigation décision:');
+        console.log('   - Géoloc:', status);
+        console.log('   - Auth:', isAuthenticated);
+        
         if (status !== 'granted') {
-          navigation.replace('Login'); // Rediriger vers login si pas de géoloc
+          console.log('🔄 [SPLASH] Redirection -> Login (pas de géoloc)');
+          navigation.replace('Login');
         } else if (isAuthenticated) {
-          navigation.replace('Main'); // Utilisateur connecté
+          console.log('🔄 [SPLASH] Redirection -> Main (connecté)');
+          navigation.replace('Main');
         } else {
-          navigation.replace('Login'); // Pas connecté
+          console.log('🔄 [SPLASH] Redirection -> Login (pas connecté)');
+          navigation.replace('Login');
         }
       }, 2500);
       
     } catch (error) {
-      console.error('Erreur initialisation:', error);
+      console.error('💥 [SPLASH] Erreur initialisation:', error);
       setTimeout(() => {
+        console.log('🔄 [SPLASH] Redirection -> Login (erreur)');
         navigation.replace('Login');
       }, 2500);
     }
@@ -86,6 +119,11 @@ export default function SplashScreen({ navigation }) {
   const logoRotate = logoRotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
+  });
+
+  const dotsOpacity = dotsAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 1],
   });
 
   return (
@@ -109,83 +147,44 @@ export default function SplashScreen({ navigation }) {
       >
         {/* Logo principal */}
         <View style={styles.logoContainer}>
+          <View style={styles.decorativeRing1} />
+          <View style={styles.decorativeRing2} />
+          
           <Animated.View
             style={[
-              styles.logoBackground,
+              styles.logoGradient,
               {
                 transform: [{ rotate: logoRotate }],
               },
             ]}
           >
             <LinearGradient
-              colors={['#4CAF50', '#45a049', '#2E7D32']}
+              colors={['#4CAF50', '#45a049', '#388e3c']}
               style={styles.logoGradient}
             >
-              <Ionicons name="fitness" size={60} color="white" />
+              <Ionicons name="flash" size={48} color="white" />
             </LinearGradient>
           </Animated.View>
-          
-          {/* Cercles décoratifs */}
-          <View style={styles.decorativeRing1} />
-          <View style={styles.decorativeRing2} />
         </View>
 
-        {/* Titre de l'app */}
+        {/* Titre et sous-titre */}
         <Text style={styles.appTitle}>RunTracker</Text>
-        <Text style={styles.appSubtitle}>Votre compagnon de course intelligent</Text>
+        <Text style={styles.appSubtitle}>
+          Votre compagnon de course intelligent
+        </Text>
 
-        {/* Indicateurs de chargement */}
+        {/* Indicateur de chargement */}
         <View style={styles.loadingContainer}>
-          <View style={styles.loadingDots}>
-            <Animated.View
-              style={[
-                styles.dot,
-                {
-                  opacity: fadeAnim,
-                  transform: [
-                    {
-                      scale: fadeAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.5, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-            <Animated.View
-              style={[
-                styles.dot,
-                {
-                  opacity: fadeAnim,
-                  transform: [
-                    {
-                      scale: fadeAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.5, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-            <Animated.View
-              style={[
-                styles.dot,
-                {
-                  opacity: fadeAnim,
-                  transform: [
-                    {
-                      scale: fadeAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.5, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-          </View>
+          <Animated.View
+            style={[
+              styles.loadingDots,
+              { opacity: dotsOpacity },
+            ]}
+          >
+            <View style={[styles.dot, { backgroundColor: '#4CAF50' }]} />
+            <View style={[styles.dot, { backgroundColor: '#4CAF50' }]} />
+            <View style={[styles.dot, { backgroundColor: '#4CAF50' }]} />
+          </Animated.View>
           <Text style={styles.loadingText}>Initialisation...</Text>
         </View>
 
@@ -193,22 +192,22 @@ export default function SplashScreen({ navigation }) {
         <View style={styles.featuresContainer}>
           <View style={styles.feature}>
             <Ionicons name="location" size={20} color="#4CAF50" />
-            <Text style={styles.featureText}>GPS précis</Text>
+            <Text style={styles.featureText}>GPS</Text>
           </View>
           <View style={styles.feature}>
-            <Ionicons name="fitness" size={20} color="#2196F3" />
-            <Text style={styles.featureText}>Coach IA</Text>
+            <Ionicons name="analytics" size={20} color="#4CAF50" />
+            <Text style={styles.featureText}>Stats</Text>
           </View>
           <View style={styles.feature}>
-            <Ionicons name="analytics" size={20} color="#FF9800" />
-            <Text style={styles.featureText}>Statistiques</Text>
+            <Ionicons name="trophy" size={20} color="#4CAF50" />
+            <Text style={styles.featureText}>Records</Text>
           </View>
         </View>
       </Animated.View>
 
       {/* Version */}
       <View style={styles.versionContainer}>
-        <Text style={styles.versionText}>Version 1.0.0</Text>
+        <Text style={styles.versionText}>v1.0.0</Text>
       </View>
     </LinearGradient>
   );
@@ -228,8 +227,6 @@ const styles = StyleSheet.create({
   logoContainer: {
     position: 'relative',
     marginBottom: 40,
-  },
-  logoBackground: {
     width: 120,
     height: 120,
     borderRadius: 60,
