@@ -37,7 +37,7 @@ const SplashScreen = ({ navigation }) => {
         if (isAuthenticated) {
           navigation.replace('Main');
         } else {
-          navigation.replace('Auth');
+          navigation.replace('Login'); // ✅ CORRIGÉ: 'Login' au lieu de 'Auth'
         }
       }, 1500);
 
@@ -97,7 +97,7 @@ const SplashScreen = ({ navigation }) => {
       console.error('Erreur initialisation:', error);
       // En cas d'erreur, rediriger vers l'auth
       setTimeout(() => {
-        navigation.replace('Auth');
+        navigation.replace('Login'); // ✅ CORRIGÉ: 'Login' au lieu de 'Auth'
       }, 2000);
     }
   };

@@ -64,6 +64,7 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   };
 
+
   const login = async (email, password) => {
     console.log('🔐 Starting login process for:', email);
     try {
@@ -72,14 +73,14 @@ export const AuthProvider = ({ children }) => {
       
       const response = await apiService.login(email, password);
       console.log('✅ Login API response:', {
-        hasToken: !!response.token,
+        hasToken: !!response.access_token, // ✅ CORRIGÉ: access_token au lieu de token
         hasUser: !!response.user,
         message: response.message
       });
       
-      if (response.token) {
+      if (response.access_token) { // ✅ CORRIGÉ: access_token au lieu de token
         console.log('💾 Storing tokens...');
-        await AsyncStorage.setItem('authToken', response.token);
+        await AsyncStorage.setItem('authToken', response.access_token); // ✅ CORRIGÉ
         if (response.refreshToken) {
           await AsyncStorage.setItem('refreshToken', response.refreshToken);
         }
