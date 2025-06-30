@@ -55,43 +55,36 @@ const ProposedRunsScreen = ({ navigation }) => {
   const [sortBy, setSortBy] = useState('name'); // name, distance, duration, difficulty
   const [sortOrder, setSortOrder] = useState('asc'); // asc, desc
 
+  // Charger les données au montage
   useEffect(() => {
     loadRoutes();
   }, []);
 
+  // Mettre à jour les routes filtrées quand les données changent
   useEffect(() => {
     applyFiltersAndSort();
-  }, [routes, searchTerm, filters, sortBy, sortOrder]);
+  }, [routes, searchTerm, sortBy, sortOrder, filters]);
 
-  // Fonction de chargement des parcours
-    const loadRoutes = useCallback(async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        console.log('🗺️ Chargement des parcours proposés...');
-
-        // ✅ CORRIGÉ: Utilisation de getRoutes au lieu de getActiveRoutes
-        const routesData = await apiService.getRoutes();
-        console.log('✅ Parcours chargés:', routesData);
-
-        if (Array.isArray(routesData)) {
-          setRoutes(routesData);
-          console.log(`📊 ${routesData.length} parcours chargés`);
-        } else if (routesData?.routes && Array.isArray(routesData.routes)) {
-          setRoutes(routesData.routes);
-          console.log(`📊 ${routesData.routes.length} parcours chargés`);
-        } else {
-          console.warn('⚠️ Structure de données inattendue:', routesData);
-          setRoutes([]);
-        }
-      } catch (error) {
-        console.error('❌ Erreur chargement parcours:', error);
-        setError(error.message || 'Erreur de chargement des parcours');
+  const loadRoutes = async () => {
+    try {
+      setError(null);
+      const response = await apiService.getProposedRoutes();
+      
+      if (response?.status === 'success' && response?.data) {
+        setRoutes(response.data);
+      } else if (Array.isArray(response)) {
+        setRoutes(response);
+      } else {
         setRoutes([]);
-      } finally {
-        setLoading(false);
       }
-    }, []);
+    } catch (error) {
+      console.error('Erreur chargement routes:', error);
+      setError('Erreur de chargement des parcours');
+      Alert.alert('Erreur', 'Impossible de charger les parcours proposés');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -102,143 +95,75 @@ const ProposedRunsScreen = ({ navigation }) => {
   const applyFiltersAndSort = () => {
     let filtered = [...routes];
 
-    // Filtre par recherche textuelle
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(route => 
-        route.name?.toLowerCase().includes(searchLower) ||
-        route.description?.toLowerCase().includes(searchLower) ||
-        route.difficulty?.toLowerCase().includes(searchLower)
+    // Filtrage par terme de recherche
+    if (searchTerm) {
+      filtered = filtered.filter(route =>
+        route.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        route.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        route.location?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Filtre par difficulté
+    // Filtrage par difficulté
     if (filters.difficulty !== 'all') {
       filtered = filtered.filter(route => route.difficulty === filters.difficulty);
     }
 
-    // Filtre par distance
+    // Filtrage par distance
     if (filters.minDistance) {
-      const minDist = parseFloat(filters.minDistance);
-      filtered = filtered.filter(route => (route.distance || 0) >= minDist);
+      const min = parseFloat(filters.minDistance);
+      filtered = filtered.filter(route => route.distance >= min);
     }
-
     if (filters.maxDistance) {
-      const maxDist = parseFloat(filters.maxDistance);
-      filtered = filtered.filter(route => (route.distance || 0) <= maxDist);
+      const max = parseFloat(filters.maxDistance);
+      filtered = filtered.filter(route => route.distance <= max);
     }
 
-    // Filtre par durée
+    // Filtrage par durée
     if (filters.minDuration) {
-      const minDur = parseInt(filters.minDuration) * 60; // Convertir en secondes
-      filtered = filtered.filter(route => (route.estimated_duration || 0) >= minDur);
+      const min = parseInt(filters.minDuration);
+      filtered = filtered.filter(route => route.estimatedDuration >= min);
     }
-
     if (filters.maxDuration) {
-      const maxDur = parseInt(filters.maxDuration) * 60;
-      filtered = filtered.filter(route => (route.estimated_duration || 0) <= maxDur);
+      const max = parseInt(filters.maxDuration);
+      filtered = filtered.filter(route => route.estimatedDuration <= max);
     }
 
     // Tri
     filtered.sort((a, b) => {
-      let aValue, bValue;
-
+      let aVal, bVal;
+      
       switch (sortBy) {
+        case 'name':
+          aVal = a.name || '';
+          bVal = b.name || '';
+          break;
         case 'distance':
-          aValue = a.distance || 0;
-          bValue = b.distance || 0;
+          aVal = a.distance || 0;
+          bVal = b.distance || 0;
           break;
         case 'duration':
-          aValue = a.estimated_duration || 0;
-          bValue = b.estimated_duration || 0;
+          aVal = a.estimatedDuration || 0;
+          bVal = b.estimatedDuration || 0;
           break;
         case 'difficulty':
           const difficultyOrder = { 'Facile': 1, 'Moyen': 2, 'Difficile': 3 };
-          aValue = difficultyOrder[a.difficulty] || 0;
-          bValue = difficultyOrder[b.difficulty] || 0;
+          aVal = difficultyOrder[a.difficulty] || 0;
+          bVal = difficultyOrder[b.difficulty] || 0;
           break;
-        case 'name':
         default:
-          aValue = a.name?.toLowerCase() || '';
-          bValue = b.name?.toLowerCase() || '';
-          break;
+          aVal = a.name || '';
+          bVal = b.name || '';
       }
 
-      if (sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
+      if (typeof aVal === 'string') {
+        return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       } else {
-        return aValue < bValue ? 1 : -1;
+        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
       }
     });
 
     setFilteredRoutes(filtered);
-  };
-
-  const formatDuration = (seconds) => {
-    if (!seconds) return '0min';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes}min`;
-    }
-    return `${minutes}min`;
-  };
-
-  const getDifficultyColor = (difficulty) => {
-    switch (difficulty) {
-      case 'Facile': return '#4CAF50';
-      case 'Moyen': return '#FF9800';
-      case 'Difficile': return '#f44336';
-      default: return '#666';
-    }
-  };
-
-  const getDifficultyIcon = (difficulty) => {
-    switch (difficulty) {
-      case 'Facile': return 'leaf-outline';
-      case 'Moyen': return 'flash-outline';
-      case 'Difficile': return 'flame-outline';
-      default: return 'help-outline';
-    }
-  };
-
-  const handleRoutePress = (route) => {
-    setSelectedRoute(route);
-    setShowRouteModal(true);
-  };
-
-  const handleStartRoute = (route) => {
-    setShowRouteModal(false);
-    Alert.alert(
-      'Démarrer le parcours',
-      `Voulez-vous commencer "${route.name}" ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { 
-          text: 'Démarrer', 
-          onPress: () => {
-            // Navigation vers l'écran de course avec les données du parcours
-            navigation.navigate('Run', { proposedRoute: route });
-          }
-        }
-      ]
-    );
-  };
-
-  const resetFilters = () => {
-    setFilters({
-      difficulty: 'all',
-      minDistance: '',
-      maxDistance: '',
-      minDuration: '',
-      maxDuration: '',
-    });
-    setSearchTerm('');
-  };
-
-  const getSortIcon = (field) => {
-    if (sortBy !== field) return 'swap-vertical-outline';
-    return sortOrder === 'asc' ? 'chevron-up' : 'chevron-down';
   };
 
   const toggleSort = (field) => {
@@ -250,188 +175,208 @@ const ProposedRunsScreen = ({ navigation }) => {
     }
   };
 
-  const renderRouteItem = ({ item: route }) => (
-    <TouchableOpacity
-      style={styles.routeCard}
-      onPress={() => handleRoutePress(route)}
-      activeOpacity={0.7}
-    >
+  const getSortIcon = (field) => {
+    if (sortBy !== field) return 'remove-outline';
+    return sortOrder === 'asc' ? 'chevron-up' : 'chevron-down';
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      difficulty: 'all',
+      minDistance: '',
+      maxDistance: '',
+      minDuration: '',
+      maxDuration: '',
+    });
+  };
+
+  const getDifficultyColor = (difficulty) => {
+    switch (difficulty?.toLowerCase()) {
+      case 'facile': return '#4CAF50';
+      case 'moyen': return '#FF9800';
+      case 'difficile': return '#f44336';
+      default: return '#757575';
+    }
+  };
+
+  const formatDuration = (minutes) => {
+    if (!minutes) return 'N/A';
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return `${hours}h${mins > 0 ? ` ${mins}min` : ''}`;
+    }
+    return `${mins}min`;
+  };
+
+  const openRouteDetails = (route) => {
+    setSelectedRoute(route);
+    setShowRouteModal(true);
+  };
+
+  const renderRouteItem = ({ item }) => (
+    <TouchableOpacity style={styles.routeCard} onPress={() => openRouteDetails(item)}>
       <View style={styles.routeHeader}>
-        <View style={styles.routeInfo}>
-          <Text style={styles.routeName}>{route.name}</Text>
-          <Text style={styles.routeDescription} numberOfLines={2}>
-            {route.description}
-          </Text>
-        </View>
-        <View style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(route.difficulty) }]}>
-          <Ionicons name={getDifficultyIcon(route.difficulty)} size={14} color="white" />
-          <Text style={styles.difficultyText}>{route.difficulty}</Text>
+        <Text style={styles.routeName}>{item.name || 'Parcours sans nom'}</Text>
+        <View style={[
+          styles.difficultyBadge, 
+          { backgroundColor: getDifficultyColor(item.difficulty) }
+        ]}>
+          <Text style={styles.difficultyText}>{item.difficulty || 'N/A'}</Text>
         </View>
       </View>
+
+      <Text style={styles.routeDescription} numberOfLines={2}>
+        {item.description || 'Aucune description disponible'}
+      </Text>
 
       <View style={styles.routeStats}>
         <View style={styles.statItem}>
-          <Ionicons name="navigate-outline" size={16} color="#666" />
-          <Text style={styles.statText}>{formatDistance(route.distance || 0)}</Text>
+          <Ionicons name="location-outline" size={16} color="#666" />
+          <Text style={styles.statText}>{formatDistance(item.distance || 0)}</Text>
         </View>
         <View style={styles.statItem}>
           <Ionicons name="time-outline" size={16} color="#666" />
-          <Text style={styles.statText}>{formatDuration(route.estimated_duration)}</Text>
+          <Text style={styles.statText}>{formatDuration(item.estimatedDuration)}</Text>
         </View>
-        {route.elevation_gain > 0 && (
+        {item.elevation && (
           <View style={styles.statItem}>
             <Ionicons name="trending-up-outline" size={16} color="#666" />
-            <Text style={styles.statText}>{route.elevation_gain}m D+</Text>
+            <Text style={styles.statText}>{item.elevation}m</Text>
           </View>
         )}
       </View>
+
+      {item.location && (
+        <View style={styles.locationContainer}>
+          <Ionicons name="pin-outline" size={14} color="#999" />
+          <Text style={styles.locationText}>{item.location}</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
-  const renderRouteModal = () => {
-    if (!selectedRoute) return null;
+  const renderRouteModal = () => (
+    <Modal
+      visible={showRouteModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowRouteModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.routeModal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{selectedRoute?.name}</Text>
+            <TouchableOpacity onPress={() => setShowRouteModal(false)}>
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
 
-    const waypoints = selectedRoute.waypoints || [];
-
-    return (
-      <Modal
-        visible={showRouteModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowRouteModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.routeModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{selectedRoute.name}</Text>
-              <TouchableOpacity onPress={() => setShowRouteModal(false)}>
-                <Ionicons name="close" size={24} color="#666" />
-              </TouchableOpacity>
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.routeDetailHeader}>
+              <View style={[
+                styles.difficultyBadge, 
+                { backgroundColor: getDifficultyColor(selectedRoute?.difficulty) }
+              ]}>
+                <Text style={styles.difficultyText}>{selectedRoute?.difficulty}</Text>
+              </View>
             </View>
 
-            <ScrollView style={styles.modalContent}>
-              {/* Minimap ou placeholder */}
-              <View style={styles.mapContainer}>
-                {MapView && waypoints.length > 0 ? (
-                  <MapView
-                    style={styles.miniMap}
-                    region={{
-                      latitude: waypoints[0].lat,
-                      longitude: waypoints[0].lng,
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    }}
-                    scrollEnabled={false}
-                    zoomEnabled={false}
-                  >
-                    {waypoints.map((waypoint, index) => (
-                      <Marker
-                        key={index}
-                        coordinate={{
-                          latitude: waypoint.lat,
-                          longitude: waypoint.lng,
-                        }}
-                        title={waypoint.name}
-                      />
-                    ))}
-                    {waypoints.length > 1 && (
-                      <Polyline
-                        coordinates={waypoints.map(wp => ({
-                          latitude: wp.lat,
-                          longitude: wp.lng,
-                        }))}
-                        strokeColor="#4CAF50"
-                        strokeWidth={3}
-                      />
-                    )}
-                  </MapView>
-                ) : (
-                  <View style={styles.mapPlaceholder}>
-                    <Ionicons name="map-outline" size={48} color="#ccc" />
-                    <Text style={styles.mapPlaceholderText}>
-                      {MapView ? 'Aperçu du parcours' : 'Carte non disponible'}
-                    </Text>
-                  </View>
-                )}
-              </View>
+            <Text style={styles.routeDetailDescription}>
+              {selectedRoute?.description || 'Aucune description disponible'}
+            </Text>
 
-              {/* Description */}
-              <View style={styles.descriptionSection}>
-                <Text style={styles.sectionTitle}>Description</Text>
-                <Text style={styles.descriptionText}>{selectedRoute.description}</Text>
+            <View style={styles.routeDetailStats}>
+              <View style={styles.detailStatCard}>
+                <Ionicons name="location" size={24} color="#4CAF50" />
+                <Text style={styles.detailStatValue}>{formatDistance(selectedRoute?.distance || 0)}</Text>
+                <Text style={styles.detailStatLabel}>Distance</Text>
               </View>
-
-              {/* Statistiques détaillées */}
-              <View style={styles.statsSection}>
-                <Text style={styles.sectionTitle}>Détails du parcours</Text>
-                <View style={styles.statsGrid}>
-                  <View style={styles.statCard}>
-                    <Ionicons name="navigate-outline" size={24} color="#4CAF50" />
-                    <Text style={styles.statValue}>{formatDistance(selectedRoute.distance || 0)}</Text>
-                    <Text style={styles.statLabel}>Distance</Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Ionicons name="time-outline" size={24} color="#2196F3" />
-                    <Text style={styles.statValue}>{formatDuration(selectedRoute.estimated_duration)}</Text>
-                    <Text style={styles.statLabel}>Durée estimée</Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Ionicons name={getDifficultyIcon(selectedRoute.difficulty)} size={24} color={getDifficultyColor(selectedRoute.difficulty)} />
-                    <Text style={styles.statValue}>{selectedRoute.difficulty}</Text>
-                    <Text style={styles.statLabel}>Difficulté</Text>
-                  </View>
-                  {selectedRoute.elevation_gain > 0 && (
-                    <View style={styles.statCard}>
-                      <Ionicons name="trending-up-outline" size={24} color="#FF9800" />
-                      <Text style={styles.statValue}>{selectedRoute.elevation_gain}m</Text>
-                      <Text style={styles.statLabel}>Dénivelé +</Text>
-                    </View>
-                  )}
-                </View>
+              <View style={styles.detailStatCard}>
+                <Ionicons name="time" size={24} color="#4CAF50" />
+                <Text style={styles.detailStatValue}>{formatDuration(selectedRoute?.estimatedDuration)}</Text>
+                <Text style={styles.detailStatLabel}>Durée estimée</Text>
               </View>
-
-              {/* Points de passage */}
-              {waypoints.length > 0 && (
-                <View style={styles.waypointsSection}>
-                  <Text style={styles.sectionTitle}>Points de passage</Text>
-                  {waypoints.map((waypoint, index) => (
-                    <View key={index} style={styles.waypointItem}>
-                      <View style={styles.waypointNumber}>
-                        <Text style={styles.waypointNumberText}>{index + 1}</Text>
-                      </View>
-                      <Text style={styles.waypointName}>{waypoint.name}</Text>
-                    </View>
-                  ))}
+              {selectedRoute?.elevation && (
+                <View style={styles.detailStatCard}>
+                  <Ionicons name="trending-up" size={24} color="#4CAF50" />
+                  <Text style={styles.detailStatValue}>{selectedRoute.elevation}m</Text>
+                  <Text style={styles.detailStatLabel}>Dénivelé</Text>
                 </View>
               )}
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.startButton}
-                onPress={() => handleStartRoute(selectedRoute)}
-              >
-                <Ionicons name="play" size={20} color="white" />
-                <Text style={styles.startButtonText}>Commencer ce parcours</Text>
-              </TouchableOpacity>
             </View>
+
+            {selectedRoute?.location && (
+              <View style={styles.locationInfo}>
+                <Ionicons name="pin" size={20} color="#666" />
+                <Text style={styles.locationInfoText}>{selectedRoute.location}</Text>
+              </View>
+            )}
+
+            {/* Carte si disponible */}
+            {MapView && selectedRoute?.coordinates && (
+              <View style={styles.mapContainer}>
+                <MapView
+                  style={styles.map}
+                  initialRegion={{
+                    latitude: selectedRoute.coordinates[0]?.latitude || 0,
+                    longitude: selectedRoute.coordinates[0]?.longitude || 0,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }}
+                >
+                  {selectedRoute.coordinates.length > 0 && (
+                    <>
+                      <Polyline
+                        coordinates={selectedRoute.coordinates}
+                        strokeWidth={3}
+                        strokeColor="#4CAF50"
+                      />
+                      <Marker
+                        coordinate={selectedRoute.coordinates[0]}
+                        title="Départ"
+                        pinColor="green"
+                      />
+                      <Marker
+                        coordinate={selectedRoute.coordinates[selectedRoute.coordinates.length - 1]}
+                        title="Arrivée"
+                        pinColor="red"
+                      />
+                    </>
+                  )}
+                </MapView>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.startRouteButton}
+              onPress={() => {
+                setShowRouteModal(false);
+                navigation.navigate('Run', { selectedRoute });
+              }}
+            >
+              <Ionicons name="play" size={20} color="white" />
+              <Text style={styles.startRouteButtonText}>Commencer ce parcours</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
-    );
-  };
+      </View>
+    </Modal>
+  );
 
   const renderHeader = () => (
-    <View style={styles.listHeader}>
+    <View style={styles.searchContainer}>
       {/* Barre de recherche */}
-      <View style={styles.searchContainer}>
+      <View style={styles.searchInputContainer}>
         <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher un parcours..."
           value={searchTerm}
           onChangeText={setSearchTerm}
-          placeholderTextColor="#999"
+          returnKeyType="search"
         />
         {searchTerm ? (
           <TouchableOpacity onPress={() => setSearchTerm('')}>
@@ -542,7 +487,7 @@ const ProposedRunsScreen = ({ navigation }) => {
       {/* Modal des détails de parcours */}
       {renderRouteModal()}
 
-      {/* Modal de filtres */}
+      {/* Modal de filtres - CORRIGÉ */}
       <Modal
         visible={showFilters}
         transparent={true}
@@ -559,7 +504,7 @@ const ProposedRunsScreen = ({ navigation }) => {
             </View>
 
             <ScrollView style={styles.filtersContent}>
-              {/* Filtre par difficulté */}
+              {/* Filtre par difficulté - CORRIGÉ */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterLabel}>Difficulté</Text>
                 <View style={styles.filterOptions}>
@@ -660,13 +605,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 10 : 20,
-    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight || 0,
+    paddingBottom: 16,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -679,31 +624,30 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   headerButton: {
-    padding: 8,
+    padding: 4,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 32,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: '#666',
-  },
-  listHeader: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    textAlign: 'center',
   },
   searchContainer: {
+    padding: 16,
+    backgroundColor: 'white',
+  },
+  searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     marginBottom: 16,
   },
   searchIcon: {
@@ -711,139 +655,147 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
+    paddingVertical: 12,
     fontSize: 16,
     color: '#333',
   },
   controlsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginRight: 8,
   },
   sortText: {
-    fontSize: 12,
-    color: '#666',
     marginLeft: 4,
+    fontSize: 14,
+    color: '#666',
   },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingVertical: 8,
     backgroundColor: '#e8f5e8',
+    borderRadius: 8,
+    marginLeft: 'auto',
   },
   filterText: {
-    fontSize: 12,
-    color: '#4CAF50',
     marginLeft: 4,
+    fontSize: 14,
+    color: '#4CAF50',
     fontWeight: '600',
   },
   resultsCount: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
-    textAlign: 'center',
+    fontStyle: 'italic',
   },
   routeCard: {
     backgroundColor: 'white',
     marginHorizontal: 16,
-    marginVertical: 4,
-    borderRadius: 12,
+    marginBottom: 12,
+    borderRadius: 16,
     padding: 16,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   routeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  routeInfo: {
-    flex: 1,
-    marginRight: 12,
+    marginBottom: 8,
   },
   routeName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 4,
-  },
-  routeDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
+    flex: 1,
+    marginRight: 12,
   },
   difficultyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   difficultyText: {
-    fontSize: 10,
     color: 'white',
+    fontSize: 12,
     fontWeight: 'bold',
-    marginLeft: 4,
+  },
+  routeDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+    lineHeight: 20,
   },
   routeStats: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 16,
   },
   statText: {
-    fontSize: 12,
-    color: '#666',
     marginLeft: 4,
+    fontSize: 14,
+    color: '#666',
   },
-  emptyContainer: {
-    flexGrow: 1,
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationText: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: '#999',
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    padding: 32,
+  },
+  emptyContainer: {
+    flexGrow: 1,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#666',
     marginTop: 16,
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#4CAF50',
+    marginTop: 16,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 24,
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
   },
   retryButtonText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
@@ -865,122 +817,84 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
+    flex: 1,
   },
   modalContent: {
     flex: 1,
     padding: 16,
   },
-  mapContainer: {
-    height: 200,
-    borderRadius: 12,
-    overflow: 'hidden',
+  routeDetailHeader: {
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
-  miniMap: {
-    width: '100%',
-    height: '100%',
-  },
-  mapPlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e8',
-  },
-  mapPlaceholderText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  descriptionSection: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
+  routeDetailDescription: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  descriptionText: {
-    fontSize: 14,
     color: '#666',
-    lineHeight: 20,
+    lineHeight: 24,
+    marginBottom: 20,
   },
-  statsSection: {
-    marginBottom: 16,
-  },
-  statsGrid: {
+  routeDetailStats: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-around',
+    marginBottom: 20,
   },
-  statCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
+  detailStatCard: {
     alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    minWidth: 80,
   },
-  statValue: {
+  detailStatValue: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
     marginTop: 4,
   },
-  statLabel: {
-    fontSize: 10,
+  detailStatLabel: {
+    fontSize: 12,
     color: '#666',
     marginTop: 2,
   },
-  waypointsSection: {
-    marginBottom: 16,
-  },
-  waypointItem: {
+  locationInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    marginBottom: 20,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
   },
-  waypointNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  waypointNumberText: {
-    fontSize: 12,
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  waypointName: {
+  locationInfoText: {
+    marginLeft: 8,
     fontSize: 14,
-    color: '#333',
+    color: '#666',
+  },
+  mapContainer: {
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  map: {
+    flex: 1,
   },
   modalFooter: {
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
-  startButton: {
-    backgroundColor: '#4CAF50',
+  startRouteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#4CAF50',
     paddingVertical: 16,
     borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
   },
-  startButtonText: {
+  startRouteButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',

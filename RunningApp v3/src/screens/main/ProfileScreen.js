@@ -7,21 +7,21 @@ import {
   Alert,
   Platform,
   StatusBar,
-  SafeAreaView,
   Image,
   Modal,
   TextInput,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native'; // ✅ AJOUTÉ
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { axiosInstance } from '../../services/api';
 
 const ProfileScreen = () => {
-  const navigation = useNavigation(); // ✅ AJOUTÉ
+  const navigation = useNavigation();
   const { user, logout, updateUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -80,11 +80,21 @@ const ProfileScreen = () => {
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         date_of_birth: user.date_of_birth ? new Date(user.date_of_birth) : null,
-        height: user.height ? user.height.toString() : '',
-        weight: user.weight ? user.weight.toString() : '',
+        height: user.height?.toString() || '',
+        weight: user.weight?.toString() || '',
       });
+      
+      if (user.date_of_birth) {
+        setTempDate(new Date(user.date_of_birth));
+      }
     }
   }, [user]);
+
+  const getInitials = () => {
+    const firstName = user?.first_name || '';
+    const lastName = user?.last_name || '';
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || '??';
+  };
 
   const handleEdit = () => {
     setEditing(true);
@@ -92,54 +102,44 @@ const ProfileScreen = () => {
 
   const handleCancel = () => {
     setEditing(false);
-    setProfileData({
-      first_name: user.first_name || '',
-      last_name: user.last_name || '',
-      date_of_birth: user.date_of_birth ? new Date(user.date_of_birth) : null,
-      height: user.height ? user.height.toString() : '',
-      weight: user.weight ? user.weight.toString() : '',
-    });
+    // Restaurer les données originales
+    if (user) {
+      setProfileData({
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        date_of_birth: user.date_of_birth ? new Date(user.date_of_birth) : null,
+        height: user.height?.toString() || '',
+        weight: user.weight?.toString() || '',
+      });
+    }
   };
 
   const handleSave = async () => {
-    setLoading(true);
     try {
-      // Validation des données
-      const errors = [];
+      setLoading(true);
       
-      if (profileData.height && (isNaN(parseFloat(profileData.height)) || parseFloat(profileData.height) <= 0)) {
-        errors.push('Taille invalide');
-      }
-      
-      if (profileData.weight && (isNaN(parseFloat(profileData.weight)) || parseFloat(profileData.weight) <= 0)) {
-        errors.push('Poids invalide');
-      }
-      
-      if (errors.length > 0) {
-        Alert.alert('Erreur de validation', errors.join('\n'));
-        return;
-      }
-
-      const updateData = {
-        first_name: profileData.first_name.trim(),
-        last_name: profileData.last_name.trim(),
+      // Préparer les données à envoyer
+      const dataToSend = {
+        first_name: profileData.first_name,
+        last_name: profileData.last_name,
+        date_of_birth: profileData.date_of_birth ? profileData.date_of_birth.toISOString().split('T')[0] : null,
         height: profileData.height ? parseFloat(profileData.height) : null,
         weight: profileData.weight ? parseFloat(profileData.weight) : null,
-        date_of_birth: profileData.date_of_birth ? profileData.date_of_birth.toISOString().split('T')[0] : null,
       };
 
-      // ✅ CORRIGÉ: Appel API pour mise à jour du profil
-      const updatedUser = await updateProfileCorrect(updateData);
+      console.log('💾 Saving profile data:', dataToSend);
+
+      const updatedUser = await updateProfileCorrect(dataToSend);
       
-      if (updatedUser) {
-        await updateUser(updatedUser); // ✅ CORRIGÉ: suppression du second paramètre
-        setEditing(false);
-        Alert.alert('Succès', 'Profil mis à jour avec succès');
+      if (updateUser) {
+        updateUser(updatedUser);
       }
+      
+      setEditing(false);
+      Alert.alert('Succès', 'Profil mis à jour avec succès');
     } catch (error) {
-      console.error('Erreur mise à jour profil:', error);
-      const message = error.response?.data?.message || error.message || 'Impossible de mettre à jour le profil';
-      Alert.alert('Erreur', message);
+      console.error('❌ Error updating profile:', error);
+      Alert.alert('Erreur', error.message || 'Erreur lors de la mise à jour du profil');
     } finally {
       setLoading(false);
     }
@@ -147,10 +147,10 @@ const ProfileScreen = () => {
 
   const handleImagePicker = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
-      if (!permissionResult.granted) {
-        Alert.alert('Permission refusée', 'Nous avons besoin de votre permission pour accéder à vos photos');
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder à vos photos.');
         return;
       }
 
@@ -159,11 +159,10 @@ const ProfileScreen = () => {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
-        base64: false,
       });
 
-      if (!result.canceled && result.assets && result.assets[0]) {
-        await handleImageUpload(result.assets[0]);
+      if (!result.canceled && result.assets[0]) {
+        await uploadProfilePicture(result.assets[0]);
       }
     } catch (error) {
       console.error('Erreur sélection image:', error);
@@ -171,102 +170,158 @@ const ProfileScreen = () => {
     }
   };
 
-  const handleImageUpload = async (imageAsset) => {
-    setUploadLoading(true);
+  const uploadProfilePicture = async (imageAsset) => {
     try {
+      setUploadLoading(true);
+
       const formData = new FormData();
-      formData.append('image', {
+      formData.append('profile_picture', {
         uri: imageAsset.uri,
-        type: 'image/jpeg',
-        name: 'profile.jpg',
+        type: imageAsset.type || 'image/jpeg',
+        name: imageAsset.fileName || 'profile.jpg',
       });
 
-      // ✅ CORRIGÉ: utilisation d'axiosInstance au lieu de api
-      const response = await axiosInstance.post('/api/users/profile/upload-profile-image', formData, {
+      const response = await axiosInstance.post('/api/users/profile/picture', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
-      if (response.data.status === 'success') {
-        const updatedUser = { ...user, profile_picture: response.data.data.profile_picture };
-        await updateUser(updatedUser); // ✅ CORRIGÉ: suppression du second paramètre
+      if (response.data?.status === 'success' && response.data?.data) {
+        const updatedUser = response.data.data;
+        if (updateUser) {
+          updateUser(updatedUser);
+        }
         Alert.alert('Succès', 'Photo de profil mise à jour');
       }
     } catch (error) {
       console.error('Erreur upload image:', error);
-      Alert.alert('Erreur', 'Impossible de télécharger l\'image');
+      Alert.alert('Erreur', 'Erreur lors de l\'upload de l\'image');
     } finally {
       setUploadLoading(false);
     }
   };
 
   const handleDeleteImage = async () => {
-    Alert.alert(
-      'Supprimer la photo',
-      'Êtes-vous sûr de vouloir supprimer votre photo de profil ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            setUploadLoading(true);
-            try {
-              await axiosInstance.delete('/api/uploads/profile-image');
-              // Recharger le profil depuis l'API
-              const profileResponse = await getCurrentUserCorrect();
-              if (profileResponse) {
-                await updateUser(profileResponse); // ✅ CORRIGÉ: suppression du second paramètre
+    try {
+      Alert.alert(
+        'Supprimer la photo',
+        'Êtes-vous sûr de vouloir supprimer votre photo de profil ?',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Supprimer',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                setUploadLoading(true);
+                const response = await axiosInstance.delete('/api/users/profile/picture');
+                
+                if (response.data?.status === 'success') {
+                  const updatedUser = { ...user, profile_picture: null };
+                  if (updateUser) {
+                    updateUser(updatedUser);
+                  }
+                  Alert.alert('Succès', 'Photo de profil supprimée');
+                }
+              } catch (error) {
+                console.error('Erreur suppression image:', error);
+                Alert.alert('Erreur', 'Erreur lors de la suppression');
+              } finally {
+                setUploadLoading(false);
               }
-              Alert.alert('Succès', 'Photo de profil supprimée');
-            } catch (error) {
-              console.error('Erreur suppression image:', error);
-              Alert.alert('Erreur', 'Impossible de supprimer l\'image');
-            } finally {
-              setUploadLoading(false);
             }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleLogout = () => {
-    setShowLogoutModal(true);
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Erreur:', error);
+    }
   };
 
   const confirmLogout = async () => {
     try {
-      setShowLogoutModal(false);
       await logout();
-      // ✅ AJOUTÉ: Navigation vers l'écran de connexion après déconnexion
-      navigation.replace('Login');
+      setShowLogoutModal(false);
+      
+      // 🔄 REDIRECTION FORCÉE VERS LOGIN
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+      
     } catch (error) {
-      console.error('Erreur logout:', error);
+      console.error('Erreur déconnexion:', error);
       Alert.alert('Erreur', 'Erreur lors de la déconnexion');
     }
   };
 
-  const showDatePickerModal = () => {
+  const formatDate = (date) => {
+    if (!date) return 'Non renseigné';
+    return date.toLocaleDateString('fr-FR');
+  };
+
+  // Gestionnaires pour le sélecteur de date personnalisé
+  const openDatePicker = () => {
     setTempDate(profileData.date_of_birth || new Date());
     setShowDateModal(true);
   };
 
-  const confirmDate = () => {
-    setProfileData({ ...profileData, date_of_birth: tempDate });
+  const confirmDateSelection = () => {
+    setProfileData(prev => ({
+      ...prev,
+      date_of_birth: new Date(tempDate)
+    }));
     setShowDateModal(false);
   };
 
-  const formatDate = (date) => {
-    if (!date) return '';
-    return date.toLocaleDateString('fr-FR');
+  const cancelDateSelection = () => {
+    setTempDate(profileData.date_of_birth || new Date());
+    setShowDateModal(false);
   };
 
-  const getInitials = () => {
-    const firstName = user?.first_name || '';
-    const lastName = user?.last_name || '';
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  // Générateurs de listes pour les sélecteurs
+  const generateDays = () => {
+    const days = [];
+    for (let i = 1; i <= 31; i++) {
+      days.push(i);
+    }
+    return days;
+  };
+
+  const generateMonths = () => {
+    const months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    return months.map((month, index) => ({ label: month, value: index }));
+  };
+
+  const generateYears = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = currentYear; i >= currentYear - 100; i--) {
+      years.push(i);
+    }
+    return years;
+  };
+
+  const updateDateField = (field, value) => {
+    const newDate = new Date(tempDate);
+    
+    switch (field) {
+      case 'day':
+        newDate.setDate(value);
+        break;
+      case 'month':
+        newDate.setMonth(value);
+        break;
+      case 'year':
+        newDate.setFullYear(value);
+        break;
+    }
+    
+    setTempDate(newDate);
   };
 
   return (
@@ -275,22 +330,21 @@ const ProfileScreen = () => {
       
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>Profil</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.headerTitle}>Profil</Text>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => setShowLogoutModal(true)}
+        >
+          <Ionicons name="log-out-outline" size={24} color="white" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Section photo de profil */}
-        <View style={styles.profileSection}>
-          <TouchableOpacity 
-            style={styles.avatarContainer} 
-            onPress={!editing ? handleImagePicker : undefined}
+        {/* Section avatar et infos de base */}
+        <View style={styles.profileHeader}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            onPress={editing ? handleImagePicker : undefined}
             disabled={uploadLoading}
           >
             <View style={styles.avatar}>
@@ -367,9 +421,9 @@ const ProfileScreen = () => {
             <Text style={styles.infoLabel}>Prénom</Text>
             {editing ? (
               <TextInput
-                style={styles.textInput}
+                style={styles.infoInput}
                 value={profileData.first_name}
-                onChangeText={(text) => setProfileData({ ...profileData, first_name: text })}
+                onChangeText={(text) => setProfileData(prev => ({...prev, first_name: text}))}
                 placeholder="Votre prénom"
               />
             ) : (
@@ -381,9 +435,9 @@ const ProfileScreen = () => {
             <Text style={styles.infoLabel}>Nom</Text>
             {editing ? (
               <TextInput
-                style={styles.textInput}
+                style={styles.infoInput}
                 value={profileData.last_name}
-                onChangeText={(text) => setProfileData({ ...profileData, last_name: text })}
+                onChangeText={(text) => setProfileData(prev => ({...prev, last_name: text}))}
                 placeholder="Votre nom"
               />
             ) : (
@@ -394,19 +448,14 @@ const ProfileScreen = () => {
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Date de naissance</Text>
             {editing ? (
-              <TouchableOpacity
-                style={styles.dateInput}
-                onPress={showDatePickerModal}
-              >
-                <Text style={[styles.dateText, !profileData.date_of_birth && styles.placeholderText]}>
-                  {profileData.date_of_birth ? formatDate(profileData.date_of_birth) : 'Sélectionner une date'}
+              <TouchableOpacity style={styles.dateSelector} onPress={openDatePicker}>
+                <Text style={[styles.infoValue, !profileData.date_of_birth && styles.placeholderText]}>
+                  {formatDate(profileData.date_of_birth)}
                 </Text>
-                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Ionicons name="calendar-outline" size={20} color="#4CAF50" />
               </TouchableOpacity>
             ) : (
-              <Text style={styles.infoValue}>
-                {user?.date_of_birth ? new Date(user.date_of_birth).toLocaleDateString('fr-FR') : 'Non renseigné'}
-              </Text>
+              <Text style={styles.infoValue}>{formatDate(user?.date_of_birth ? new Date(user.date_of_birth) : null)}</Text>
             )}
           </View>
 
@@ -414,9 +463,9 @@ const ProfileScreen = () => {
             <Text style={styles.infoLabel}>Taille (cm)</Text>
             {editing ? (
               <TextInput
-                style={styles.textInput}
+                style={styles.infoInput}
                 value={profileData.height}
-                onChangeText={(text) => setProfileData({ ...profileData, height: text })}
+                onChangeText={(text) => setProfileData(prev => ({...prev, height: text}))}
                 placeholder="Votre taille en cm"
                 keyboardType="numeric"
               />
@@ -431,9 +480,9 @@ const ProfileScreen = () => {
             <Text style={styles.infoLabel}>Poids (kg)</Text>
             {editing ? (
               <TextInput
-                style={styles.textInput}
+                style={styles.infoInput}
                 value={profileData.weight}
-                onChangeText={(text) => setProfileData({ ...profileData, weight: text })}
+                onChangeText={(text) => setProfileData(prev => ({...prev, weight: text}))}
                 placeholder="Votre poids en kg"
                 keyboardType="numeric"
               />
@@ -443,22 +492,33 @@ const ProfileScreen = () => {
               </Text>
             )}
           </View>
+        </View>
 
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{user?.email}</Text>
-          </View>
-
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Membre depuis</Text>
-            <Text style={styles.infoValue}>
-              {user?.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR') : 'Non disponible'}
-            </Text>
-          </View>
+        {/* Section paramètres */}
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>Paramètres</Text>
+          
+          <TouchableOpacity style={styles.settingItem}>
+            <Ionicons name="notifications-outline" size={24} color="#4CAF50" />
+            <Text style={styles.settingText}>Notifications</Text>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.settingItem}>
+            <Ionicons name="shield-outline" size={24} color="#4CAF50" />
+            <Text style={styles.settingText}>Confidentialité</Text>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.settingItem}>
+            <Ionicons name="help-circle-outline" size={24} color="#4CAF50" />
+            <Text style={styles.settingText}>Aide</Text>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Modal de confirmation de déconnexion */}
+      {/* Modal de déconnexion */}
       <Modal
         transparent={true}
         visible={showLogoutModal}
@@ -466,9 +526,9 @@ const ProfileScreen = () => {
         onRequestClose={() => setShowLogoutModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.logoutModal}>
             <Text style={styles.modalTitle}>Déconnexion</Text>
-            <Text style={styles.modalText}>
+            <Text style={styles.modalMessage}>
               Êtes-vous sûr de vouloir vous déconnecter ?
             </Text>
             <View style={styles.modalActions}>
@@ -489,85 +549,108 @@ const ProfileScreen = () => {
         </View>
       </Modal>
 
-      {/* Modal de sélection de date */}
+      {/* Modal de sélection de date - COMPLET */}
       <Modal
         transparent={true}
         visible={showDateModal}
         animationType="slide"
-        onRequestClose={() => setShowDateModal(false)}
+        onRequestClose={cancelDateSelection}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.dateModalContent}>
-            <Text style={styles.modalTitle}>Sélectionner une date</Text>
-            
-            <View style={styles.dateInputsContainer}>
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputLabel}>Jour</Text>
-                <TextInput
-                  style={styles.dateInputField}
-                  value={tempDate.getDate().toString().padStart(2, '0')}
-                  onChangeText={(text) => {
-                    const day = parseInt(text) || 1;
-                    if (day >= 1 && day <= 31) {
-                      const newDate = new Date(tempDate);
-                      newDate.setDate(day);
-                      setTempDate(newDate);
-                    }
-                  }}
-                  keyboardType="numeric"
-                  maxLength={2}
-                />
-              </View>
-              
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputLabel}>Mois</Text>
-                <TextInput
-                  style={styles.dateInputField}
-                  value={(tempDate.getMonth() + 1).toString().padStart(2, '0')}
-                  onChangeText={(text) => {
-                    const month = parseInt(text) || 1;
-                    if (month >= 1 && month <= 12) {
-                      const newDate = new Date(tempDate);
-                      newDate.setMonth(month - 1);
-                      setTempDate(newDate);
-                    }
-                  }}
-                  keyboardType="numeric"
-                  maxLength={2}
-                />
-              </View>
-              
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputLabel}>Année</Text>
-                <TextInput
-                  style={styles.dateInputField}
-                  value={tempDate.getFullYear().toString()}
-                  onChangeText={(text) => {
-                    const year = parseInt(text) || new Date().getFullYear();
-                    if (year >= 1900 && year <= new Date().getFullYear()) {
-                      const newDate = new Date(tempDate);
-                      newDate.setFullYear(year);
-                      setTempDate(newDate);
-                    }
-                  }}
-                  keyboardType="numeric"
-                  maxLength={4}
-                />
-              </View>
+            <View style={styles.dateModalHeader}>
+              <Text style={styles.modalTitle}>Sélectionner une date</Text>
+              <TouchableOpacity onPress={cancelDateSelection}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
             </View>
             
-            <View style={styles.modalActions}>
+            <View style={styles.dateSelectorsContainer}>
+              {/* Sélecteur de jour */}
+              <View style={styles.dateSelectorColumn}>
+                <Text style={styles.dateSelectorLabel}>Jour</Text>
+                <ScrollView style={styles.dateScrollView} showsVerticalScrollIndicator={false}>
+                  {generateDays().map((day) => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[
+                        styles.dateOption,
+                        tempDate.getDate() === day && styles.dateOptionSelected
+                      ]}
+                      onPress={() => updateDateField('day', day)}
+                    >
+                      <Text style={[
+                        styles.dateOptionText,
+                        tempDate.getDate() === day && styles.dateOptionTextSelected
+                      ]}>
+                        {day.toString().padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Sélecteur de mois */}
+              <View style={styles.dateSelectorColumn}>
+                <Text style={styles.dateSelectorLabel}>Mois</Text>
+                <ScrollView style={styles.dateScrollView} showsVerticalScrollIndicator={false}>
+                  {generateMonths().map((month) => (
+                    <TouchableOpacity
+                      key={month.value}
+                      style={[
+                        styles.dateOption,
+                        tempDate.getMonth() === month.value && styles.dateOptionSelected
+                      ]}
+                      onPress={() => updateDateField('month', month.value)}
+                    >
+                      <Text style={[
+                        styles.dateOptionText,
+                        tempDate.getMonth() === month.value && styles.dateOptionTextSelected
+                      ]}>
+                        {month.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Sélecteur d'année */}
+              <View style={styles.dateSelectorColumn}>
+                <Text style={styles.dateSelectorLabel}>Année</Text>
+                <ScrollView style={styles.dateScrollView} showsVerticalScrollIndicator={false}>
+                  {generateYears().map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[
+                        styles.dateOption,
+                        tempDate.getFullYear() === year && styles.dateOptionSelected
+                      ]}
+                      onPress={() => updateDateField('year', year)}
+                    >
+                      <Text style={[
+                        styles.dateOptionText,
+                        tempDate.getFullYear() === year && styles.dateOptionTextSelected
+                      ]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            <View style={styles.dateModalFooter}>
               <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowDateModal(false)}
+                style={styles.dateModalCancelButton}
+                onPress={cancelDateSelection}
               >
-                <Text style={styles.modalCancelText}>Annuler</Text>
+                <Text style={styles.dateModalCancelText}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.modalConfirmButton}
-                onPress={confirmDate}
+                style={styles.dateModalConfirmButton}
+                onPress={confirmDateSelection}
               >
-                <Text style={styles.modalConfirmText}>Confirmer</Text>
+                <Text style={styles.dateModalConfirmText}>Confirmer</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -583,39 +666,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 20,
-    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
-  headerLeft: {
-    flex: 1,
-  },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: 'white',
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   headerButton: {
-    padding: 8,
-    marginLeft: 8,
+    padding: 4,
   },
   content: {
     flex: 1,
   },
-  profileSection: {
+  profileHeader: {
     backgroundColor: 'white',
     alignItems: 'center',
     paddingVertical: 32,
@@ -630,23 +704,26 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
     position: 'relative',
   },
   avatarImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    borderRadius: 60,
   },
   avatarPlaceholder: {
     width: '100%',
     height: '100%',
+    borderRadius: 60,
     backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitials: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
     color: 'white',
   },
@@ -656,18 +733,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: 8,
+    right: 8,
     backgroundColor: '#4CAF50',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    borderRadius: 16,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
@@ -676,13 +754,15 @@ const styles = StyleSheet.create({
   deleteImageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    backgroundColor: '#fff5f5',
+    borderRadius: 8,
     marginBottom: 16,
   },
   deleteImageText: {
-    color: '#f44336',
     marginLeft: 8,
+    color: '#f44336',
     fontSize: 14,
   },
   userName: {
@@ -693,23 +773,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   userEmail: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
-    marginBottom: 20,
+    marginBottom: 24,
     textAlign: 'center',
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#e8f5e8',
+    borderRadius: 25,
   },
   editButtonText: {
-    color: '#4CAF50',
     marginLeft: 8,
+    color: '#4CAF50',
+    fontSize: 16,
     fontWeight: '600',
   },
   editActions: {
@@ -717,24 +797,29 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cancelButton: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#e0e0e0',
   },
   cancelButtonText: {
     color: '#666',
+    fontSize: 16,
     fontWeight: '600',
   },
   saveButton: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 8,
     backgroundColor: '#4CAF50',
+    borderRadius: 25,
+    minWidth: 120,
+    alignItems: 'center',
   },
   saveButtonText: {
     color: 'white',
+    fontSize: 16,
     fontWeight: 'bold',
   },
   disabledButton: {
@@ -742,93 +827,116 @@ const styles = StyleSheet.create({
   },
   infoSection: {
     backgroundColor: 'white',
+    marginHorizontal: 16,
     marginBottom: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
+    borderRadius: 16,
+    padding: 16,
+  },
+  settingsSection: {
+    backgroundColor: 'white',
+    marginHorizontal: 16,
+    marginBottom: 32,
+    borderRadius: 16,
+    padding: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   infoItem: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   infoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#666',
     marginBottom: 8,
   },
   infoValue: {
     fontSize: 16,
-    color: '#666',
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-  },
-  dateInput: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    color: '#333',
     paddingVertical: 12,
-    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
   },
-  dateText: {
+  infoInput: {
     fontSize: 16,
     color: '#333',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  dateSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   placeholderText: {
     color: '#999',
   },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  settingText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 16,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalContent: {
+  logoutModal: {
     backgroundColor: 'white',
-    borderRadius: 12,
+    marginHorizontal: 32,
+    borderRadius: 16,
     padding: 24,
-    width: '80%',
-    maxWidth: 400,
+    alignItems: 'center',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 12,
+    marginBottom: 8,
     textAlign: 'center',
   },
-  modalText: {
-    fontSize: 16,
+  modalMessage: {
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   modalActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     gap: 12,
+    width: '100%',
   },
   modalCancelButton: {
-    flex: 0.45,
+    flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
+    backgroundColor: '#f8f9fa',
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#e0e0e0',
     alignItems: 'center',
   },
   modalCancelText: {
@@ -836,7 +944,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalConfirmButton: {
-    flex: 0.45,
+    flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
     backgroundColor: '#f44336',
@@ -848,37 +956,86 @@ const styles = StyleSheet.create({
   },
   dateModalContent: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 24,
-    width: '85%',
-    maxWidth: 400,
+    marginHorizontal: 20,
+    borderRadius: 16,
+    maxHeight: '80%',
   },
-  dateInputsContainer: {
+  dateModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
-    gap: 12,
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  dateInputGroup: {
+  dateSelectorsContainer: {
+    flexDirection: 'row',
+    height: 300,
+  },
+  dateSelectorColumn: {
     flex: 1,
+    borderRightWidth: 1,
+    borderRightColor: '#f0f0f0',
+  },
+  dateSelectorLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    paddingVertical: 12,
+    backgroundColor: '#f8f9fa',
+  },
+  dateScrollView: {
+    flex: 1,
+  },
+  dateOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
     alignItems: 'center',
   },
-  dateInputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+  dateOptionSelected: {
+    backgroundColor: '#4CAF50',
   },
-  dateInputField: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  dateOptionText: {
     fontSize: 16,
-    textAlign: 'center',
-    backgroundColor: '#f9f9f9',
-    width: '100%',
+    color: '#333',
+  },
+  dateOptionTextSelected: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  dateModalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    gap: 12,
+  },
+  dateModalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+  },
+  dateModalCancelText: {
+    color: '#666',
+    fontWeight: '600',
+  },
+  dateModalConfirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#4CAF50',
+    alignItems: 'center',
+  },
+  dateModalConfirmText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
 
