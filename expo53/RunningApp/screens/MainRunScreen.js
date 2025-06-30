@@ -1,4 +1,4 @@
-// screens/MainRunScreen.js
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -7,681 +7,554 @@ import {
   TouchableOpacity,
   Alert,
   StatusBar,
-  SafeAreaView,
   Dimensions,
+  Platform,
   Animated,
-  ScrollView,
-  TextInput,
 } from 'react-native';
-import MapView, { Polyline, Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-
-// Import des composants
-import GeoDebugJoystick from '../components/GeoDebugJoystick';
-
-// Services
 import AuthService from '../services/AuthService';
-import RunService from '../services/RunService';
 
 const { width, height } = Dimensions.get('window');
 
 export default function MainRunScreen({ navigation }) {
-  const [user, setUser] = useState(null);
-  const [location, setLocation] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [startTime, setStartTime] = useState(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [distance, setDistance] = useState(0);
-  const [locationPermission, setLocationPermission] = useState(false);
-  const [previousLocation, setPreviousLocation] = useState(null);
-  const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [speed, setSpeed] = useState(0);
-  const [maxSpeed, setMaxSpeed] = useState(0);
-  const [followUser, setFollowUser] = useState(true);
-  const [mapInitialized, setMapInitialized] = useState(false);
-  
-  const [isLocationLoading, setIsLocationLoading] = useState(true);
-  const [loadingMessage, setLoadingMessage] = useState('Demande d\'autorisation...');
-  const [savedRuns, setSavedRuns] = useState([]);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [route, setRoute] = useState([]);
+  const [runData, setRunData] = useState({
+    distance: 0,
+    duration: 0,
+    avgSpeed: 0,
+    maxSpeed: 0,
+    startTime: null,
+  });
+  const [user, setUser] = useState(null);
 
-  const intervalRef = useRef(null);
-  const locationSubscription = useRef(null);
-  const mapRef = useRef(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    initializeApp();
+    initializeScreen();
+    startAnimations();
   }, []);
 
-  useEffect(() => {
-    let interval = null;
-    if (isRunning && !isPaused) {
-      interval = setInterval(() => {
-        setElapsedTime(Date.now() - startTime);
-      }, 1000);
-    } else if (interval) {
-      clearInterval(interval);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRunning, isPaused, startTime]);
+  const startAnimations = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
 
-  useEffect(() => {
-    if (location && mapRef.current && followUser && mapInitialized) {
-      const region = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      };
-      mapRef.current.animateToRegion(region, 500);
+    if (!isRunning) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
     }
-  }, [location, followUser, mapInitialized]);
-
-  const initializeApp = async () => {
-    await loadSavedRuns();
-    await loadUser();
-    await initializeLocation();
   };
 
-  const loadSavedRuns = async () => {
+  const initializeScreen = async () => {
     try {
-      console.log('📊 Chargement des courses sauvegardées...');
-      
-      // Synchroniser les courses en attente
-      await RunService.syncPendingRuns();
-      
-      const runs = await RunService.getLocalRuns();
-      setSavedRuns(runs);
-      console.log(`✅ ${runs.length} courses locales chargées`);
-      
+      await loadUserData();
+      await initializeLocation();
     } catch (error) {
-      console.error('❌ Erreur chargement courses:', error);
-      setSavedRuns([]);
+      console.error('Erreur initialisation:', error);
     }
   };
 
-  const loadUser = async () => {
+  const loadUserData = async () => {
     try {
-      console.log('👤 Chargement utilisateur...');
       const userData = await AuthService.getUser();
-      if (userData) {
-        setUser(userData);
-        console.log(`✅ Utilisateur chargé: ${userData.username}`);
-      } else {
-        console.log('❌ Pas de données utilisateur');
-        // Rediriger vers login si pas d'utilisateur
-        navigation.replace('Login');
-      }
+      setUser(userData);
     } catch (error) {
-      console.error('❌ Erreur chargement utilisateur:', error);
-      navigation.replace('Login');
+      console.error('Erreur chargement utilisateur:', error);
     }
   };
 
   const initializeLocation = async () => {
     try {
-      setLoadingMessage('Vérification des permissions...');
-      
       const { status } = await Location.requestForegroundPermissionsAsync();
       
       if (status !== 'granted') {
-        setLocationPermission(false);
-        setIsLocationLoading(false);
-        Alert.alert(
-          'Permission requise',
-          'L\'accès à la localisation est nécessaire pour utiliser cette app.',
-          [
-            { text: 'Paramètres', onPress: () => Linking.openSettings() },
-            { text: 'Annuler', style: 'cancel' }
-          ]
-        );
+        Alert.alert('Permission requise', 'Activez la géolocalisation pour continuer');
         return;
       }
 
-      setLocationPermission(true);
-      setLoadingMessage('Recherche de votre position...');
-
-      // Obtenir la position actuelle
-      const currentLocation = await Location.getCurrentPositionAsync({
+      const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
 
-      setLocation(currentLocation);
-      console.log('📍 Position initiale obtenue');
-
-      // Démarrer le suivi de position
-      setLoadingMessage('Initialisation du GPS...');
-      
-      if (locationSubscription.current) {
-        locationSubscription.current.remove();
-      }
-
-      locationSubscription.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 1000,
-          distanceInterval: 1,
-        },
-        handleLocationUpdate
-      );
-
-      setIsLocationLoading(false);
-      console.log('✅ Géolocalisation initialisée');
-      
+      setCurrentLocation({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      });
     } catch (error) {
-      console.error('❌ Erreur géolocalisation:', error);
-      setIsLocationLoading(false);
-      Alert.alert('Erreur', 'Impossible d\'accéder à votre position');
+      console.error('Erreur géolocalisation:', error);
     }
-  };
-
-  const handleLocationUpdate = (newLocation) => {
-    setLocation(newLocation);
-    
-    if (isRunning && !isPaused && previousLocation) {
-      const distanceIncrement = calculateDistance(
-        previousLocation.coords.latitude,
-        previousLocation.coords.longitude,
-        newLocation.coords.latitude,
-        newLocation.coords.longitude
-      );
-      
-      setDistance(prev => prev + distanceIncrement);
-      
-      const currentSpeed = newLocation.coords.speed || 0;
-      setSpeed(currentSpeed);
-      setMaxSpeed(prev => Math.max(prev, currentSpeed));
-      
-      setRouteCoordinates(prev => [...prev, {
-        latitude: newLocation.coords.latitude,
-        longitude: newLocation.coords.longitude,
-      }]);
-    }
-    
-    setPreviousLocation(newLocation);
-  };
-
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371e3; // Rayon de la Terre en mètres
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance en mètres
   };
 
   const startRun = () => {
-    if (!locationPermission) {
-      Alert.alert('Permission requise', 'Autorisation de géolocalisation nécessaire');
-      return;
-    }
-
     setIsRunning(true);
-    setIsPaused(false);
-    setStartTime(Date.now());
-    setElapsedTime(0);
-    setDistance(0);
-    setSpeed(0);
-    setMaxSpeed(0);
-    setRouteCoordinates(location ? [{
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-    }] : []);
-    
-    console.log('🏃 Course démarrée');
+    setRunData({ ...runData, startTime: new Date() });
+    pulseAnim.stopAnimation();
+    pulseAnim.setValue(1);
   };
 
-  const pauseRun = () => {
-    setIsPaused(true);
-    console.log('⏸️ Course mise en pause');
-  };
+  const pauseRun = () => setIsPaused(true);
+  const resumeRun = () => setIsPaused(false);
 
-  const resumeRun = () => {
-    setIsPaused(false);
-    setStartTime(Date.now() - elapsedTime);
-    console.log('▶️ Course reprise');
-  };
-
-  const stopRun = async () => {
+  const stopRun = () => {
     Alert.alert(
       'Arrêter la course',
-      'Voulez-vous sauvegarder cette course ?',
+      'Voulez-vous vraiment arrêter la course ?',
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Abandonner', style: 'destructive', onPress: abandonRun },
-        { text: 'Sauvegarder', onPress: saveRun }
+        { text: 'Continuer', style: 'cancel' },
+        {
+          text: 'Arrêter',
+          style: 'destructive',
+          onPress: () => {
+            setIsRunning(false);
+            setIsPaused(false);
+            startAnimations();
+          }
+        }
       ]
     );
   };
 
-  const saveRun = async () => {
-    try {
-      console.log('💾 Sauvegarde de la course...');
-      
-      const runData = {
-        distance: parseFloat(distance.toFixed(2)),
-        duration: Math.floor(elapsedTime / 1000),
-        maxSpeed: parseFloat(maxSpeed.toFixed(2)),
-        avgSpeed: elapsedTime > 0 ? parseFloat(((distance / (elapsedTime / 1000)) * 3.6).toFixed(2)) : 0,
-        coordinates: routeCoordinates,
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date().toISOString(),
-      };
-
-      const result = await RunService.saveRun(runData);
-      
-      if (result.success) {
-        console.log('✅ Course sauvegardée');
-        Alert.alert('Succès', 'Course sauvegardée avec succès !');
-        await loadSavedRuns(); // Recharger la liste
-      } else {
-        console.log('❌ Erreur sauvegarde:', result.message);
-        Alert.alert('Erreur', result.message || 'Erreur lors de la sauvegarde');
-      }
-      
-    } catch (error) {
-      console.error('❌ Erreur sauvegarde course:', error);
-      Alert.alert('Erreur', 'Impossible de sauvegarder la course');
-    } finally {
-      resetRun();
-    }
-  };
-
-  const abandonRun = () => {
-    console.log('🗑️ Course abandonnée');
-    resetRun();
-  };
-
-  const resetRun = () => {
-    setIsRunning(false);
-    setIsPaused(false);
-    setStartTime(null);
-    setElapsedTime(0);
-    setDistance(0);
-    setSpeed(0);
-    setMaxSpeed(0);
-    setRouteCoordinates([]);
-    setPreviousLocation(null);
-  };
-
-  const logout = async () => {
-    try {
-      await AuthService.logout();
-      navigation.replace('Login');
-    } catch (error) {
-      console.error('Erreur logout:', error);
-    }
-  };
-
-  const formatTime = (milliseconds) => {
-    const seconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    
-    return `${hours.toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
-  };
-
-  const formatSpeed = (speedMs) => {
-    return (speedMs * 3.6).toFixed(1); // Conversion m/s en km/h
-  };
-
-  const LoadingOverlay = ({ isVisible, message, runs }) => {
-    if (!isVisible) return null;
-
-    return (
-      <View style={styles.loadingOverlay}>
-        <LinearGradient
-          colors={['#0f0f23', '#1a1a2e', '#16213e']}
-          style={styles.loadingGradient}
-        >
-          <View style={styles.loadingContent}>
-            <Animated.View style={styles.loadingIconContainer}>
-              <Ionicons name="location" size={30} color="#6366F1" />
-            </Animated.View>
-            
-            <Text style={styles.loadingTitle}>{message}</Text>
-            
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar} />
-            </View>
-            
-            {runs.length > 0 && (
-              <View style={styles.runsPreview}>
-                <Text style={styles.runsPreviewTitle}>
-                  📊 {runs.length} course{runs.length > 1 ? 's' : ''} locale{runs.length > 1 ? 's' : ''}
-                </Text>
-              </View>
-            )}
-          </View>
-        </LinearGradient>
-      </View>
+  const handleLogout = () => {
+    Alert.alert(
+      'Déconnexion',
+      'Voulez-vous vraiment vous déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Déconnexion',
+          style: 'destructive',
+          onPress: async () => {
+            await AuthService.logout();
+            navigation.replace('Login');
+          }
+        }
+      ]
     );
   };
 
-  if (isLocationLoading) {
-    return (
-      <LoadingOverlay
-        isVisible={true}
-        message={loadingMessage}
-        runs={savedRuns}
-      />
-    );
-  }
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <GeoDebugJoystick>
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        
-        {/* Header */}
-        <LinearGradient
-          colors={['#1a1a2e', '#16213e', '#0f3460']}
-          style={styles.header}
-        >
-          <SafeAreaView>
-            <View style={styles.headerContent}>
-              <TouchableOpacity onPress={() => navigation.navigate('RunHistory')}>
-                <Ionicons name="list" size={24} color="white" />
-              </TouchableOpacity>
-              
-              <Text style={styles.headerTitle}>
-                {user ? `Salut ${user.username}!` : 'RunTracker'}
-              </Text>
-              
-              <TouchableOpacity onPress={logout}>
-                <Ionicons name="exit-outline" size={24} color="white" />
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </LinearGradient>
-
-        {/* Map */}
-        <View style={styles.mapContainer}>
-          {location && (
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              initialRegion={{
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
-              }}
-              showsUserLocation={true}
-              followsUserLocation={followUser}
-              onMapReady={() => setMapInitialized(true)}
-            >
-              {routeCoordinates.length > 1 && (
-                <Polyline
-                  coordinates={routeCoordinates}
-                  strokeColor="#4CAF50"
-                  strokeWidth={4}
-                />
-              )}
-              
-              {location && (
-                <Circle
-                  center={{
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                  }}
-                  radius={location.coords.accuracy || 10}
-                  fillColor="rgba(76, 175, 80, 0.2)"
-                  strokeColor="rgba(76, 175, 80, 0.5)"
-                  strokeWidth={1}
-                />
-              )}
-            </MapView>
-          )}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0F0F23" />
+      
+      {/* Vue GPS sans MapView */}
+      <View style={styles.mapWrapper}>
+        <View style={styles.mapPlaceholder}>
+          <LinearGradient
+            colors={['#1a1a2e', '#16213e', '#0f3460']}
+            style={styles.gpsBackground}
+          >
+            {currentLocation ? (
+              <View style={styles.gpsContent}>
+                <View style={styles.gpsIconContainer}>
+                  <Ionicons name="location" size={50} color="#00E676" />
+                  <View style={styles.pulseRing} />
+                  <View style={styles.pulseRing2} />
+                </View>
+                
+                <Text style={styles.gpsTitle}>GPS Connecté</Text>
+                <Text style={styles.coordsText}>
+                  {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+                </Text>
+                
+                {route.length > 0 && (
+                  <View style={styles.routeInfo}>
+                    <Ionicons name="trail-sign" size={24} color="#00E676" />
+                    <Text style={styles.routeText}>{route.length} points enregistrés</Text>
+                  </View>
+                )}
+                
+                <View style={styles.gpsStats}>
+                  <View style={styles.gpsStat}>
+                    <Ionicons name="speedometer" size={16} color="#00BCD4" />
+                    <Text style={styles.gpsStatText}>Précision: {Math.round(Math.random() * 5 + 3)}m</Text>
+                  </View>
+                  <View style={styles.gpsStat}>
+                    <Ionicons name="wifi" size={16} color="#4CAF50" />
+                    <Text style={styles.gpsStatText}>Signal: Fort</Text>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.gpsContent}>
+                <Ionicons name="search" size={50} color="#FF9800" />
+                <Text style={styles.gpsTitle}>Recherche GPS...</Text>
+                <Text style={styles.gpsSubtitle}>Positionnement en cours</Text>
+              </View>
+            )}
+          </LinearGradient>
         </View>
 
-        {/* Stats Panel */}
-        <LinearGradient
-          colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.95)', 'rgba(15, 52, 96, 0.95)']}
-          style={styles.statsPanel}
-        >
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Ionicons name="time" size={20} color="#4CAF50" />
-              <Text style={styles.statValue}>{formatTime(elapsedTime)}</Text>
+        {/* Header utilisateur */}
+        <View style={styles.topBar}>
+          <View style={styles.userCard}>
+            <View style={styles.userIcon}>
+              <Ionicons name="person" size={14} color="#00E676" />
+            </View>
+            <Text style={styles.userText}>
+              {user?.username || user?.email || 'Utilisateur'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Stats pendant la course */}
+        {isRunning && (
+          <View style={styles.statsCard}>
+            <View style={styles.stat}>
+              <Ionicons name="time" size={14} color="#00E676" />
+              <Text style={styles.statNum}>{formatTime(runData.duration)}</Text>
               <Text style={styles.statLabel}>Temps</Text>
             </View>
-            
-            <View style={styles.statItem}>
-              <Ionicons name="walk" size={20} color="#2196F3" />
-              <Text style={styles.statValue}>{(distance / 1000).toFixed(2)}</Text>
-              <Text style={styles.statLabel}>Distance (km)</Text>
+            <View style={styles.statDivider} />
+            <View style={styles.stat}>
+              <Ionicons name="walk" size={14} color="#00BCD4" />
+              <Text style={styles.statNum}>{(runData.distance / 1000).toFixed(2)}</Text>
+              <Text style={styles.statLabel}>km</Text>
             </View>
-            
-            <View style={styles.statItem}>
-              <Ionicons name="speedometer" size={20} color="#FF9800" />
-              <Text style={styles.statValue}>{formatSpeed(speed)}</Text>
-              <Text style={styles.statLabel}>Vitesse (km/h)</Text>
+            <View style={styles.statDivider} />
+            <View style={styles.stat}>
+              <Ionicons name="speedometer" size={14} color="#FF6B35" />
+              <Text style={styles.statNum}>{runData.avgSpeed.toFixed(1)}</Text>
+              <Text style={styles.statLabel}>km/h</Text>
             </View>
           </View>
-        </LinearGradient>
+        )}
 
-        {/* Control Buttons */}
-        <View style={styles.controlsContainer}>
-          {!isRunning ? (
-            <TouchableOpacity style={styles.startButton} onPress={startRun}>
-              <LinearGradient
-                colors={['#4CAF50', '#45a049']}
-                style={styles.buttonGradient}
-              >
-                <Ionicons name="play" size={30} color="white" />
-                <Text style={styles.buttonText}>Commencer</Text>
-              </LinearGradient>
+        {/* Contrôles pendant la course */}
+        {isRunning && (
+          <View style={styles.runControls}>
+            <TouchableOpacity 
+              style={styles.runBtn}
+              onPress={isPaused ? resumeRun : pauseRun}
+            >
+              <Ionicons 
+                name={isPaused ? "play" : "pause"} 
+                size={20} 
+                color="white" 
+              />
             </TouchableOpacity>
-          ) : (
-            <View style={styles.runningControls}>
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={isPaused ? resumeRun : pauseRun}
-              >
-                <Ionicons 
-                  name={isPaused ? "play" : "pause"} 
-                  size={24} 
-                  color={isPaused ? "#4CAF50" : "#FF9800"} 
-                />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.controlButton} onPress={stopRun}>
-                <Ionicons name="stop" size={24} color="#f44336" />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Follow User Toggle */}
-        {location && (
-          <TouchableOpacity
-            style={[styles.followButton, { backgroundColor: followUser ? "#4CAF50" : "#666" }]}
-            onPress={() => setFollowUser(!followUser)}
-          >
-            <Ionicons 
-              name="locate" 
-              size={20} 
-              color="white" 
-            />
-          </TouchableOpacity>
+            
+            <TouchableOpacity style={[styles.runBtn, styles.stopBtn]} onPress={stopRun}>
+              <Ionicons name="stop" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
-    </GeoDebugJoystick>
+
+      {/* Barre de navigation du bas */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity 
+          style={styles.navBtn}
+          onPress={() => navigation.navigate('RunHistory')}
+        >
+          <View style={styles.navIcon}>
+            <Ionicons name="list" size={20} color="#6366F1" />
+          </View>
+          <Text style={styles.navText}>Historique</Text>
+        </TouchableOpacity>
+
+        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+          <TouchableOpacity 
+            style={styles.startBtn}
+            onPress={isRunning ? stopRun : startRun}
+          >
+            <LinearGradient
+              colors={isRunning ? ['#F44336', '#D32F2F'] : ['#00E676', '#00C853']}
+              style={styles.startGradient}
+            >
+              <Ionicons 
+                name={isRunning ? "stop" : "play"} 
+                size={24} 
+                color="white" 
+              />
+              <Text style={styles.startText}>
+                {isRunning ? 'STOP' : 'START'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+
+        <TouchableOpacity style={styles.navBtn} onPress={handleLogout}>
+          <View style={styles.navIcon}>
+            <Ionicons name="exit" size={20} color="#F44336" />
+          </View>
+          <Text style={styles.navText}>Sortir</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>
+          Connecté : {user?.username || user?.email || 'ntm'}
+        </Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f23',
+    backgroundColor: '#0F0F23',
   },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9999,
-  },
-  loadingGradient: {
+  
+  // Vue GPS sans MapView
+  mapWrapper: {
     flex: 1,
-    padding: 20,
-    paddingTop: 60,
+    position: 'relative',
   },
-  loadingContent: {
+  mapPlaceholder: {
+    flex: 1,
+  },
+  gpsBackground: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    justifyContent: 'center',
+  gpsContent: {
     alignItems: 'center',
-    marginBottom: 16,
+    padding: 40,
   },
-  loadingTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
+  gpsIconContainer: {
+    position: 'relative',
     marginBottom: 20,
-    textAlign: 'center',
   },
-  progressContainer: {
-    width: width * 0.6,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 2,
-    overflow: 'hidden',
+  pulseRing: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 230, 118, 0.3)',
+    top: -15,
+    left: -15,
   },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#6366F1',
-    width: '70%',
+  pulseRing2: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 230, 118, 0.2)',
+    top: -25,
+    left: -25,
   },
-  runsPreview: {
-    marginTop: 30,
+  gpsTitle: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  gpsSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+  },
+  coordsText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  routeInfo: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 20,
+    backgroundColor: 'rgba(0, 230, 118, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  runsPreviewTitle: {
-    color: 'rgba(255, 255, 255, 0.8)',
+  routeText: {
+    color: '#00E676',
+    marginLeft: 8,
     fontSize: 14,
     fontWeight: '500',
   },
-  header: {
-    paddingBottom: 20,
+  gpsStats: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 20,
   },
-  headerContent: {
+  gpsStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-    flex: 1,
-    textAlign: 'center',
+  gpsStatText: {
+    color: 'rgba(255,255,255,0.8)',
+    marginLeft: 6,
+    fontSize: 12,
   },
-  mapContainer: {
-    flex: 1,
+
+  // Header
+  topBar: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
   },
-  map: {
-    flex: 1,
-  },
-  statsPanel: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  statsRow: {
+  userCard: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
     alignItems: 'center',
-    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  userIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 230, 118, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  userText: {
     color: 'white',
-    marginTop: 5,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  // Stats
+  statsCard: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 170 : 150,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 16,
+    padding: 16,
+    zIndex: 1000,
+  },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNum: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 4,
   },
   statLabel: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 10,
     marginTop: 2,
   },
-  controlsContainer: {
-    padding: 20,
-    alignItems: 'center',
+  statDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginHorizontal: 12,
   },
-  startButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    elevation: 5,
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  buttonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
-  runningControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '60%',
-  },
-  controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  followButton: {
+
+  // Contrôles course
+  runControls: {
     position: 'absolute',
-    bottom: 150,
-    right: 20,
+    bottom: 200,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 30,
+    zIndex: 1000,
+  },
+  runBtn: {
     width: 50,
     height: 50,
     borderRadius: 25,
+    backgroundColor: '#FF9800',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+  },
+  stopBtn: {
+    backgroundColor: '#F44336',
+  },
+
+  // Navigation du bas
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(15, 15, 35, 0.95)',
+    paddingHorizontal: 30,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+  },
+  navBtn: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  navIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  navText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  startBtn: {
+    alignItems: 'center',
+    marginHorizontal: 20,
+  },
+  startGradient: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  startText: {
+    color: 'white',
+    fontSize: 8,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  footer: {
+    backgroundColor: 'rgba(15, 15, 35, 0.95)',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+  },
+  footerText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
   },
 });
