@@ -22,6 +22,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
 import RunHistoryScreen from './screens/RunHistoryScreen';
+import ChallengesScreen from './screens/ChallengesScreen';
 
 import AuthService from './services/AuthService';
 import RunService from './services/RunService';
@@ -515,7 +516,17 @@ function MainRunScreen({ navigation }) {
                 >
                   <Ionicons name={isPaused ? "play" : "pause"} size={24} color="white" />
                 </TouchableOpacity>
-                
+
+                <TouchableOpacity 
+                  style={styles.challengesButton}
+                  onPress={() => navigation.navigate('Challenges')}
+                >
+                  <LinearGradient colors={THEME.gradients.cosmic} style={styles.challengesGradient}>
+                    <Ionicons name="trophy" size={20} color="white" />
+                    <Text style={styles.challengesButtonText}>Défis</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
                 <TouchableOpacity 
                   style={[styles.controlButton, styles.stopButton]} 
                   onPress={stopRun}
@@ -761,6 +772,7 @@ export default function App() {
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="Main" component={MainRunScreen} />
         <Stack.Screen name="RunHistory" component={RunHistoryScreen} />
+        <Stack.Screen name="Challenges" component={ChallengesScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -826,6 +838,7 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
+  
   userMarker: {
     width: 20,
     height: 20,
@@ -1110,4 +1123,6 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontWeight: 'bold',
   },
+
+
 });

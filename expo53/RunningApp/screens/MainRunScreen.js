@@ -263,20 +263,32 @@
 
 //         <ScrollView showsVerticalScrollIndicator={false}>
           
-//           {/* Main Timer */}
-//           <View style={styles.timerSection}>
-//             <Animated.View style={[styles.timerCircle, { transform: [{ scale: breatheAnim }] }]}>
-//               <LinearGradient
-//                 colors={isRunning && !isPaused ? THEME.gradients.success : THEME.gradients.surface}
-//                 style={styles.timerGradient}
-//               >
-//                 <Text style={styles.timeText}>{formatTime(time)}</Text>
-//                 <Text style={styles.statusText}>
-//                   {!isRunning ? 'Prêt' : isPaused ? 'Pause' : 'En cours'}
-//                 </Text>
-//               </LinearGradient>
-//             </Animated.View>
-//           </View>
+//       {/* Main Timer */}
+//       <View style={styles.timerSection}>
+//         <Animated.View style={[styles.timerCircle, { transform: [{ scale: breatheAnim }] }]}>
+//           <LinearGradient
+//             colors={isRunning && !isPaused ? THEME.gradients.success : THEME.gradients.surface}
+//             style={styles.timerGradient}
+//           >
+//             <Text style={styles.timeText}>{formatTime(time)}</Text>
+//             <Text style={styles.statusText}>
+//               {!isRunning ? 'Prêt' : isPaused ? 'Pause' : 'En cours'}
+//             </Text>
+//           </LinearGradient>
+//         </Animated.View>
+
+//         {/* ➕ Bouton Défis */}
+//         <TouchableOpacity 
+//           style={styles.challengesButton}
+//           onPress={() => navigation.navigate('Challenges')}
+//         >
+//           <LinearGradient colors={THEME.gradients.cosmic} style={styles.challengesGradient}>
+//             <Ionicons name="trophy" size={20} color="white" />
+//             <Text style={styles.challengesButtonText}>Défis</Text>
+//           </LinearGradient>
+//         </TouchableOpacity>
+//       </View>
+
 
 //           {/* Stats Grid */}
 //           <View style={styles.statsGrid}>
@@ -362,6 +374,15 @@
 //                     <Text style={styles.stopText}>Terminer</Text>
 //                   </LinearGradient>
 //                 </TouchableOpacity>
+//                 <TouchableOpacity 
+//                 style={styles.challengesButton}
+//                 onPress={() => navigation.navigate('Challenges')}
+//               >
+//                 <LinearGradient colors={THEME.gradients.cosmic} style={styles.challengesGradient}>
+//                   <Ionicons name="trophy" size={20} color="white" />
+//                   <Text style={styles.challengesButtonText}>Défis</Text>
+//                 </LinearGradient>
+//               </TouchableOpacity>
 //               </View>
 //             )}
 //           </View>
@@ -424,7 +445,24 @@
 //     color: THEME.colors.textSecondary,
 //     marginTop: THEME.spacing.sm,
 //   },
-  
+//   challengesButton: {
+//   borderRadius: THEME.borderRadius.lg,
+//   overflow: 'hidden',
+//   margin: THEME.spacing.md,
+// },
+// challengesGradient: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   justifyContent: 'center',
+//   paddingVertical: THEME.spacing.md,
+//   paddingHorizontal: THEME.spacing.lg,
+// },
+// challengesButtonText: {
+//   ...THEME.typography.body,
+//   color: 'white',
+//   marginLeft: THEME.spacing.sm,
+//   fontWeight: '600',
+// },
 //   statsGrid: {
 //     flexDirection: 'row',
 //     flexWrap: 'wrap',
