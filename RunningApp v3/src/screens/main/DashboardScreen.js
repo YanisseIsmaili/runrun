@@ -2,58 +2,69 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
-  RefreshControl,
-  Dimensions,
+  StyleSheet,
   StatusBar,
   Platform,
+  ActivityIndicator,
+  RefreshControl,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useRun } from '../../context/RunContext';
-import { useSettings } from '../../context/SettingsContext';
-
-const { width } = Dimensions.get('window');
+import * as apiService from '../../services/api';
 
 const DashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
-  
-  // Protection complète du contexte RunContext
   const runContext = useRun();
-  const {
-    runHistory = [],
-    loading = false,
-    fetchRunHistory,
-    getWeeklyStats,
-    formatDuration
-  } = runContext || {};
+  const { runHistory, formatDuration, formatDistance } = runContext || {};
   
-  // Protection du contexte SettingsContext
-  const settingsContext = useSettings();
-  const { formatDistance } = settingsContext || { formatDistance: (d) => `${d.toFixed(2)} km` };
-
+  const [weeklyStats, setWeeklyStats] = useState({
+    runs: 0,
+    distance: 0,
+    duration: 0,
+  });
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadDashboardData();
+  }, [runHistory]);
 
-  const loadData = async () => {
+  const loadDashboardData = async () => {
     try {
-      if (fetchRunHistory) {
-        await fetchRunHistory();
-      }
+      calculateWeeklyStats();
     } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
+      console.error('Erreur chargement dashboard:', error);
     }
+  };
+
+  const calculateWeeklyStats = () => {
+    if (!Array.isArray(runHistory)) return;
+    
+    const now = new Date();
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const weeklyRuns = runHistory.filter(run => {
+      const runDate = new Date(run.startTime || run.start_time || run.date);
+      return runDate >= weekStart;
+    });
+
+    const stats = weeklyRuns.reduce((acc, run) => ({
+      runs: acc.runs + 1,
+      distance: acc.distance + (run.distance || 0),
+      duration: acc.duration + (run.duration || 0),
+    }), { runs: 0, distance: 0, duration: 0 });
+
+    setWeeklyStats(stats);
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await loadDashboardData();
     setRefreshing(false);
   };
 
@@ -64,20 +75,13 @@ const DashboardScreen = ({ navigation }) => {
     return 'Bonsoir';
   };
 
-  // Protection de getWeeklyStats avec valeurs par défaut
-  const getDefaultWeeklyStats = () => ({
-    runs: 0,
-    distance: 0,
-    duration: 0,
-    calories: 0,
-    averagePace: '00:00'
-  });
+  const getInitials = () => {
+    const firstName = user?.first_name || '';
+    const lastName = user?.last_name || '';
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || '??';
+  };
 
-  const weeklyStats = getWeeklyStats ? getWeeklyStats() : getDefaultWeeklyStats();
-
-  // Formatage sécurisé des données
   const formatSafeDistance = (distance) => {
-    if (typeof distance !== 'number' || isNaN(distance)) return '0.00 km';
     return formatDistance ? formatDistance(distance / 1000) : `${(distance / 1000).toFixed(2)} km`;
   };
 
@@ -86,7 +90,6 @@ const DashboardScreen = ({ navigation }) => {
     return formatDuration ? formatDuration(duration) : '0:00';
   };
 
-  // Assurer que runHistory est toujours un tableau
   const safeRunHistory = Array.isArray(runHistory) ? runHistory : [];
   const recentRuns = safeRunHistory.slice(0, 3);
 
@@ -108,7 +111,7 @@ const DashboardScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#4CAF50" />
       
-      {/* En-tête */}
+      {/* En-tête avec image profil */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.greeting}>
@@ -122,7 +125,16 @@ const DashboardScreen = ({ navigation }) => {
           style={styles.profileButton}
           onPress={() => navigation.navigate('Profile')}
         >
-          <Ionicons name="person-circle-outline" size={32} color="white" />
+          {user?.profile_picture ? (
+            <Image
+              source={{ uri: user.profile_picture }}
+              style={styles.profileImage}
+            />
+          ) : (
+            <View style={styles.profilePlaceholder}>
+              <Text style={styles.profileInitials}>{getInitials()}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -161,12 +173,6 @@ const DashboardScreen = ({ navigation }) => {
               </Text>
               <Text style={styles.statLabel}>Temps</Text>
             </View>
-            
-            <View style={styles.statCard}>
-              <Ionicons name="flame-outline" size={24} color="#F44336" />
-              <Text style={styles.statValue}>{weeklyStats.calories || 0}</Text>
-              <Text style={styles.statLabel}>Calories</Text>
-            </View>
           </View>
         </View>
 
@@ -176,37 +182,21 @@ const DashboardScreen = ({ navigation }) => {
             <Text style={styles.sectionTitle}>Actions rapides</Text>
           </View>
           
-          <View style={styles.quickActionsGrid}>
-            <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#4CAF50' }]}
+          <View style={styles.quickActions}>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: '#4CAF50' }]}
               onPress={() => navigation.navigate('Run')}
             >
-              <Ionicons name="play-circle-outline" size={32} color="white" />
-              <Text style={styles.quickActionText}>Nouvelle course</Text>
+              <Ionicons name="play" size={24} color="white" />
+              <Text style={styles.actionButtonText}>Commencer</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#FF9800' }]}
-              onPress={() => navigation.navigate('History')}
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: '#FF9800' }]}
+              onPress={() => navigation.navigate('Proposed')}
             >
-              <Ionicons name="list-outline" size={32} color="white" />
-              <Text style={styles.quickActionText}>Historique</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#2196F3' }]}
-              onPress={() => navigation.navigate('Statistics')}
-            >
-              <Ionicons name="bar-chart-outline" size={32} color="white" />
-              <Text style={styles.quickActionText}>Statistiques</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#9C27B0' }]}
-              onPress={() => navigation.navigate('Settings')}
-            >
-              <Ionicons name="settings-outline" size={32} color="white" />
-              <Text style={styles.quickActionText}>Paramètres</Text>
+              <Ionicons name="map" size={24} color="white" />
+              <Text style={styles.actionButtonText}>Parcours</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -214,12 +204,10 @@ const DashboardScreen = ({ navigation }) => {
         {/* Courses récentes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Courses récentes</Text>
-            {safeRunHistory.length > 3 && (
-              <TouchableOpacity onPress={() => navigation.navigate('History')}>
-                <Text style={styles.seeAllText}>Voir tout</Text>
-              </TouchableOpacity>
-            )}
+            <Text style={styles.sectionTitle}>Dernières courses</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('History')}>
+              <Text style={styles.sectionLink}>Voir tout</Text>
+            </TouchableOpacity>
           </View>
           
           {loading ? (
@@ -310,11 +298,11 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#4CAF50',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 10 : 20,
-    paddingBottom: 20,
+    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight + 10,
+    paddingBottom: 16,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -325,23 +313,46 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   greeting: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: 'white',
   },
   motivationalText: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 4,
   },
   profileButton: {
-    padding: 8,
+    marginLeft: 12,
+  },
+  profileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  profilePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  profileInitials: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'white',
   },
   content: {
     flex: 1,
   },
   section: {
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -350,18 +361,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
   },
-  seeAllText: {
+  sectionLink: {
     fontSize: 14,
     color: '#4CAF50',
     fontWeight: '600',
   },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   statCard: {
@@ -369,16 +379,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    width: (width - 48) / 2,
-    marginBottom: 12,
+    flex: 1,
+    marginHorizontal: 4,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
     marginTop: 8,
@@ -388,28 +398,29 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
-  quickActionsGrid: {
+  quickActions: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  quickActionButton: {
+  actionButton: {
+    flex: 1,
+    backgroundColor: '#4CAF50',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 12,
-    padding: 16,
     alignItems: 'center',
-    width: (width - 48) / 2,
-    marginBottom: 12,
-    elevation: 3,
+    marginHorizontal: 4,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  quickActionText: {
+  actionButtonText: {
     color: 'white',
-    fontWeight: 'bold',
-    marginTop: 8,
     fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 4,
   },
   runItem: {
     backgroundColor: 'white',
@@ -418,28 +429,31 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    elevation: 1,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.18,
-    shadowRadius: 1.5,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   runItemIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#E8F5E8',
-    borderRadius: 8,
-    padding: 8,
-    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
   },
   runItemDetails: {
     flex: 1,
   },
   runItemDistance: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
   },
   runItemDate: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginTop: 2,
   },
@@ -447,7 +461,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   runItemDuration: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#333',
   },
@@ -457,11 +471,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   emptyStateContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
     backgroundColor: 'white',
     borderRadius: 12,
-    marginTop: 8,
+    padding: 32,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   emptyStateText: {
     fontSize: 16,
@@ -474,28 +492,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: 8,
     marginTop: 16,
   },
   startRunButtonText: {
     color: 'white',
+    fontSize: 16,
     fontWeight: 'bold',
-    fontSize: 14,
   },
   goalCard: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
-    elevation: 1,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.18,
-    shadowRadius: 1.5,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   goalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   goalTitle: {
     fontSize: 16,
@@ -521,7 +539,8 @@ const styles = StyleSheet.create({
   goalText: {
     fontSize: 14,
     color: '#666',
+    fontWeight: '600',
   },
 });
 
-export default DashboardScreen;   
+export default DashboardScreen;
