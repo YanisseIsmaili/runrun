@@ -287,6 +287,7 @@ export const checkConnectivity = async () => {
   }
 };
 
+
 // Export de l'instance axios pour accès direct si nécessaire
 export { api as axiosInstance };
 
