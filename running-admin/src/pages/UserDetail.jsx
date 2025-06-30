@@ -282,6 +282,10 @@ const UserDetail = () => {
                 <span className="text-gray-900 font-medium">
                   {type === 'select' && options ? 
                     options.find(opt => opt.value === user[field])?.label || 'Non défini' :
+                    type === 'date' && user[field] ? 
+                      new Date(user[field]).toLocaleDateString('fr-FR') :
+                    type === 'number' && user[field] ? 
+                      user[field] :
                     user[field] || 'Non défini'
                   }
                 </span>
@@ -403,7 +407,9 @@ const UserDetail = () => {
             { icon: ChartBarIcon, label: 'Total Courses', value: stats.totalRuns, color: 'from-blue-500 to-cyan-500', delay: '100ms' },
             { icon: MapPinIcon, label: 'Distance Totale', value: `${(stats.totalDistance / 1000).toFixed(1)} km`, color: 'from-green-500 to-emerald-500', delay: '200ms' },
             { icon: ClockIcon, label: 'Temps Total', value: formatDuration(stats.totalTime), color: 'from-purple-500 to-pink-500', delay: '300ms' },
-            { icon: HeartIcon, label: 'Allure Moyenne', value: stats.avgPace ? `${stats.avgPace.toFixed(2)} min/km` : 'N/A', color: 'from-orange-500 to-red-500', delay: '400ms' }
+            user.height && user.weight ? 
+              { icon: UserIcon, label: 'IMC', value: (user.weight / Math.pow(user.height / 100, 2)).toFixed(1), color: 'from-indigo-500 to-purple-500', delay: '400ms' } :
+              { icon: HeartIcon, label: 'Allure Moyenne', value: stats.avgPace ? `${stats.avgPace.toFixed(2)} min/km` : 'N/A', color: 'from-orange-500 to-red-500', delay: '400ms' }
           ].map((stat, index) => (
             <div 
               key={index}
@@ -507,6 +513,21 @@ const UserDetail = () => {
                 <EditableField label="Nom" field="last_name" />
                 <EditableField label="Email" field="email" type="email" />
                 <EditableField label="Username" field="username" />
+                <EditableField 
+                  label="Taille (cm)" 
+                  field="height" 
+                  type="number"
+                />
+                <EditableField 
+                  label="Poids (kg)" 
+                  field="weight" 
+                  type="number"
+                />
+                <EditableField 
+                  label="Date de naissance" 
+                  field="date_of_birth" 
+                  type="date"
+                />
                 <EditableField 
                   label="Rôle" 
                   field="is_admin" 

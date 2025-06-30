@@ -17,7 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
-import { updateProfile, getCurrentUser, axiosInstance } from '../../services/api';
+import { axiosInstance } from '../../services/api';
 
 const ProfileScreen = () => {
   const { user, logout, updateUser } = useAuth();
@@ -34,6 +34,43 @@ const ProfileScreen = () => {
     height: '',
     weight: '',
   });
+
+  // Fonctions API locales
+  const updateProfileCorrect = async (profileData) => {
+    console.log('👤 Updating profile via correct endpoint');
+    try {
+      const response = await axiosInstance.put('/api/users/profile', profileData);
+      console.log('✅ Profile updated:', response.data);
+      
+      if (response.data?.status === 'success' && response.data?.data) {
+        return response.data.data;
+      } else if (response.data) {
+        return response.data;
+      }
+      throw new Error('Réponse invalide du serveur');
+    } catch (error) {
+      console.error('🚨 Update profile failed:', error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || 'Erreur de mise à jour du profil');
+    }
+  };
+
+  const getCurrentUserCorrect = async () => {
+    console.log('👤 Getting current user via correct endpoint');
+    try {
+      const response = await axiosInstance.get('/api/users/profile');
+      console.log('✅ Current user retrieved:', response.data);
+      
+      if (response.data?.status === 'success' && response.data?.data) {
+        return response.data.data;
+      } else if (response.data) {
+        return response.data;
+      }
+      throw new Error('Réponse invalide du serveur');
+    } catch (error) {
+      console.error('🚨 Get current user failed:', error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || 'Erreur de récupération du profil utilisateur');
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -90,14 +127,10 @@ const ProfileScreen = () => {
       };
 
       // Appel API pour mise à jour du profil
-      const response = await updateProfileCorrect(updateData);
+      const updatedUser = await updateProfileCorrect(updateData);
       
-      if (response) {
-        // Recharger le profil depuis l'API pour synchroniser
-        const profileResponse = await getCurrentUserCorrect();
-        if (profileResponse) {
-          await updateUser(profileResponse, false);
-        }
+      if (updatedUser) {
+        await updateUser(updatedUser, false);
         setEditing(false);
         Alert.alert('Succès', 'Profil mis à jour avec succès');
       }
@@ -120,7 +153,7 @@ const ProfileScreen = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: [ImagePicker.MediaType.Images],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -146,20 +179,22 @@ const ProfileScreen = () => {
         name: 'profile.jpg',
       });
 
-      const response = await api.post('/api/users/profile/upload-profile-image', formData, {
+      const response = await axiosInstance.post('/api/uploads/profile-image', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
-      if (response.data.status === 'success') {
-        const updatedUser = { ...user, profile_picture: response.data.data.profile_picture };
-        await updateUser(updatedUser, false);
+      if (response.data?.status === 'success') {
+        const profileResponse = await getCurrentUserCorrect();
+        if (profileResponse) {
+          await updateUser(profileResponse, false);
+        }
         Alert.alert('Succès', 'Photo de profil mise à jour');
       }
     } catch (error) {
       console.error('Erreur upload image:', error);
-      Alert.alert('Erreur', 'Impossible de télécharger l\'image');
+      Alert.alert('Erreur', error.response?.data?.message || 'Impossible de télécharger l\'image');
     } finally {
       setUploadLoading(false);
     }
@@ -178,7 +213,6 @@ const ProfileScreen = () => {
             setUploadLoading(true);
             try {
               await axiosInstance.delete('/api/uploads/profile-image');
-              // Recharger le profil depuis l'API
               const profileResponse = await getCurrentUserCorrect();
               if (profileResponse) {
                 await updateUser(profileResponse, false);
