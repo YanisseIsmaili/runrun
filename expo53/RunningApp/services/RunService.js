@@ -246,7 +246,7 @@ class RunService {
           end_time: new Date(Date.now()).toISOString(),
           duration: runData.duration || 0,
           distance: runData.distance || 0, // ✅ Assurez-vous que c'est un nombre
-          avg_speed: runData.distance && runData.duration ? (runData.distance / runData.duration) * 3.6 : 0,
+          avg_speed: runData.avgSpeed || 0,
           max_speed: runData.maxSpeed || 0,
           status: 'finished'
         }),
