@@ -1,4 +1,4 @@
-// screens/SplashScreen.js - SYNTAXE CORRIGÉE
+// screens/SplashScreen.js - Skeleton Loading moderne
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -6,202 +6,252 @@ import {
   StyleSheet,
   Animated,
   StatusBar,
-  Dimensions,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import AuthService from '../services/AuthService';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
-export default function SplashScreen({ navigation }) {
+// Composant Skeleton Card
+const SkeletonCard = ({ width: cardWidth, height, delay = 0 }) => {
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const logoRotateAnim = useRef(new Animated.Value(0)).current;
-  const dotsAnim = useRef(new Animated.Value(0)).current;
-
-  const [initializationStatus, setInitializationStatus] = useState('starting');
-  const [currentStep, setCurrentStep] = useState('Démarrage...');
 
   useEffect(() => {
-    startAnimations();
-    initializeApp();
-
-    return () => {
-      console.log('🔄 [SPLASH] Nettoyage du composant');
-    };
-  }, []);
-
-  const startAnimations = () => {
-    console.log('🎬 [SPLASH] Démarrage des animations');
-
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      delay,
+      useNativeDriver: true,
+    }).start();
 
     Animated.loop(
-      Animated.timing(logoRotateAnim, {
+      Animated.timing(shimmerAnim, {
         toValue: 1,
-        duration: 3000,
+        duration: 1500,
         useNativeDriver: true,
       })
     ).start();
+  }, []);
+
+  const translateX = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-cardWidth, cardWidth],
+  });
+
+  return (
+    <Animated.View style={[styles.skeletonCard, { width: cardWidth, height, opacity: fadeAnim }]}>
+      <LinearGradient
+        colors={['#2A2A42', '#1E1E2E', '#2A2A42']}
+        style={styles.skeletonBackground}
+      />
+      <Animated.View
+        style={[
+          styles.shimmerOverlay,
+          { transform: [{ translateX }] },
+        ]}
+      >
+        <LinearGradient
+          colors={[
+            'transparent',
+            'rgba(255, 255, 255, 0.1)',
+            'rgba(255, 255, 255, 0.2)',
+            'rgba(255, 255, 255, 0.1)',
+            'transparent',
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.shimmerGradient}
+        />
+      </Animated.View>
+    </Animated.View>
+  );
+};
+
+const SkeletonPulse = ({ width: pulseWidth, height, borderRadius = 8, delay = 0 }) => {
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      delay,
+      useNativeDriver: true,
+    }).start();
 
     Animated.loop(
       Animated.sequence([
-        Animated.timing(dotsAnim, {
-          toValue: 1,
+        Animated.timing(pulseAnim, {
+          toValue: 0.8,
           duration: 800,
           useNativeDriver: true,
         }),
-        Animated.timing(dotsAnim, {
-          toValue: 0,
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
           duration: 800,
           useNativeDriver: true,
         }),
       ])
     ).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.skeletonPulse,
+        {
+          width: pulseWidth,
+          height,
+          borderRadius,
+          opacity: fadeAnim,
+          transform: [{ scale: pulseAnim }],
+        },
+      ]}
+    />
+  );
+};
+
+export default function SplashScreen({ navigation }) {
+  const [currentStep, setCurrentStep] = useState('Initialisation...');
+  const [progress, setProgress] = useState(0);
+  const isMounted = useRef(true);
+
+  const logoScaleAnim = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const containerFadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    isMounted.current = true;
+    startAnimations();
+    initializeApp();
+
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const startAnimations = () => {
+    Animated.timing(containerFadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.spring(logoScaleAnim, {
+      toValue: 1,
+      tension: 50,
+      friction: 8,
+      delay: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const updateProgress = (newProgress, step) => {
+    if (!isMounted.current) return;
+    
+    setProgress(newProgress);
+    setCurrentStep(step);
+    
+    Animated.timing(progressAnim, {
+      toValue: newProgress,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
   };
 
   const initializeApp = async () => {
-    console.log('🚀 [SPLASH] Début initialisation app...');
-    setInitializationStatus('initializing');
+    if (!isMounted.current) return;
     
     try {
-      setCurrentStep('Vérification GPS...');
-      console.log('📍 [SPLASH] Demande permission géolocalisation...');
+      updateProgress(0.2, 'Vérification GPS...');
       
-      // LIGNE CORRIGÉE - suppression de la syntaxe cassée
       const { status } = await Location.requestForegroundPermissionsAsync();
-      console.log('📍 [SPLASH] Permission géoloc:', status);
+      
+      if (!isMounted.current) return;
       
       if (status !== 'granted') {
-        console.log('❌ [SPLASH] Permission géolocalisation refusée');
-        setCurrentStep('Permission GPS requise');
-        
+        updateProgress(0.5, 'Permission GPS requise');
         setTimeout(() => {
+          if (!isMounted.current) return;
           Alert.alert(
             'Permission requise',
-            'L\'accès à la géolocalisation est nécessaire pour utiliser cette application.',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  console.log('🔄 [SPLASH] Redirection -> Login (pas de géoloc)');
-                  navigation.replace('Login');
-                }
-              }
-            ]
+            'L\'accès à la géolocalisation est nécessaire.',
+            [{ text: 'OK', onPress: () => safeNavigate('Login') }]
           );
         }, 1000);
         return;
       }
 
-      setCurrentStep('Vérification compte...');
-      console.log('🔐 [SPLASH] Vérification authentification...');
+      updateProgress(0.5, 'Vérification compte...');
       
       let isAuthenticated = false;
-      
       try {
         isAuthenticated = await AuthService.isAuthenticated();
-        console.log('✅ [SPLASH] Résultat authentification:', isAuthenticated);
       } catch (authError) {
-        console.error('❌ [SPLASH] Erreur authentification:', authError);
-        isAuthenticated = false;
+        console.error('Erreur auth:', authError);
       }
       
-      setCurrentStep('Vérification serveur...');
-      console.log('🌐 [SPLASH] Test connectivité API...');
+      if (!isMounted.current) return;
+      
+      updateProgress(0.8, 'Connexion serveur...');
       
       try {
-        const connectionTest = await AuthService.testConnection();
-        console.log('📡 [SPLASH] Test connexion:', connectionTest.success);
-        
-        if (!connectionTest.success) {
-          console.log('⚠️ [SPLASH] API non disponible, mode hors ligne');
-        }
+        await AuthService.testConnection();
       } catch (networkError) {
-        console.log('⚠️ [SPLASH] Erreur réseau (mode hors ligne):', networkError.message);
+        console.log('Mode hors ligne');
       }
 
-      setCurrentStep('Chargement...');
-      console.log('⏱️ [SPLASH] Attente animation (2.5s)...');
+      if (!isMounted.current) return;
+      
+      updateProgress(1, 'Prêt !');
       
       setTimeout(() => {
-        setInitializationStatus('completed');
-        navigateToNextScreen(status, isAuthenticated);
-      }, 2500);
+        if (!isMounted.current) return;
+        
+        const targetScreen = status === 'granted' && isAuthenticated ? 'Main' : 'Login';
+        safeNavigate(targetScreen);
+      }, 800);
       
     } catch (error) {
-      console.error('💥 [SPLASH] Erreur critique initialisation:', error);
-      setInitializationStatus('error');
-      setCurrentStep('Erreur de connexion');
+      console.error('Erreur initialisation:', error);
+      if (!isMounted.current) return;
+      
+      updateProgress(0, 'Erreur de connexion');
       
       setTimeout(() => {
-        console.log('🔄 [SPLASH] Redirection -> Login (erreur)');
-        navigation.replace('Login');
-      }, 3000);
+        if (!isMounted.current) return;
+        safeNavigate('Login');
+      }, 2000);
     }
   };
 
-  const navigateToNextScreen = (locationStatus, isAuthenticated) => {
-    console.log('🎯 [SPLASH] Navigation décision:');
-    console.log('   - Géoloc:', locationStatus);
-    console.log('   - Auth:', isAuthenticated);
+  const safeNavigate = (screenName) => {
+    if (!isMounted.current) return;
     
-    if (locationStatus !== 'granted') {
-      console.log('🔄 [SPLASH] Redirection -> Login (pas de géoloc)');
-      navigation.replace('Login');
-    } else if (isAuthenticated) {
-      console.log('🔄 [SPLASH] Redirection -> Main (connecté)');
-      navigation.replace('Main');
-    } else {
-      console.log('🔄 [SPLASH] Redirection -> Login (pas connecté)');
-      navigation.replace('Login');
+    try {
+      if (navigation && navigation.replace) {
+        navigation.replace(screenName);
+      } else if (navigation && navigation.navigate) {
+        navigation.navigate(screenName);
+      }
+    } catch (navError) {
+      console.error('Erreur navigation:', navError);
     }
   };
 
-  const logoRotate = logoRotateAnim.interpolate({
+  const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+    outputRange: [0, width - 80],
   });
-
-  const dotsOpacity = dotsAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 1],
-  });
-
-  const getStatusColor = () => {
-    switch (initializationStatus) {
-      case 'starting': return '#4CAF50';
-      case 'initializing': return '#FF9800';
-      case 'completed': return '#4CAF50';
-      case 'error': return '#f44336';
-      default: return '#4CAF50';
-    }
-  };
 
   return (
     <LinearGradient
-      colors={['#0f0f23', '#1a1a2e', '#16213e', '#0f3460']}
+      colors={['#0A0A0F', '#141420', '#1E1E2E']}
       style={styles.container}
     >
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -209,70 +259,73 @@ export default function SplashScreen({ navigation }) {
       <Animated.View
         style={[
           styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [
-              { scale: scaleAnim },
-              { translateY: slideAnim },
-            ],
-          },
+          { opacity: containerFadeAnim }
         ]}
       >
-        <View style={styles.logoContainer}>
-          <View style={styles.decorativeRing1} />
-          <View style={styles.decorativeRing2} />
-          
+        <View style={styles.logoSection}>
           <Animated.View
             style={[
-              styles.logoGradient,
-              {
-                transform: [{ rotate: logoRotate }],
-              },
+              styles.logoContainer,
+              { transform: [{ scale: logoScaleAnim }] }
             ]}
           >
             <LinearGradient
-              colors={['#4CAF50', '#45a049', '#388e3c']}
+              colors={['#FF6B35', '#E55A2B', '#D44A1C']}
               style={styles.logoGradient}
             >
-              <Ionicons name="flash" size={48} color="white" />
+              <Ionicons name="flash" size={40} color="white" />
             </LinearGradient>
           </Animated.View>
+          
+          <Text style={styles.appTitle}>RunTracker</Text>
+          <Text style={styles.appSubtitle}>Votre compagnon de course</Text>
         </View>
 
-        <Text style={styles.appTitle}>RunTracker</Text>
-        <Text style={styles.appSubtitle}>
-          Votre compagnon de course intelligent
-        </Text>
-
-        <View style={styles.loadingContainer}>
-          <Animated.View
-            style={[
-              styles.loadingDots,
-              { opacity: dotsOpacity },
-            ]}
-          >
-            <View style={[styles.dot, { backgroundColor: getStatusColor() }]} />
-            <View style={[styles.dot, { backgroundColor: getStatusColor() }]} />
-            <View style={[styles.dot, { backgroundColor: getStatusColor() }]} />
-          </Animated.View>
-          <Text style={[styles.loadingText, { color: getStatusColor() }]}>
-            {currentStep}
-          </Text>
+        <View style={styles.skeletonSection}>
+          <View style={styles.skeletonRow}>
+            <SkeletonCard width={(width - 80) / 2 - 10} height={80} delay={200} />
+            <SkeletonCard width={(width - 80) / 2 - 10} height={80} delay={400} />
+          </View>
+          
+          <SkeletonCard width={width - 80} height={60} delay={600} />
+          
+          <View style={styles.skeletonRow}>
+            <SkeletonPulse width={60} height={60} borderRadius={30} delay={800} />
+            <SkeletonPulse width={120} height={20} delay={1000} />
+            <SkeletonPulse width={80} height={20} delay={1200} />
+          </View>
         </View>
 
-        <View style={styles.featuresContainer}>
-          <View style={styles.feature}>
-            <Ionicons name="location" size={20} color="#4CAF50" />
-            <Text style={styles.featureText}>GPS</Text>
+        <View style={styles.progressSection}>
+          <View style={styles.progressContainer}>
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  { width: progressWidth }
+                ]}
+              >
+                <LinearGradient
+                  colors={['#FF6B35', '#E55A2B']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.progressGradient}
+                />
+              </Animated.View>
+            </View>
           </View>
-          <View style={styles.feature}>
-            <Ionicons name="analytics" size={20} color="#4CAF50" />
-            <Text style={styles.featureText}>Stats</Text>
-          </View>
-          <View style={styles.feature}>
-            <Ionicons name="trophy" size={20} color="#4CAF50" />
-            <Text style={styles.featureText}>Records</Text>
-          </View>
+          
+          <Text style={styles.statusText}>{currentStep}</Text>
+          <Text style={styles.progressText}>{Math.round(progress * 100)}%</Text>
+        </View>
+
+        <View style={styles.featuresSection}>
+          {[0, 1, 2].map((index) => (
+            <View key={index} style={styles.featureItem}>
+              <SkeletonPulse width={24} height={24} borderRadius={12} delay={1400 + index * 200} />
+              <SkeletonPulse width={40} height={12} delay={1600 + index * 200} />
+            </View>
+          ))}
         </View>
       </Animated.View>
 
@@ -293,102 +346,114 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
-  logoContainer: {
-    marginBottom: 40,
+  logoSection: {
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    marginBottom: 60,
   },
-  decorativeRing1: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
-    top: -10,
-    left: -10,
-  },
-  decorativeRing2: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.1)',
-    top: -20,
-    left: -20,
+  logoContainer: {
+    marginBottom: 20,
   },
   logoGradient: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 10,
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   appTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
+    color: '#FFFFFF',
     marginBottom: 8,
     letterSpacing: 1,
   },
   appSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-    marginBottom: 60,
-    fontWeight: '300',
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    marginBottom: 50,
-  },
-  loadingDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
-  loadingText: {
     fontSize: 14,
-    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center',
   },
-  featuresContainer: {
+  skeletonSection: {
+    width: '100%',
+    marginBottom: 40,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  skeletonCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  skeletonBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+  },
+  shimmerGradient: {
+    flex: 1,
+  },
+  skeletonPulse: {
+    backgroundColor: '#2A2A42',
+  },
+  progressSection: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  progressContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  progressGradient: {
+    flex: 1,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  progressText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  featuresSection: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    maxWidth: 250,
+    maxWidth: 200,
   },
-  feature: {
+  featureItem: {
     alignItems: 'center',
-    flex: 1,
-  },
-  featureText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 5,
-    fontWeight: '500',
+    gap: 8,
   },
   versionContainer: {
     position: 'absolute',
     bottom: 30,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    alignSelf: 'center',
   },
   versionText: {
     fontSize: 12,
