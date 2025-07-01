@@ -96,12 +96,17 @@ const RunningHistory = () => {
     duration: 120,
     pace: 100,
     cardio: 120,
-    actions: 100
+    actions: 120
   })
   const [isResizing, setIsResizing] = useState(false)
   const [resizingColumn, setResizingColumn] = useState(null)
   const [startX, setStartX] = useState(0)
   const [startWidth, setStartWidth] = useState(0)
+
+  // ✅ NOUVEAUX ÉTATS POUR LA SÉLECTION
+  const [selectedRuns, setSelectedRuns] = useState(new Set())
+  const [lastSelectedIndex, setLastSelectedIndex] = useState(null)
+  const [selectionMode, setSelectionMode] = useState(false)
 
   // ✅ useEffect pour l'initialisation et la pagination
   useEffect(() => {
@@ -127,6 +132,47 @@ const RunningHistory = () => {
   useEffect(() => {
     applyFilters()
   }, [runs, searchTerm])
+
+  // ✅ NOUVEAUX useEffect POUR LA SÉLECTION
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Echap pour désélectionner
+      if (e.key === 'Escape' && selectionMode) {
+        clearSelection()
+        addDebugLog('⌨️ Sélection effacée via Escape')
+      }
+      
+      // Ctrl+A pour tout sélectionner
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && filteredRuns.length > 0) {
+        e.preventDefault()
+        selectAllRuns()
+        addDebugLog('⌨️ Tout sélectionné via Ctrl+A')
+      }
+      
+      // Delete pour supprimer les sélectionnés
+      if (e.key === 'Delete' && selectedRuns.size > 0) {
+        setShowDeleteModal(true)
+        addDebugLog('⌨️ Modal suppression via Delete')
+      }
+    }
+    
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectionMode, selectedRuns, filteredRuns])
+
+  // Effect pour nettoyer la sélection quand les données changent
+  useEffect(() => {
+    if (selectedRuns.size > 0) {
+      const visibleIds = new Set(filteredRuns.map(run => run.id))
+      const validSelected = new Set([...selectedRuns].filter(id => visibleIds.has(id)))
+      
+      if (validSelected.size !== selectedRuns.size) {
+        setSelectedRuns(validSelected)
+        setSelectionMode(validSelected.size > 0)
+        addDebugLog(`🧹 Sélection nettoyée: ${selectedRuns.size - validSelected.size} courses supprimées de la sélection`)
+      }
+    }
+  }, [filteredRuns])
 
   // Fonction principale de récupération des données
   const fetchRuns = async () => {
@@ -310,6 +356,104 @@ const RunningHistory = () => {
 
     addDebugLog(`📊 Filtrage local terminé: ${filtered.length} courses affichées`)
     setFilteredRuns(filtered)
+  }
+
+  // ✅ NOUVELLES FONCTIONS DE GESTION DE LA SÉLECTION
+  
+  // Toggle sélection d'une course unique
+  const toggleRunSelection = (runId, index, event) => {
+    event.stopPropagation()
+    
+    const newSelected = new Set(selectedRuns)
+    
+    if (event.shiftKey && lastSelectedIndex !== null) {
+      // Sélection en bloc avec Shift
+      const start = Math.min(lastSelectedIndex, index)
+      const end = Math.max(lastSelectedIndex, index)
+      
+      for (let i = start; i <= end; i++) {
+        if (filteredRuns[i]) {
+          newSelected.add(filteredRuns[i].id)
+        }
+      }
+      addDebugLog(`📋 Sélection Shift: courses ${start} à ${end} sélectionnées`)
+    } else if (event.ctrlKey || event.metaKey) {
+      // Sélection multiple avec Ctrl/Cmd
+      if (newSelected.has(runId)) {
+        newSelected.delete(runId)
+        addDebugLog(`➖ Course ${runId} désélectionnée (Ctrl)`)
+      } else {
+        newSelected.add(runId)
+        addDebugLog(`➕ Course ${runId} ajoutée à la sélection (Ctrl)`)
+      }
+    } else {
+      // Sélection simple
+      if (newSelected.has(runId) && newSelected.size === 1) {
+        newSelected.clear()
+        setLastSelectedIndex(null)
+        addDebugLog(`➖ Course ${runId} désélectionnée`)
+      } else {
+        newSelected.clear()
+        newSelected.add(runId)
+        setLastSelectedIndex(index)
+        addDebugLog(`📌 Course ${runId} sélectionnée`)
+      }
+    }
+    
+    if (!newSelected.has(runId)) {
+      setLastSelectedIndex(null)
+    } else if (!event.shiftKey) {
+      setLastSelectedIndex(index)
+    }
+    
+    setSelectedRuns(newSelected)
+    setSelectionMode(newSelected.size > 0)
+  }
+
+  // Sélectionner toutes les courses visibles
+  const selectAllRuns = () => {
+    const allIds = new Set(filteredRuns.map(run => run.id))
+    setSelectedRuns(allIds)
+    setSelectionMode(true)
+    addDebugLog(`📋 Toutes les courses sélectionnées: ${allIds.size} courses`)
+  }
+
+  // Désélectionner toutes les courses
+  const clearSelection = () => {
+    setSelectedRuns(new Set())
+    setLastSelectedIndex(null)
+    setSelectionMode(false)
+    addDebugLog('🗑️ Sélection effacée')
+  }
+
+  // Supprimer les courses sélectionnées
+  const handleDeleteSelectedRuns = async () => {
+    if (selectedRuns.size === 0) return
+    
+    const selectedArray = Array.from(selectedRuns)
+    addDebugLog(`🗑️ Suppression en lot: ${selectedArray.length} courses`)
+    
+    try {
+      if (api.runs?.deleteMultiple) {
+        await api.runs.deleteMultiple(selectedArray)
+        addDebugLog(`✅ ${selectedArray.length} courses supprimées avec succès`, 'success')
+        fetchRuns()
+      } else {
+        // Fallback: suppression une par une
+        for (const runId of selectedArray) {
+          if (api.runs?.delete) {
+            await api.runs.delete(runId)
+          } else {
+            setRuns(prev => prev.filter(run => !selectedArray.includes(run.id)))
+          }
+        }
+        addDebugLog(`🎭 ${selectedArray.length} courses supprimées (simulation)`, 'info')
+      }
+      clearSelection()
+    } catch (err) {
+      addDebugLog(`❌ Erreur suppression en lot: ${err.message}`, 'error')
+      setError('Impossible de supprimer les courses sélectionnées')
+    }
   }
 
   // Fonctions utilitaires de formatage
@@ -511,7 +655,7 @@ const RunningHistory = () => {
     avgDistance: filteredRuns.length > 0 ? filteredRuns.reduce((acc, run) => acc + (run.distance || 0), 0) / filteredRuns.length : 0
   }
 
-  // Configuration des colonnes
+// Configuration des colonnes
   const columnConfig = {
     user: {
       key: 'user',
@@ -643,8 +787,27 @@ const RunningHistory = () => {
       key: 'actions',
       title: 'Actions',
       sortable: false,
-      render: (run) => (
+      render: (run, index) => (
         <div className="flex justify-end space-x-2">
+          {/* ✅ CHECKBOX DE SÉLECTION */}
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selectedRuns.has(run.id)}
+              onChange={(e) => toggleRunSelection(run.id, index, e)}
+              className="sr-only"
+            />
+            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-200 ${
+              selectedRuns.has(run.id)
+                ? 'bg-emerald-600 border-emerald-600 text-white'
+                : 'border-gray-300 hover:border-emerald-400'
+            }`}>
+              {selectedRuns.has(run.id) && (
+                <CheckIcon className="h-3 w-3" />
+              )}
+            </div>
+          </label>
+          
           <button
             onClick={() => handleRunDetail(run)}
             className="text-emerald-600 hover:text-emerald-800 transition-colors duration-200 hover:scale-110"
@@ -679,7 +842,8 @@ const RunningHistory = () => {
         </div>
       </div>
     )
-  } 
+  }
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -959,6 +1123,54 @@ const RunningHistory = () => {
           </div>
         )}
 
+        {/* ✅ BARRE D'ACTIONS POUR SÉLECTION MULTIPLE */}
+        {selectionMode && (
+          <div className="glass-green rounded-2xl p-4 mb-6 animate-slide-in-up">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-6 h-6 bg-emerald-600 rounded flex items-center justify-center">
+                    <CheckIcon className="h-4 w-4 text-white" />
+                  </div>
+                  <span className="font-semibold text-emerald-800">
+                    {selectedRuns.size} course{selectedRuns.size > 1 ? 's' : ''} sélectionnée{selectedRuns.size > 1 ? 's' : ''}
+                  </span>
+                </div>
+                
+                <div className="text-sm text-emerald-600">
+                  💡 Shift+clic pour sélectionner une plage • Ctrl+clic pour sélection multiple
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={selectAllRuns}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all duration-300 hover:scale-105 flex items-center"
+                >
+                  <CheckIcon className="h-4 w-4 mr-2" />
+                  Tout sélectionner ({filteredRuns.length})
+                </button>
+                
+                <button
+                  onClick={clearSelection}
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-all duration-300 hover:scale-105"
+                >
+                  Désélectionner
+                </button>
+                
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all duration-300 hover:scale-105 flex items-center"
+                  disabled={selectedRuns.size === 0}
+                >
+                  <TrashIcon className="h-4 w-4 mr-2" />
+                  Supprimer ({selectedRuns.size})
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Statistiques globales */}
         {filteredRuns.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -1064,9 +1276,23 @@ const RunningHistory = () => {
                     })}
                   </tr>
                 </thead>
+                {/* ✅ TBODY MODIFIÉ AVEC SÉLECTION */}
                 <tbody className="divide-y divide-emerald-100">
                   {filteredRuns.map((run, index) => (
-                    <tr key={run.id} className="hover:bg-emerald-50/50 transition-colors duration-200">
+                    <tr 
+                      key={run.id} 
+                      className={`transition-colors duration-200 cursor-pointer ${
+                        selectedRuns.has(run.id)
+                          ? 'bg-emerald-100 hover:bg-emerald-200'
+                          : 'hover:bg-emerald-50/50'
+                      }`}
+                      onClick={(e) => {
+                        // Clic sur la ligne pour sélection
+                        if (!e.target.closest('button') && !e.target.closest('input')) {
+                          toggleRunSelection(run.id, index, e)
+                        }
+                      }}
+                    >
                       {columnOrder.map(columnKey => {
                         const column = columnConfig[columnKey]
                         const width = columnWidths[columnKey]
@@ -1076,7 +1302,7 @@ const RunningHistory = () => {
                             className="px-4 py-3 overflow-hidden"
                             style={{ width: `${width}px` }}
                           >
-                            {column.render(run)}
+                            {columnKey === 'actions' ? column.render(run, index) : column.render(run)}
                           </td>
                         )
                       })}
@@ -1281,23 +1507,47 @@ const RunningHistory = () => {
         </div>
       )}
 
-      {/* Modal de suppression */}
-      {showDeleteModal && selectedRun && (
+      {/* ✅ MODAL DE SUPPRESSION MODIFIÉ POUR SÉLECTION MULTIPLE */}
+      {showDeleteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-white rounded-2xl p-6 max-w-md mx-4 animate-scale-in">
             <h3 className="text-lg font-bold text-gray-900 mb-4">
               Confirmer la suppression
             </h3>
-            <p className="text-gray-600 mb-6">
-              Êtes-vous sûr de vouloir supprimer la course{' '}
-              <strong>"{selectedRun.title}" de{' '}
-              {selectedRun.user?.first_name && selectedRun.user?.last_name
-                ? `${selectedRun.user.first_name} ${selectedRun.user.last_name}`
-                : selectedRun.user?.username || 'Utilisateur inconnu'
-              }</strong>{' '}
-              ({(selectedRun.distance || 0).toFixed(2)} m) ?
-              Cette action est irréversible.
-            </p>
+            
+            {selectedRuns.size > 0 ? (
+              // Suppression multiple
+              <div>
+                <p className="text-gray-600 mb-6">
+                  Êtes-vous sûr de vouloir supprimer{' '}
+                  <strong>{selectedRuns.size} course{selectedRuns.size > 1 ? 's' : ''}</strong> sélectionnée{selectedRuns.size > 1 ? 's' : ''} ?
+                  Cette action est irréversible.
+                </p>
+                <div className="max-h-32 overflow-y-auto mb-4 p-3 bg-gray-50 rounded-lg">
+                  {filteredRuns
+                    .filter(run => selectedRuns.has(run.id))
+                    .map(run => (
+                      <div key={run.id} className="text-sm text-gray-700 py-1">
+                        • {run.title} - {run.user?.first_name} {run.user?.last_name} ({(run.distance || 0).toFixed(2)} m)
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+            ) : selectedRun ? (
+              // Suppression unique
+              <p className="text-gray-600 mb-6">
+                Êtes-vous sûr de vouloir supprimer la course{' '}
+                <strong>"{selectedRun.title}" de{' '}
+                {selectedRun.user?.first_name && selectedRun.user?.last_name
+                  ? `${selectedRun.user.first_name} ${selectedRun.user.last_name}`
+                  : selectedRun.user?.username || 'Utilisateur inconnu'
+                }</strong>{' '}
+                ({(selectedRun.distance || 0).toFixed(2)} m) ?
+                Cette action est irréversible.
+              </p>
+            ) : null}
+            
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => {
@@ -1309,10 +1559,16 @@ const RunningHistory = () => {
                 Annuler
               </button>
               <button
-                onClick={() => handleDeleteRun(selectedRun.id)}
+                onClick={() => {
+                  if (selectedRuns.size > 0) {
+                    handleDeleteSelectedRuns()
+                  } else if (selectedRun) {
+                    handleDeleteRun(selectedRun.id)
+                  }
+                }}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
               >
-                Supprimer
+                Supprimer {selectedRuns.size > 0 ? `(${selectedRuns.size})` : ''}
               </button>
             </div>
           </div>
