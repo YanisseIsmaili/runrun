@@ -46,11 +46,13 @@ const RunningHistory = () => {
   const { isConfigured, selectedApi } = useApiConfig()
   const { addDebugLog } = useDebugIntegration()
   
+  // États principaux
   const [runs, setRuns] = useState([])
   const [filteredRuns, setFilteredRuns] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   
+  // États pour la recherche et filtres
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState({
     period: 'all',
@@ -62,18 +64,18 @@ const RunningHistory = () => {
   })
   const [showFilters, setShowFilters] = useState(false)
   
+  // États pour les modals
   const [selectedRun, setSelectedRun] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   
+  // États pour la pagination
   const [pagination, setPagination] = useState({
     page: 1,
     pages: 1,
     per_page: 20,
     total: 0
   })
-
-  // États pour la sélection de per_page personnalisé
   const [showCustomPerPage, setShowCustomPerPage] = useState(false)
   const [customPerPage, setCustomPerPage] = useState('')
 
@@ -101,6 +103,7 @@ const RunningHistory = () => {
   const [startX, setStartX] = useState(0)
   const [startWidth, setStartWidth] = useState(0)
 
+  // ✅ useEffect pour l'initialisation et la pagination
   useEffect(() => {
     if (isConfigured) {
       addDebugLog(`✅ API configurée: ${selectedApi?.name || 'Inconnue'} (${selectedApi?.url || 'URL manquante'})`)
@@ -108,10 +111,24 @@ const RunningHistory = () => {
     }
   }, [isConfigured, pagination.page, pagination.per_page])
 
+  // ✅ useEffect pour les filtres côté serveur (SANS searchTerm)
+  useEffect(() => {
+    if (isConfigured) {
+      const timeoutId = setTimeout(() => {
+        addDebugLog(`🔄 Filtres serveur modifiés: ${filters.period}, ${filters.sortBy}, ${filters.sortOrder}`)
+        fetchRuns()
+      }, 300)
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [filters.period, filters.minDistance, filters.maxDistance, filters.sortBy, filters.sortOrder])
+
+  // ✅ useEffect pour le filtrage local uniquement
   useEffect(() => {
     applyFilters()
-  }, [runs, searchTerm, filters])
+  }, [runs, searchTerm])
 
+  // Fonction principale de récupération des données
   const fetchRuns = async () => {
     if (!isConfigured) {
       setError('API non configurée')
@@ -129,11 +146,11 @@ const RunningHistory = () => {
       const params = {
         page: pagination.page,
         limit: pagination.per_page,
-        search: searchTerm || undefined,
         sort_by: filters.sortBy,
         sort_order: filters.sortOrder
       }
 
+      // Filtres de période pour l'API
       if (filters.period !== 'all') {
         const now = new Date()
         let startDate = new Date()
@@ -153,11 +170,12 @@ const RunningHistory = () => {
         params.start_date = startDate.toISOString()
       }
 
+      // Filtres de distance pour l'API
       if (filters.minDistance) params.min_distance = filters.minDistance
       if (filters.maxDistance) params.max_distance = filters.maxDistance
       if (filters.userId) params.user_id = filters.userId
 
-      addDebugLog(`📋 Paramètres requête: ${JSON.stringify(params)}`, 'info')
+      addDebugLog(`📋 Paramètres requête API: ${JSON.stringify(params)}`, 'info')
       
       try {
         const response = await api.runs.getAll(params)
@@ -175,7 +193,7 @@ const RunningHistory = () => {
             pages: paginationData?.pages || 1,
             total: paginationData?.total || runsData.length
           }))
-          addDebugLog(`📈 État mis à jour: ${runsData.length} courses chargées`, 'success')
+          addDebugLog(`📈 État mis à jour: ${runsData.length} courses chargées depuis l'API`, 'success')
         } else {
           throw new Error('Structure de réponse inattendue')
         }
@@ -202,6 +220,7 @@ const RunningHistory = () => {
     }
   }
 
+  // Génération de données simulées
   const generateMockRuns = () => {
     const users = [
       { id: 5, username: 'alex', first_name: 'Alexandre', last_name: 'Dupont' },
@@ -245,12 +264,14 @@ const RunningHistory = () => {
     }).sort((a, b) => new Date(b.start_time) - new Date(a.start_time))
   }
 
+  // Fonction de filtrage local
   const applyFilters = () => {
-    addDebugLog('🔍 Application des filtres')
+    addDebugLog('🔍 Application du filtrage local (recherche uniquement)')
     let filtered = [...runs]
 
+    // Recherche locale uniquement
     if (searchTerm) {
-      const search = searchTerm.toLowerCase()
+      const search = searchTerm.toLowerCase().trim()
       const originalCount = filtered.length
       filtered = filtered.filter(run => 
         run.user?.username?.toLowerCase().includes(search) ||
@@ -262,38 +283,7 @@ const RunningHistory = () => {
       addDebugLog(`🔎 Filtrage recherche "${searchTerm}": ${originalCount} → ${filtered.length} courses`)
     }
 
-    if (filters.period !== 'all') {
-      const now = new Date()
-      let startDate = new Date()
-      
-      switch (filters.period) {
-        case 'week':
-          startDate.setDate(now.getDate() - 7)
-          break
-        case 'month':
-          startDate.setMonth(now.getMonth() - 1)
-          break
-        case 'year':
-          startDate.setFullYear(now.getFullYear() - 1)
-          break
-      }
-      
-      const originalCount = filtered.length
-      filtered = filtered.filter(run => new Date(run.start_time) >= startDate)
-      addDebugLog(`📅 Filtrage période "${filters.period}": ${originalCount} → ${filtered.length} courses`)
-    }
-
-    if (filters.minDistance) {
-      const originalCount = filtered.length
-      filtered = filtered.filter(run => run.distance >= parseFloat(filters.minDistance))
-      addDebugLog(`📏 Filtrage distance min ${filters.minDistance}m: ${originalCount} → ${filtered.length} courses`)
-    }
-    if (filters.maxDistance) {
-      const originalCount = filtered.length
-      filtered = filtered.filter(run => run.distance <= parseFloat(filters.maxDistance))
-      addDebugLog(`📏 Filtrage distance max ${filters.maxDistance}m: ${originalCount} → ${filtered.length} courses`)
-    }
-
+    // Tri local
     filtered.sort((a, b) => {
       let aVal, bVal
       
@@ -318,10 +308,11 @@ const RunningHistory = () => {
       }
     })
 
-    addDebugLog(`📊 Tri par ${filters.sortBy} (${filters.sortOrder}): ${filtered.length} courses`)
+    addDebugLog(`📊 Filtrage local terminé: ${filtered.length} courses affichées`)
     setFilteredRuns(filtered)
   }
 
+  // Fonctions utilitaires de formatage
   const formatDuration = (seconds) => {
     if (!seconds) return '0:00'
     const hours = Math.floor(seconds / 3600)
@@ -349,6 +340,7 @@ const RunningHistory = () => {
     })
   }
 
+  // Gestionnaires d'événements
   const handleRunDetail = (run) => {
     setSelectedRun(run)
     setShowDetailModal(true)
@@ -388,12 +380,10 @@ const RunningHistory = () => {
     addDebugLog('🔄 Réinitialisation des filtres')
   }
 
-  // Gestion du changement de page
   const handlePageChange = (newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }))
   }
 
-  // Gestion du changement de per_page
   const handlePerPageChange = (newPerPage) => {
     if (newPerPage === 'custom') {
       setShowCustomPerPage(true)
@@ -411,7 +401,7 @@ const RunningHistory = () => {
     setShowCustomPerPage(false)
   }
 
-  // Fonctions pour le redimensionnement des colonnes
+  // Gestion du redimensionnement des colonnes
   const handleResizeStart = (e, columnKey) => {
     e.preventDefault()
     setIsResizing(true)
@@ -450,7 +440,7 @@ const RunningHistory = () => {
     document.removeEventListener('mouseup', handleResizeEnd)
   }
 
-  // Fonctions pour le drag & drop des colonnes
+  // Gestion du drag & drop des colonnes
   const handleDragStart = (e, columnKey) => {
     setDraggedColumn(columnKey)
     e.dataTransfer.effectAllowed = 'move'
@@ -479,7 +469,7 @@ const RunningHistory = () => {
     addDebugLog(`📋 Colonne ${draggedColumn} déplacée vers position ${targetIndex}`)
   }
 
-  // Fonction pour le tri par colonne
+  // Gestion du tri par colonne
   const handleSort = (field) => {
     const newDirection = sortField === field && sortDirection === 'desc' ? 'asc' : 'desc'
     setSortField(field)
@@ -496,7 +486,7 @@ const RunningHistory = () => {
     }
   }, [])
 
-  // Validation et application du per_page personnalisé
+  // Validation per_page personnalisé
   const handleCustomPerPageSubmit = () => {
     const value = parseInt(customPerPage)
     if (value && value > 0 && value <= 1000) {
@@ -513,6 +503,7 @@ const RunningHistory = () => {
     }
   }
 
+  // Calcul des statistiques
   const stats = {
     totalRuns: filteredRuns.length,
     totalDistance: filteredRuns.reduce((acc, run) => acc + (run.distance || 0), 0),
@@ -520,6 +511,7 @@ const RunningHistory = () => {
     avgDistance: filteredRuns.length > 0 ? filteredRuns.reduce((acc, run) => acc + (run.distance || 0), 0) / filteredRuns.length : 0
   }
 
+  // Configuration des colonnes
   const columnConfig = {
     user: {
       key: 'user',
@@ -675,6 +667,7 @@ const RunningHistory = () => {
     }
   }
 
+  // Vérification de la configuration API
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 flex items-center justify-center">
@@ -686,8 +679,7 @@ const RunningHistory = () => {
         </div>
       </div>
     )
-  }
-
+  } 
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -723,19 +715,71 @@ const RunningHistory = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        {/* Barre de recherche */}
+        {/* ✅ BARRE DE RECHERCHE CORRIGÉE */}
         <div className="glass-green rounded-2xl p-6 mb-8 animate-fade-in">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative group">
               <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-emerald-400 transition-colors group-focus-within:text-emerald-600" />
               <input
                 type="text"
-                placeholder="Rechercher par utilisateur, titre ou parcours..."
+                placeholder="Rechercher par utilisateur, titre ou parcours... (recherche locale instantanée)"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 placeholder-gray-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
+                onChange={(e) => {
+                  const newValue = e.target.value
+                  setSearchTerm(newValue)
+                  addDebugLog(`🔍 Recherche mise à jour: "${newValue}" (${newValue.length} caractères)`)
+                }}
+                className="w-full pl-12 pr-16 py-3 bg-white border-2 border-emerald-300 rounded-xl text-gray-900 placeholder-gray-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-200 transition-all duration-300"
               />
+              {searchTerm && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('')
+                    addDebugLog('🔍 Recherche effacée')
+                  }}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors hover:scale-110"
+                  title="Effacer la recherche"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              )}
             </div>
+            
+            {/* Indicateur de résultats de recherche */}
+            {searchTerm && (
+              <div className="flex items-center px-4 py-2 bg-emerald-100 rounded-lg border border-emerald-200">
+                <span className="text-sm font-medium text-emerald-700">
+                  🔍 "{searchTerm}" → {filteredRuns.length} résultat{filteredRuns.length > 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+            
+            {/* Bouton pour effacer tous les filtres */}
+            {(searchTerm || filters.period !== 'all' || filters.minDistance || filters.maxDistance) && (
+              <button
+                onClick={() => {
+                  setSearchTerm('')
+                  resetFilters()
+                  addDebugLog('🔄 Tous les filtres effacés')
+                }}
+                className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-all duration-300 hover:scale-105 flex items-center"
+                title="Effacer tous les filtres"
+              >
+                <TrashIcon className="h-4 w-4 mr-2" />
+                Tout effacer
+              </button>
+            )}
+          </div>
+          
+          {/* Compteur de courses totales */}
+          <div className="mt-4 flex justify-between items-center text-sm text-emerald-600">
+            <span>
+              📊 Total: {runs.length} courses • Affichées: {filteredRuns.length} courses
+              {searchTerm && ` • Recherche active`}
+            </span>
+            <span className="text-xs opacity-75">
+              🔄 Dernière mise à jour: {new Date().toLocaleTimeString('fr-FR')}
+            </span>
           </div>
 
           {/* Panneau de filtres */}
@@ -958,7 +1002,9 @@ const RunningHistory = () => {
           ) : filteredRuns.length === 0 ? (
             <div className="text-center py-8">
               <PlayIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Aucune course enregistrée</p>
+              <p className="text-gray-500">
+                {searchTerm ? `Aucune course trouvée pour "${searchTerm}"` : 'Aucune course enregistrée'}
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1038,19 +1084,11 @@ const RunningHistory = () => {
                   ))}
                 </tbody>
               </table>
-              
-              {filteredRuns.length > 10 && (
-                <div className="mt-4 text-center">
-                  <p className="text-sm text-gray-500">
-                    Affichage des {Math.min(10, filteredRuns.length)} premières courses sur {filteredRuns.length}
-                  </p>
-                </div>
-              )}
             </div>
           )}
         </div>
 
-        {/* Pagination améliorée */}
+        {/* Pagination */}
         {pagination.pages > 1 && (
           <div className="glass-green rounded-2xl p-6 shadow-xl animate-slide-in-right mt-8">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1058,7 +1096,6 @@ const RunningHistory = () => {
                 Page {pagination.page} sur {pagination.pages} ({pagination.total} courses, {pagination.per_page} par page)
               </div>
               <div className="flex items-center space-x-3">
-                {/* Bouton première page */}
                 <button
                   className="px-3 py-2 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={pagination.page === 1}
@@ -1068,7 +1105,6 @@ const RunningHistory = () => {
                   ««
                 </button>
                 
-                {/* Bouton page précédente */}
                 <button
                   className="px-4 py-2 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={pagination.page === 1}
@@ -1077,7 +1113,6 @@ const RunningHistory = () => {
                   Précédent
                 </button>
 
-                {/* Numéros de page */}
                 <div className="flex space-x-1">
                   {(() => {
                     const pages = []
@@ -1114,7 +1149,6 @@ const RunningHistory = () => {
                   })()}
                 </div>
 
-                {/* Bouton page suivante */}
                 <button
                   className="px-4 py-2 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={pagination.page === pagination.pages}
@@ -1123,7 +1157,6 @@ const RunningHistory = () => {
                   Suivant
                 </button>
                 
-                {/* Bouton dernière page */}
                 <button
                   className="px-3 py-2 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={pagination.page === pagination.pages}
@@ -1138,7 +1171,7 @@ const RunningHistory = () => {
         )}
       </div>
 
-      {/* Modal de détails de course */}
+      {/* Modal de détails */}
       {showDetailModal && selectedRun && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-scale-in">
@@ -1211,7 +1244,6 @@ const RunningHistory = () => {
                   <div className="bg-red-50 rounded-xl p-4 text-center">
                     <HeartIcon className="h-8 w-8 text-red-500 mx-auto mb-2" />
                     <div className="font-semibold text-gray-900">{selectedRun.avg_heart_rate} bpm</div>
-                    <div className="text-sm text-gray-600">FC moyenne</div>
                   </div>
                   <div className="bg-red-50 rounded-xl p-4 text-center">
                     <HeartIcon className="h-8 w-8 text-red-600 mx-auto mb-2" />
@@ -1222,22 +1254,6 @@ const RunningHistory = () => {
                     <FireIcon className="h-8 w-8 text-orange-500 mx-auto mb-2" />
                     <div className="font-semibold text-gray-900">{selectedRun.calories} cal</div>
                     <div className="text-sm text-gray-600">Calories</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2">
-                  Horaires
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-emerald-50 rounded-xl p-4">
-                    <div className="font-medium text-emerald-800">Début</div>
-                    <div className="text-emerald-900 font-semibold">{new Date(selectedRun.start_time).toLocaleString('fr-FR')}</div>
-                  </div>
-                  <div className="bg-emerald-50 rounded-xl p-4">
-                    <div className="font-medium text-emerald-800">Fin</div>
-                    <div className="text-emerald-900 font-semibold">{new Date(selectedRun.end_time).toLocaleString('fr-FR')}</div>
                   </div>
                 </div>
               </div>
@@ -1265,7 +1281,7 @@ const RunningHistory = () => {
         </div>
       )}
 
-      {/* Modal de confirmation de suppression */}
+      {/* Modal de suppression */}
       {showDeleteModal && selectedRun && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-white rounded-2xl p-6 max-w-md mx-4 animate-scale-in">
@@ -1303,7 +1319,7 @@ const RunningHistory = () => {
         </div>
       )}
 
-      {/* Styles CSS identiques à UserDetail */}
+      {/* Styles CSS */}
       <style jsx>{`
         .glass-green {
           background: rgba(255, 255, 255, 0.95);
@@ -1348,7 +1364,10 @@ const RunningHistory = () => {
           animation: slide-in-right 0.6s ease-out;
         }
 
-        /* Styles pour les colonnes du tableau */
+        .animate-scale-in {
+          animation: scale-in 0.3s ease-out;
+        }
+
         .table-fixed {
           table-layout: fixed;
         }
@@ -1357,25 +1376,6 @@ const RunningHistory = () => {
           cursor: col-resize;
         }
 
-        body.resizing-column {
-          cursor: col-resize;
-          user-select: none;
-        }
-
-        /* Styles pour les en-têtes triables */
-        .sortable-header {
-          transition: all 0.2s ease;
-        }
-
-        .sortable-header:hover {
-          background-color: rgba(16, 185, 129, 0.1);
-        }
-
-        .sorted-column {
-          background-color: rgba(16, 185, 129, 0.15);
-        }
-
-        /* Responsive adjustments */
         @media (max-width: 768px) {
           .table-fixed {
             table-layout: auto;
