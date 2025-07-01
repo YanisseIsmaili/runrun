@@ -188,6 +188,121 @@ export const clearStoredAuth = async () => {
   }
 };
 
+// 🛣️ SERVICES ROUTES - PARCOURS PROPOSÉS
+export const getProposedRoutes = async (page = 1, limit = 10) => {
+  console.log(`🗺️ Getting proposed routes (page ${page}, limit ${limit})...`);
+  try {
+    const response = await api.get(`/api/routes?page=${page}&limit=${limit}`);
+    console.log('✅ Proposed routes fetched');
+    console.log('🔍 Raw response:', response.data);
+    
+    const responseData = response.data;
+    
+    // Gestion standardisée de toutes les structures possibles
+    let routes = [];
+    let pagination = {};
+    
+    // Structure 1: {status: 'success', data: {routes: [...], pagination: {...}}}
+    if (responseData?.status === 'success' && responseData?.data?.routes) {
+      routes = responseData.data.routes;
+      pagination = responseData.data.pagination || {};
+      console.log('📊 Structure API standard détectée');
+    }
+    // Structure 2: {routes: [...], pagination: {...}}
+    else if (responseData?.routes && Array.isArray(responseData.routes)) {
+      routes = responseData.routes;
+      pagination = responseData.pagination || {};
+      console.log('📊 Structure routes directe détectée');
+    }
+    // Structure 3: {data: {routes: [...]}}
+    else if (responseData?.data?.routes && Array.isArray(responseData.data.routes)) {
+      routes = responseData.data.routes;
+      pagination = responseData.data.pagination || {};
+      console.log('📊 Structure data.routes détectée');
+    }
+    // Structure 4: {data: [...]} (array direct dans data)
+    else if (Array.isArray(responseData?.data)) {
+      routes = responseData.data;
+      pagination = responseData.pagination || {};
+      console.log('📊 Structure data array détectée');
+    }
+    // Structure 5: [...] (array direct)
+    else if (Array.isArray(responseData)) {
+      routes = responseData;
+      pagination = {};
+      console.log('📊 Structure array direct détectée');
+    }
+    // Aucune structure reconnue
+    else {
+      console.warn('⚠️ Structure de réponse non reconnue:', {
+        type: typeof responseData,
+        keys: responseData ? Object.keys(responseData) : 'null',
+        data: responseData
+      });
+      routes = [];
+      pagination = {};
+    }
+
+    console.log(`📊 ${routes.length} routes processed`);
+    
+    return {
+      status: 'success',
+      data: routes,
+      pagination: pagination
+    };
+    
+    
+  } catch (error) {
+    console.error('🚨 Get proposed routes failed:', error.response?.data || error.message);
+    
+    // Gestion d'erreur détaillée
+    if (error.response?.status === 401) {
+      throw new Error('Session expirée, veuillez vous reconnecter');
+    } else if (error.response?.status === 403) {
+      throw new Error('Accès non autorisé aux parcours');
+    } else if (error.response?.status === 404) {
+      throw new Error('Endpoint des parcours non trouvé');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Erreur serveur, veuillez réessayer plus tard');
+    } else if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+      throw new Error('Erreur de connexion, vérifiez votre réseau');
+    } else {
+      throw new Error(error.response?.data?.message || 'Erreur lors de la récupération des parcours');
+    }
+  }
+};
+
+// 🔄 VARIANTE ALTERNATIVE SI L'ENDPOINT EST DIFFÉRENT
+export const getProposedRoutesAlt = async () => {
+  console.log('🗺️ Getting proposed routes (alternative endpoint)...');
+  try {
+    // Essayer d'autres endpoints possibles
+    const endpoints = [
+      '/api/routes/proposed',
+      '/api/proposed-routes', 
+      '/api/routes/public',
+      '/api/routes'
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        const response = await api.get(endpoint);
+        console.log(`✅ Found routes at: ${endpoint}`);
+        return response.data;
+      } catch (err) {
+        console.log(`❌ Failed endpoint: ${endpoint}`);
+        continue;
+      }
+    }
+    
+    throw new Error('Aucun endpoint de parcours trouvé');
+    
+  } catch (error) {
+    console.error('🚨 Get proposed routes (alt) failed:', error);
+    throw error;
+  }
+};
+
 // 🏃 SERVICES COURSES - VERSION CORRIGÉE
 export const getUserRuns = async (page = 1, limit = 10) => {
   console.log(`📊 Getting user runs (page ${page}, limit ${limit})...`);
